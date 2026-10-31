@@ -9,7 +9,7 @@ lizard-script is a small interpreted language written in Go, built phase by phas
 | Phase | Component | Status |
 | --- | --- | --- |
 | 1 | Tokens + lexer | ✅ Done |
-| 2 | Parser / AST | ⏳ Coming soon |
+| 2 | Parser / AST | ✅ Done |
 | 3 | Evaluator | ⏳ Coming soon |
 | 4 | REPL | ⏳ Coming soon |
 
@@ -23,16 +23,22 @@ function add(x, y) {
   return x + y;
 }
 
-let result = add(five, ten);
+let result = add(five, ten); -~> this is a comment
 
-if (result > 10) {
-  return true;
-} elif (result == 10) {
-  return false;
-} else {
-  break;
+while (result > 0) {
+  if (result > 10 && five != 0) {
+    result = result // 2;
+  } elif (result == 10) {
+    result = result - 1;
+  } else {
+    break;
+  }
 }
+
+let lizard = {"name": "Liz", "toes": [5, 5, 5, 5]};
 ```
+
+The full grammar is in [docs/GRAMMAR.md](docs/GRAMMAR.md).
 
 ## Tokens
 
@@ -44,11 +50,14 @@ if (result > 10) {
 | --- | --- |
 | Arithmetic | `+` `-` `*` `/` `//` (integer division) `**` (power) `%` (modulo) |
 | Comparison | `<` `>` `<=` `>=` `==` `!=` `===` (exact) `!==` (not exact) |
-| Other | `=` (assign) `!` (not) |
+| Logical | `&&` (and) `\|\|` (or) `!` (not) |
+| Other | `=` (assign) |
 
-**Delimiters:** `,` `;` `(` `)` `{` `}` `[` `]`
+**Delimiters:** `,` `;` `:` `(` `)` `{` `}` `[` `]`
 
-**Literals:** identifiers (letters and `_`) and integers.
+**Literals:** identifiers (a letter or `_`, then letters, digits or `_`), integers and strings between double quotes.
+
+**Comments:** `-~>` starts a comment that runs to the end of the line. It looks like a lizard's body, and `//` is already integer division.
 
 The lexer always takes the longest operator it can, so `====` lexes as `===` followed by `=`.
 
@@ -57,7 +66,10 @@ The lexer always takes the longest operator it can, so `====` lexes as `===` fol
 ```
 lizard-script/
 ├── token/   # token types, keywords and identifier lookup
-└── lexer/   # turns source code into a stream of tokens (+ tests)
+├── lexer/   # turns source code into a stream of tokens (+ tests)
+├── ast/     # the nodes of the abstract syntax tree
+├── parser/  # turns tokens into an AST with a Pratt parser (+ tests)
+└── docs/    # grammar of the language
 ```
 
 ## Getting started
