@@ -204,7 +204,7 @@ func (l *Lexer) readString() token.Token {
 			return token.Token{Type: token.STRING, Literal: l.input[position:l.position]}
 		}
 		if l.ch == 0 {
-			return token.Token{Type: token.ILLEGAL, Literal: l.input[position-1:l.position]}
+			return token.Token{Type: token.ILLEGAL, Literal: l.input[position-1 : l.position]}
 		}
 	}
 }
