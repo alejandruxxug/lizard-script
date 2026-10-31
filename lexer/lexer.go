@@ -1,6 +1,13 @@
 package lexer
 
-import "lizardscript/token"
+import (
+	"lizardscript/token"
+	"strings"
+)
+
+// commentStart opens a comment that runs to the end of the line. It looks
+// like a lizard's body, and '//' can't be used because it is integer division.
+const commentStart = "-~>"
 
 // Lexer turns lizard-script source code into a stream of tokens.
 type Lexer struct {
@@ -8,24 +15,35 @@ type Lexer struct {
 	position     int  // current position in input (points to current char)
 	readPosition int  // current reading position in input (after current char)
 	ch           byte // current char under examination
+	line         int  // 1-based line of ch
+	column       int  // 1-based column of ch
 }
 
 // New creates a Lexer for input and loads its first character.
 func New(input string) *Lexer {
-	l := &Lexer{input: input}
+	l := &Lexer{input: input, line: 1}
 	l.readChar()
 	return l
 }
 
-// readChar advances one character. At the end of input ch becomes 0 (NUL).
+// readChar advances one character. At the end of input ch becomes 0 (NUL)
+// and further calls do nothing, so the EOF position stays the same.
 func (l *Lexer) readChar() {
-	if l.readPosition >= len(l.input) {
+	if l.readPosition > len(l.input) {
+		return
+	}
+	if l.ch == '\n' {
+		l.line += 1
+		l.column = 0
+	}
+	if l.readPosition == len(l.input) {
 		l.ch = 0
 	} else {
 		l.ch = l.input[l.readPosition]
 	}
 	l.position = l.readPosition
 	l.readPosition += 1
+	l.column += 1
 }
 
 // peekChar returns the next character without advancing the lexer.
@@ -37,11 +55,20 @@ func (l *Lexer) peekChar() byte {
 	return l.input[l.readPosition]
 }
 
-// NextToken reads and returns the next token from the input.
+// NextToken reads and returns the next token from the input, stamped with
+// the line and column where it starts.
 func (l *Lexer) NextToken() token.Token {
-	var tok token.Token
-
 	l.skipWhitespace()
+
+	line, column := l.line, l.column
+	tok := l.readToken()
+	tok.Line, tok.Column = line, column
+	return tok
+}
+
+// readToken reads the token that starts at the current character.
+func (l *Lexer) readToken() token.Token {
+	var tok token.Token
 
 	switch l.ch {
 	case '=':
@@ -68,8 +95,16 @@ func (l *Lexer) NextToken() token.Token {
 		tok = l.oneOrTwoCharToken('/', token.SLASH, token.DOUBLE_SLASH)
 	case '%':
 		tok = newToken(token.MODULE, l.ch)
+	case '&':
+		tok = l.oneOrTwoCharToken('&', token.ILLEGAL, token.AND)
+	case '|':
+		tok = l.oneOrTwoCharToken('|', token.ILLEGAL, token.OR)
+	case '"':
+		tok = l.readString()
 	case ';':
 		tok = newToken(token.SEMICOLON, l.ch)
+	case ':':
+		tok = newToken(token.COLON, l.ch)
 	case ',':
 		tok = newToken(token.COMMA, l.ch)
 	case '(':
@@ -127,20 +162,51 @@ func (l *Lexer) extendToken(tok token.Token, next byte, tokenType token.TokenTyp
 	return tok
 }
 
-// skipWhitespace skips spaces, tabs and newlines.
+// skipWhitespace skips spaces, tabs, newlines and comments.
 func (l *Lexer) skipWhitespace() {
-	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' {
+	for {
+		switch {
+		case l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r':
+			l.readChar()
+		case strings.HasPrefix(l.input[l.position:], commentStart):
+			l.skipComment()
+		default:
+			return
+		}
+	}
+}
+
+// skipComment skips up to the end of the line, leaving the newline in ch.
+func (l *Lexer) skipComment() {
+	for l.ch != '\n' && l.ch != 0 {
 		l.readChar()
 	}
 }
 
-// readIdentifier reads letters (and underscores) and returns the whole word.
+// readIdentifier reads a word and returns it. A word starts with a letter or
+// underscore (checked by the caller) and can continue with digits, like x1.
 func (l *Lexer) readIdentifier() string {
 	position := l.position
-	for isLetter(l.ch) {
+	for isLetter(l.ch) || isDigit(l.ch) {
 		l.readChar()
 	}
 	return l.input[position:l.position]
+}
+
+// readString reads a double-quoted string, leaving ch on the closing quote.
+// The literal is the content without quotes. If the input ends first, it
+// returns an ILLEGAL token whose literal keeps the opening quote.
+func (l *Lexer) readString() token.Token {
+	position := l.position + 1
+	for {
+		l.readChar()
+		if l.ch == '"' {
+			return token.Token{Type: token.STRING, Literal: l.input[position:l.position]}
+		}
+		if l.ch == 0 {
+			return token.Token{Type: token.ILLEGAL, Literal: l.input[position-1:l.position]}
+		}
+	}
 }
 
 // readNumber reads consecutive digits and returns them as a string.

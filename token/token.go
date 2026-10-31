@@ -7,6 +7,8 @@ type TokenType string
 type Token struct {
 	Type    TokenType
 	Literal string
+	Line    int // 1-based line where the token starts
+	Column  int // 1-based column where the token starts
 }
 
 const (
@@ -14,8 +16,9 @@ const (
 	EOF     = "EOF"
 
 	// Identifiers + literals
-	IDENT = "IDENT" // add, foobar, x, y, ...
-	INT   = "INT"   // 1343456
+	IDENT  = "IDENT"  // add, foobar, x, y, ...
+	INT    = "INT"    // 1343456
+	STRING = "STRING" // "foobar"
 
 	// Operators
 	ASSIGN       = "="
@@ -38,9 +41,13 @@ const (
 	EQ     = "=="
 	NOT_EQ = "!="
 
+	AND = "&&"
+	OR  = "||"
+
 	// Delimiters
 	COMMA     = ","
 	SEMICOLON = ";"
+	COLON     = ":"
 
 	LPAREN   = "("
 	RPAREN   = ")"

@@ -204,10 +204,114 @@ func TestOperatorEdgeCases(t *testing.T) {
 		l := New(tt.input)
 		for i, want := range append(tt.expected, token.Token{Type: token.EOF, Literal: ""}) {
 			got := l.NextToken()
-			if got != want {
+			if got.Type != want.Type || got.Literal != want.Literal {
 				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
 					tt.input, i, want, got)
 			}
+		}
+	}
+}
+
+// TestNewTokens checks strings, logical operators, colons and identifiers
+// with digits.
+func TestNewTokens(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []token.Token
+	}{
+		{`"hello world"`, []token.Token{{Type: token.STRING, Literal: "hello world"}}},
+		{`""`, []token.Token{{Type: token.STRING, Literal: ""}}},
+		{`"open`, []token.Token{{Type: token.ILLEGAL, Literal: `"open`}}},
+		{"a && b", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.AND, Literal: "&&"}, {Type: token.IDENT, Literal: "b"}}},
+		{"a || b", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.OR, Literal: "||"}, {Type: token.IDENT, Literal: "b"}}},
+		{"&", []token.Token{{Type: token.ILLEGAL, Literal: "&"}}},
+		{"|", []token.Token{{Type: token.ILLEGAL, Literal: "|"}}},
+		{`{"a": 1}`, []token.Token{
+			{Type: token.LBRACE, Literal: "{"},
+			{Type: token.STRING, Literal: "a"},
+			{Type: token.COLON, Literal: ":"},
+			{Type: token.INT, Literal: "1"},
+			{Type: token.RBRACE, Literal: "}"},
+		}},
+		{"x1 _a2b", []token.Token{{Type: token.IDENT, Literal: "x1"}, {Type: token.IDENT, Literal: "_a2b"}}},
+		{"1x", []token.Token{{Type: token.INT, Literal: "1"}, {Type: token.IDENT, Literal: "x"}}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, want := range append(tt.expected, token.Token{Type: token.EOF, Literal: ""}) {
+			got := l.NextToken()
+			if got.Type != want.Type || got.Literal != want.Literal {
+				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
+					tt.input, i, want, got)
+			}
+		}
+	}
+}
+
+// TestComments checks that -~> comments are skipped and that it only opens a
+// comment when all three characters are together.
+func TestComments(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []token.Token
+	}{
+		{"1; -~> trailing\n2", []token.Token{{Type: token.INT, Literal: "1"}, {Type: token.SEMICOLON, Literal: ";"}, {Type: token.INT, Literal: "2"}}},
+		{"-~> whole line\n1", []token.Token{{Type: token.INT, Literal: "1"}}},
+		{"-~> one\n-~> two\n\n  -~> three\n1", []token.Token{{Type: token.INT, Literal: "1"}}},
+		{"1 -~> no newline at the end", []token.Token{{Type: token.INT, Literal: "1"}}},
+		{"-~>", nil},
+		{`"-~> text"`, []token.Token{{Type: token.STRING, Literal: "-~> text"}}},
+		{"a -~", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.MINUS, Literal: "-"}, {Type: token.ILLEGAL, Literal: "~"}}},
+		{"~", []token.Token{{Type: token.ILLEGAL, Literal: "~"}}},
+		{"a -b", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.MINUS, Literal: "-"}, {Type: token.IDENT, Literal: "b"}}},
+		{"a - > b", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.MINUS, Literal: "-"}, {Type: token.GT, Literal: ">"}, {Type: token.IDENT, Literal: "b"}}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, want := range append(tt.expected, token.Token{Type: token.EOF, Literal: ""}) {
+			got := l.NextToken()
+			if got.Type != want.Type || got.Literal != want.Literal {
+				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
+					tt.input, i, want, got)
+			}
+		}
+	}
+}
+
+// TestPositions checks the line and column of tokens, including the ones
+// after a newline, a comment and a multi-character token.
+func TestPositions(t *testing.T) {
+	input := "let x = 10;\n  y === 1; -~> note\n\tz\n\"a b\" w"
+
+	tests := []struct {
+		literal string
+		line    int
+		column  int
+	}{
+		{"let", 1, 1},
+		{"x", 1, 5},
+		{"=", 1, 7},
+		{"10", 1, 9},
+		{";", 1, 11},
+		{"y", 2, 3},
+		{"===", 2, 5},
+		{"1", 2, 9},
+		{";", 2, 10},
+		{"z", 3, 2},
+		{"a b", 4, 1},
+		{"w", 4, 7},
+		{"", 4, 8}, // EOF
+		{"", 4, 8}, // EOF stays put when asked again
+	}
+
+	l := New(input)
+	for i, tt := range tests {
+		got := l.NextToken()
+		if got.Literal != tt.literal || got.Line != tt.line || got.Column != tt.column {
+			t.Fatalf("tests[%d] - expected %q at %d:%d, got %q at %d:%d",
+				i, tt.literal, tt.line, tt.column, got.Literal, got.Line, got.Column)
 		}
 	}
 }
