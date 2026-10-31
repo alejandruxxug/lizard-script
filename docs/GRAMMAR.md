@@ -114,4 +114,6 @@ Whitespace and comments are skipped between tokens. Integers are always decimal,
 - Strings have no escape sequences, so they can't contain a `"`. They can span several lines.
 - Identifiers and comments are ASCII. A non-ASCII character in code is a lexical error, although strings and comments can contain it.
 - `;` is optional at the end of a line, but a line break doesn't end an expression that can continue. A line starting with an operator, `(` or `[` continues the previous expression, so `x` followed by a line with `-1` is a subtraction.
-- After a syntax error the rest of that statement is skipped, so a second mistake in the same statement shows up only after fixing the first.
+- For the same reason, `return` takes the expression on the next line as its value, unless a `;` or `}` comes first.
+- The smallest 64-bit integer can't be written as a literal: `-9223372036854775808` is a `-` applied to a number that is too large.
+- After a syntax error the rest of that statement is skipped, so a second mistake in the same statement shows up only after fixing the first. Recovery is a best effort: with a badly broken `for` header, like one with no `)`, the first error is right but a second one can follow it.

@@ -3,6 +3,7 @@ package lexer
 import (
 	"lizardscript/token"
 	"strings"
+	"unicode/utf8"
 )
 
 // commentStart opens a comment that runs to the end of the line. It looks
@@ -43,7 +44,15 @@ func (l *Lexer) readChar() {
 	}
 	l.position = l.readPosition
 	l.readPosition += 1
-	l.column += 1
+	if !isContinuationByte(l.ch) {
+		l.column += 1
+	}
+}
+
+// atEnd reports whether the whole input was read. ch alone can't tell, since
+// the source could contain a real NUL character.
+func (l *Lexer) atEnd() bool {
+	return l.position >= len(l.input)
 }
 
 // peekChar returns the next character without advancing the lexer.
@@ -120,6 +129,9 @@ func (l *Lexer) readToken() token.Token {
 	case ']':
 		tok = newToken(token.RBRACKET, l.ch)
 	case 0:
+		if !l.atEnd() {
+			return l.readIllegal()
+		}
 		tok.Literal = ""
 		tok.Type = token.EOF
 	default:
@@ -132,11 +144,23 @@ func (l *Lexer) readToken() token.Token {
 			tok.Literal = l.readNumber()
 			return tok
 		}
-		tok = newToken(token.ILLEGAL, l.ch)
+		return l.readIllegal()
 	}
 
 	l.readChar()
 	return tok
+}
+
+// readIllegal returns an ILLEGAL token with the whole character at the
+// current position. A character like 'ñ' takes several bytes in UTF-8, so
+// reading one byte would report a broken piece of it.
+func (l *Lexer) readIllegal() token.Token {
+	_, size := utf8.DecodeRuneInString(l.input[l.position:])
+	literal := l.input[l.position : l.position+size]
+	for range size {
+		l.readChar()
+	}
+	return token.Token{Type: token.ILLEGAL, Literal: literal}
 }
 
 // oneOrTwoCharToken returns a two-character token of type double when the
@@ -178,7 +202,7 @@ func (l *Lexer) skipWhitespace() {
 
 // skipComment skips up to the end of the line, leaving the newline in ch.
 func (l *Lexer) skipComment() {
-	for l.ch != '\n' && l.ch != 0 {
+	for l.ch != '\n' && !l.atEnd() {
 		l.readChar()
 	}
 }
@@ -203,7 +227,7 @@ func (l *Lexer) readString() token.Token {
 		if l.ch == '"' {
 			return token.Token{Type: token.STRING, Literal: l.input[position:l.position]}
 		}
-		if l.ch == 0 {
+		if l.atEnd() {
 			return token.Token{Type: token.ILLEGAL, Literal: l.input[position-1 : l.position]}
 		}
 	}
@@ -224,6 +248,12 @@ func isLetter(ch byte) bool {
 
 func isDigit(ch byte) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+// isContinuationByte reports whether ch is the second or later byte of a
+// UTF-8 character, which doesn't take a new column.
+func isContinuationByte(ch byte) bool {
+	return ch&0xC0 == 0x80
 }
 
 func newToken(tokenType token.TokenType, ch byte) token.Token {

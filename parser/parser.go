@@ -80,7 +80,8 @@ type Parser struct {
 
 	recovering bool // an error was found and the statement is being abandoned
 	braceDepth int  // how many '{' are open, of blocks and hashes
-	blockDepth int  // how many of those are blocks of statements
+	blockBrace int  // braceDepth inside the innermost block, 0 at the top level
+	parenDepth int  // how many '(' are open
 	loopDepth  int  // how many loops are open in the current function
 }
 
@@ -197,11 +198,11 @@ func (p *Parser) synchronize() {
 	p.recovering = false
 
 	for !p.curTokenIs(token.EOF) {
-		if p.braceDepth <= p.blockDepth {
+		if p.braceDepth <= p.blockBrace {
 			if p.curTokenIs(token.SEMICOLON) || p.curTokenIs(token.RBRACE) {
 				return
 			}
-			if p.peekTokenIs(token.EOF) || (p.blockDepth > 0 && p.peekTokenIs(token.RBRACE)) {
+			if p.peekTokenIs(token.EOF) || (p.blockBrace > 0 && p.peekTokenIs(token.RBRACE)) {
 				return
 			}
 		}
@@ -209,7 +210,7 @@ func (p *Parser) synchronize() {
 	}
 }
 
-// nextToken moves one token forward and keeps braceDepth up to date.
+// nextToken moves one token forward and keeps the depth counters up to date.
 func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
 	p.peekToken = p.l.NextToken()
@@ -219,6 +220,10 @@ func (p *Parser) nextToken() {
 		p.braceDepth++
 	case p.curTokenIs(token.RBRACE) && p.braceDepth > 0:
 		p.braceDepth--
+	case p.curTokenIs(token.LPAREN):
+		p.parenDepth++
+	case p.curTokenIs(token.RPAREN) && p.parenDepth > 0:
+		p.parenDepth--
 	}
 }
 
@@ -442,10 +447,11 @@ func (p *Parser) parseExpressionStatement() ast.Statement {
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	block := &ast.BlockStatement{Token: p.curToken}
 
-	p.blockDepth++
+	outerBlockBrace := p.blockBrace
+	p.blockBrace = p.braceDepth
 	p.nextToken()
 	block.Statements = p.parseStatementList(token.RBRACE)
-	p.blockDepth--
+	p.blockBrace = outerBlockBrace
 
 	if !p.curTokenIs(token.RBRACE) {
 		p.errorAt(block.Token, "block is never closed: expected \"}\"")
@@ -624,48 +630,17 @@ func (p *Parser) parseWhileExpression() ast.Expression {
 }
 
 // parseForExpression parses: for (<init>; <condition>; <update>) { ... }
-// Any of the three parts can be left out. <init> is a statement, which
-// consumes its own ';'. The other two are expressions, which don't.
+// A broken header is skipped first, because its ';' would otherwise look like
+// the end of the statement to synchronize.
 func (p *Parser) parseForExpression() ast.Expression {
 	expression := &ast.ForExpression{Token: p.curToken}
+	outerParenDepth := p.parenDepth
 
-	if !p.expectPeek(token.LPAREN) {
+	if !p.parseForHeader(expression) {
+		for p.parenDepth > outerParenDepth && !p.peekTokenIs(token.LBRACE) && !p.curTokenIs(token.EOF) {
+			p.nextToken()
+		}
 		return nil
-	}
-	p.nextToken()
-
-	if !p.curTokenIs(token.SEMICOLON) {
-		expression.Init = p.parseStatement()
-		if expression.Init == nil {
-			return nil
-		}
-		if !p.curTokenIs(token.SEMICOLON) {
-			p.errorAt(p.peekToken, "expected %s, got %s",
-				describeType(token.SEMICOLON), describeToken(p.peekToken))
-			return nil
-		}
-	}
-	p.nextToken()
-
-	if !p.curTokenIs(token.SEMICOLON) {
-		expression.Condition = p.parseExpression(LOWEST)
-		if expression.Condition == nil {
-			return nil
-		}
-		if !p.expectPeek(token.SEMICOLON) {
-			return nil
-		}
-	}
-	p.nextToken()
-
-	if !p.curTokenIs(token.RPAREN) {
-		expression.Update = p.parseExpression(LOWEST)
-		if expression.Update == nil {
-			return nil
-		}
-		if !p.expectPeek(token.RPAREN) {
-			return nil
-		}
 	}
 
 	if !p.expectPeek(token.LBRACE) {
@@ -673,6 +648,56 @@ func (p *Parser) parseForExpression() ast.Expression {
 	}
 	expression.Body = p.parseLoopBody()
 	return expression
+}
+
+// parseForHeader parses (<init>; <condition>; <update>), ending on the ')'.
+// Any of the three parts can be left out. <init> is a let or an expression
+// statement, which consumes its own ';'. The other two are expressions, which
+// don't. It returns false on error.
+func (p *Parser) parseForHeader(expression *ast.ForExpression) bool {
+	if !p.expectPeek(token.LPAREN) {
+		return false
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(token.SEMICOLON) {
+		if p.curTokenIs(token.LET) {
+			expression.Init = p.parseLetStatement()
+		} else {
+			expression.Init = p.parseExpressionStatement()
+		}
+		if expression.Init == nil {
+			return false
+		}
+		if !p.curTokenIs(token.SEMICOLON) {
+			p.errorAt(p.peekToken, "expected %s, got %s",
+				describeType(token.SEMICOLON), describeToken(p.peekToken))
+			return false
+		}
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(token.SEMICOLON) {
+		expression.Condition = p.parseExpression(LOWEST)
+		if expression.Condition == nil {
+			return false
+		}
+		if !p.expectPeek(token.SEMICOLON) {
+			return false
+		}
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(token.RPAREN) {
+		expression.Update = p.parseExpression(LOWEST)
+		if expression.Update == nil {
+			return false
+		}
+		if !p.expectPeek(token.RPAREN) {
+			return false
+		}
+	}
+	return true
 }
 
 // parseFunctionLiteral parses an anonymous function: function(a, b) { ... }

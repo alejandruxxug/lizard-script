@@ -275,6 +275,14 @@ func TestErrors(t *testing.T) {
 		{"a @ b;", `[line 1, column 3] lexical error: unexpected character "@"`},
 		{"a & b;", `[line 1, column 3] lexical error: unexpected character "&"`},
 		{"-~", `[line 1, column 2] lexical error: unexpected character "~"`},
+		{"let año = 1;", `[line 1, column 6] lexical error: unexpected character "ñ"`},
+		{`"canción" @`, `[line 1, column 11] lexical error: unexpected character "@"`},
+		{"a\x00b", `[line 1, column 2] lexical error: unexpected character "\x00"`},
+
+		{"for (return 1;;) { }", `[line 1, column 6] syntax error: expected an expression, got "return"`},
+		{"while (a) { for (break;;) { } }", `[line 1, column 18] syntax error: expected an expression, got "break"`},
+		{"for (; @; i) { a; }", `[line 1, column 8] lexical error: unexpected character "@"`},
+		{"for (f(1 2); ;) { a; }", `[line 1, column 10] syntax error: expected ")", got "2"`},
 		{`let s = "open;`, `[line 1, column 9] lexical error: unterminated string`},
 	}
 
@@ -333,6 +341,21 @@ func TestErrorRecovery(t *testing.T) {
 		{
 			"if (a) {\n  let h = {\"a\": 1 2};\n  let y = 2;\n}\nlet z = 1;",
 			[]string{`[line 2, column 19] syntax error: expected ",", got "2"`},
+			2,
+		},
+		{
+			"for (let = 0; i < 3; i = i + 1) {\n  a;\n  b;\n}\nlet z = 1;",
+			[]string{`[line 1, column 10] syntax error: expected identifier, got "="`},
+			1,
+		},
+		{
+			"let h = {\"f\": function() { let = 1; }};\nlet z = 1;",
+			[]string{`[line 1, column 32] syntax error: expected identifier, got "="`},
+			2,
+		},
+		{
+			"let h = {\"a\": if (x) { let = 1; }, \"b\": 2};\nlet z = 1;",
+			[]string{`[line 1, column 28] syntax error: expected identifier, got "="`},
 			2,
 		},
 		{

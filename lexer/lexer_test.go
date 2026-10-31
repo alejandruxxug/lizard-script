@@ -280,6 +280,51 @@ func TestComments(t *testing.T) {
 	}
 }
 
+// TestNonASCIIAndNUL checks that a multi-byte character is one ILLEGAL token
+// and not several pieces, and that a NUL in the source doesn't end the input.
+func TestNonASCIIAndNUL(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []token.Token
+	}{
+		{"añ", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.ILLEGAL, Literal: "ñ"}}},
+		{"🦎 x", []token.Token{{Type: token.ILLEGAL, Literal: "🦎"}, {Type: token.IDENT, Literal: "x"}}},
+		{"\xff", []token.Token{{Type: token.ILLEGAL, Literal: "\xff"}}},
+		{`"ñandú 🦎"`, []token.Token{{Type: token.STRING, Literal: "ñandú 🦎"}}},
+		{"-~> ñandú 🦎\n1", []token.Token{{Type: token.INT, Literal: "1"}}},
+		{"a\x00b", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.ILLEGAL, Literal: "\x00"}, {Type: token.IDENT, Literal: "b"}}},
+		{"\"a\x00b\"", []token.Token{{Type: token.STRING, Literal: "a\x00b"}}},
+		{"-~> a\x00b\n1", []token.Token{{Type: token.INT, Literal: "1"}}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, want := range append(tt.expected, token.Token{Type: token.EOF, Literal: ""}) {
+			got := l.NextToken()
+			if got.Type != want.Type || got.Literal != want.Literal {
+				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
+					tt.input, i, want, got)
+			}
+		}
+	}
+}
+
+// TestColumnsCountCharacters checks that columns count characters and not
+// bytes, so an accent doesn't shift the rest of the line.
+func TestColumnsCountCharacters(t *testing.T) {
+	l := New("\"canción 🦎\" x\ny")
+
+	if tok := l.NextToken(); tok.Column != 1 {
+		t.Fatalf("string - expected column 1, got %d", tok.Column)
+	}
+	if tok := l.NextToken(); tok.Literal != "x" || tok.Column != 13 {
+		t.Fatalf("expected x at column 13, got %q at %d", tok.Literal, tok.Column)
+	}
+	if tok := l.NextToken(); tok.Literal != "y" || tok.Line != 2 || tok.Column != 1 {
+		t.Fatalf("expected y at 2:1, got %q at %d:%d", tok.Literal, tok.Line, tok.Column)
+	}
+}
+
 // TestPositions checks the line and column of tokens, including the ones
 // after a newline, a comment and a multi-character token.
 func TestPositions(t *testing.T) {
