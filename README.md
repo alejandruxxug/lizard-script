@@ -10,8 +10,8 @@ lizard-script is a small interpreted language written in Go, built phase by phas
 | --- | --- | --- |
 | 1 | Tokens + lexer | ✅ Done |
 | 2 | Parser / AST | ✅ Done |
-| 3 | Evaluator | ⏳ Coming soon |
-| 4 | REPL | ⏳ Coming soon |
+| 3 | Evaluator | ✅ Done |
+| 4 | REPL | ✅ Done |
 
 ## A taste of the language
 
@@ -38,7 +38,9 @@ while (result > 0) {
 let lizard = {"name": "Liz", "toes": [5, 5, 5, 5]};
 ```
 
-The full grammar is in [docs/GRAMMAR.md](docs/GRAMMAR.md).
+The full grammar is in [docs/GRAMMAR.md](docs/GRAMMAR.md), and what each construct does when it runs (truthiness, `==` vs `===`, `/` vs `//`, scopes, builtins...) is in [docs/SEMANTICS.md](docs/SEMANTICS.md).
+
+More programs are in [examples/](examples/).
 
 ## Tokens
 
@@ -68,8 +70,13 @@ lizard-script/
 ├── token/   # token types, keywords and identifier lookup
 ├── lexer/   # turns source code into a stream of tokens (+ tests)
 ├── ast/     # the nodes of the abstract syntax tree
-├── parser/  # turns tokens into an AST with a Pratt parser (+ tests)
-└── docs/    # grammar of the language
+├── parser/    # turns tokens into an AST with a Pratt parser (+ tests)
+├── object/    # the values of a running program and the environments that hold variables
+├── evaluator/ # runs the AST by walking it, plus the builtins (+ tests)
+├── repl/      # the interactive REPL, and running whole files (+ tests)
+├── examples/  # sample programs, run by the tests
+├── docs/      # grammar and semantics of the language
+└── main.go    # the lizardscript command
 ```
 
 ## Getting started
@@ -81,6 +88,18 @@ git clone https://github.com/alejandruxxug/lizard-script.git
 cd lizard-script
 go test ./...
 ```
+
+Start the REPL with `go run .`. Variables live on between inputs, and an input with an open `(`, `[`, `{` or string keeps reading lines until it is closed. Type `exit` to leave, or end the input with Ctrl+D (Ctrl+Z then Enter on Windows).
+
+```
+🦎 >> let toes = [5, 5]
+🦎 >> push(toes, 4)
+[5, 5, 4]
+🦎 >> "Liz" * 2
+"LizLiz"
+```
+
+Run a file with `go run . examples/fizzbuzz.liz`, or build the `lizardscript` command with `go build`. A program with an error stops with a message like `[line 2, column 8] runtime error: ...` and exit code 1.
 
 ## Credits
 

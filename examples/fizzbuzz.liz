@@ -1,0 +1,14 @@
+-~> Prints the numbers from 1 to 15, but multiples of 3 are "Fizz",
+-~> multiples of 5 are "Buzz" and multiples of both are "FizzBuzz".
+
+for (let i = 1; i <= 15; i = i + 1) {
+  if (i % 15 == 0) {
+    puts("FizzBuzz")
+  } elif (i % 3 == 0) {
+    puts("Fizz")
+  } elif (i % 5 == 0) {
+    puts("Buzz")
+  } else {
+    puts(i)
+  }
+}

@@ -103,7 +103,7 @@ Whitespace and comments are skipped between tokens. Integers are always decimal,
 ## Rules that are not in the grammar
 
 - `break` must be inside a `while` or `for` of the same function. Otherwise it is a syntax error.
-- `return` is allowed outside of a function. What it does there is up to the evaluator.
+- `return` is allowed outside of a function, where it ends the program. What programs do when they run is in [SEMANTICS.md](SEMANTICS.md).
 - `elif` has no node of its own: it is an `if` inside the `else` block of the previous one.
 - `function add(x) { ... }` builds the same tree as `let add = function(x) { ... };`
 - An `if`, `while` or `for` that starts a statement ends at its closing `}`, so the next line is a new statement. As part of a larger expression they do produce a value: `let x = if (a) { 1 } else { 2 };`
