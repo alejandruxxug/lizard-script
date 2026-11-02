@@ -17,6 +17,8 @@ What a program does when it runs. The syntax is in [GRAMMAR.md](GRAMMAR.md).
 
 Arrays and hashes are shared, not copied. After `let b = a`, a change made through `b` shows through `a` too, and a function that receives an array can change it.
 
+An array or hash can even contain itself, like after `push(a, a)`. When it is shown, the inner copy is written as `[...]` or `{...}`: `a` shows as `[1, [...]]`. Comparing such values works too.
+
 ### Truthiness
 
 Conditions accept any value. `false`, `null`, `0`, `""`, `[]` and `{}` count as false. Everything else counts as true.
@@ -114,5 +116,4 @@ Syntax errors are found before the program starts, so a program with one doesn't
 
 ## Known limitations
 
-- An array or hash that contains itself, like after `push(a, a)`, can't be shown or compared: trying it crashes the interpreter.
 - An infinite loop runs forever. In the REPL, stop it with Ctrl+C.

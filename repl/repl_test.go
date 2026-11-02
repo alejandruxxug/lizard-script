@@ -27,7 +27,19 @@ func TestREPL(t *testing.T) {
 		{"let x = 5\nx * 2\n", "10\n\n"},
 		{"\"liz\"\n", "\"liz\"\n\n"},
 		{"puts(\"hi\")\n", "hi\n\n"},
-		{"if (false) { 1 }\n", "\n"},
+		{"if (false) { 1 }\n", "\n\n"},
+		{"if (true) { 1 } else { 2 }\n3\n", "1\n3\n\n"},
+		{"if (false) { 1 }\nelse { 2 }\n", "2\n\n"},
+		{"let x = 5\nif (x > 10) { 1 }\nelif (x > 3) { 2 }\nelse { 3 }\n", "2\n\n"},
+		{"let x = 1\nif (x > 10) { 1 }\nelif (x > 3) { 2 }\n\nx\n", "1\n\n"},
+		{"if (true) {\n  1\n}\nelse {\n  2\n}\n", "1\n\n"},
+		{"if (true) { 1 }\nelse\n{ 2 }\n", "1\n\n"},
+		{"if (true) { 1 }\n\n2\n", "1\n2\n\n"},
+		{"if (true) { 1 }\n2\n", "1\n2\n\n"},
+		{"if (true) { 1 }\nexit\n", "1\n"},
+		{"let y = if (false) { 1 }\nelse { 2 }\ny\n", "2\n\n"},
+		{"while (false) {}\n3\n", "3\n\n"},
+		{"else { 1 }\n", "[line 1, column 1] syntax error: expected an expression, got \"else\"\n\n"},
 		{"\n\n7\n", "7\n\n"},
 		{"function add(a, b) {\n  a + b\n}\nadd(1, 2)\n", "3\n\n"},
 		{"let list = [\n1,\n2]\nlist\n", "[1, 2]\n\n"},
@@ -65,6 +77,8 @@ func TestIsIncomplete(t *testing.T) {
 		{"a &&", true},
 		{"}", false},
 		{"1 -~> comment {", false},
+		{"if (a) { 1 } else", true},
+		{"let", true},
 	}
 
 	for _, tt := range tests {
@@ -95,6 +109,36 @@ func TestRun(t *testing.T) {
 	}
 	if out.Len() != 0 || !strings.Contains(errOut.String(), "syntax error") {
 		t.Errorf("a program with syntax errors must not run: out %q, errors %q", out.String(), errOut.String())
+	}
+}
+
+func TestEndsWithOpenIf(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"if (a) { 1 }", true},
+		{"if (a) { 1 } elif (b) { 2 }", true},
+		{"if (a) { 1 } else { 2 }", false},
+		{"if (a) { 1 } elif (b) { 2 } else { 3 }", false},
+		{"if (a) { if (b) { 1 } }", true},
+		{"if (a) { 1 } else { if (b) { 2 } }", false},
+		{"let x = if (a) { 1 }", true},
+		{"x = if (a) { 1 }", true},
+		{"return if (a) { 1 }", true},
+		{"1 + if (a) { 1 }", true},
+		{"if (a) { 1 };", false},
+		{"while (a) { if (b) { 1 } }", false},
+		{"function f() { if (a) { 1 } }", false},
+		{"{\"a\": if (a) { 1 }}", false},
+		{"let = if (a) { 1 }", false},
+		{"1", false},
+	}
+
+	for _, tt := range tests {
+		if got := endsWithOpenIf(tt.input); got != tt.expected {
+			t.Errorf("endsWithOpenIf(%q) = %t, want %t", tt.input, got, tt.expected)
+		}
 	}
 }
 

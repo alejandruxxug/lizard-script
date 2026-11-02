@@ -74,13 +74,7 @@ type Array struct {
 }
 
 func (a *Array) Type() ObjectType { return ARRAY_OBJ }
-func (a *Array) Inspect() string {
-	parts := []string{}
-	for _, e := range a.Elements {
-		parts = append(parts, inspectNested(e))
-	}
-	return "[" + strings.Join(parts, ", ") + "]"
-}
+func (a *Array) Inspect() string  { return inspectNested(a, map[Object]bool{}) }
 
 // HashKey identifies a key of a Hash. Two keys are the same when they have
 // the same type and value, so 1 and "1" are different keys.
@@ -164,21 +158,46 @@ func (h *Hash) Each(f func(pair HashPair)) {
 }
 
 func (h *Hash) Type() ObjectType { return HASH_OBJ }
-func (h *Hash) Inspect() string {
-	parts := []string{}
-	h.Each(func(pair HashPair) {
-		parts = append(parts, inspectNested(pair.Key)+": "+inspectNested(pair.Value))
-	})
-	return "{" + strings.Join(parts, ", ") + "}"
-}
+func (h *Hash) Inspect() string  { return inspectNested(h, map[Object]bool{}) }
 
-// inspectNested shows strings inside arrays and hashes with their quotes,
-// so ["1"] and [1] look different.
-func inspectNested(o Object) string {
-	if s, ok := o.(*String); ok {
-		return "\"" + s.Value + "\""
+// inspectNested writes a value inside an array or hash. Strings get their
+// quotes, so ["1"] and [1] look different. open has the arrays and hashes
+// being written right now: meeting one of them again means it contains
+// itself, and it is shown as [...] or {...} instead of looping forever.
+func inspectNested(o Object, open map[Object]bool) string {
+	switch o := o.(type) {
+	case *String:
+		return "\"" + o.Value + "\""
+
+	case *Array:
+		if open[o] {
+			return "[...]"
+		}
+		open[o] = true
+		defer delete(open, o)
+
+		parts := []string{}
+		for _, e := range o.Elements {
+			parts = append(parts, inspectNested(e, open))
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+
+	case *Hash:
+		if open[o] {
+			return "{...}"
+		}
+		open[o] = true
+		defer delete(open, o)
+
+		parts := []string{}
+		o.Each(func(pair HashPair) {
+			parts = append(parts, inspectNested(pair.Key, open)+": "+inspectNested(pair.Value, open))
+		})
+		return "{" + strings.Join(parts, ", ") + "}"
+
+	default:
+		return o.Inspect()
 	}
-	return o.Inspect()
 }
 
 // Function is a function value. Env is the environment where it was

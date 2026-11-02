@@ -89,7 +89,7 @@ cd lizard-script
 go test ./...
 ```
 
-Start the REPL with `go run .`. Variables live on between inputs, and an input with an open `(`, `[`, `{` or string keeps reading lines until it is closed. Type `exit` to leave, or end the input with Ctrl+D (Ctrl+Z then Enter on Windows).
+Start the REPL with `go run .`. Variables live on between inputs, and an input with an open `(`, `[`, `{` or string keeps reading lines until it is closed. After an `if`, the REPL waits for one more line in case it starts with `elif` or `else`: press Enter on an empty line to run the `if` alone. Type `exit` to leave, or end the input with Ctrl+D (Ctrl+Z then Enter on Windows).
 
 ```
 🦎 >> let toes = [5, 5]

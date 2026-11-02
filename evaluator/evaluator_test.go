@@ -255,6 +255,27 @@ func TestArraysAndHashes(t *testing.T) {
 	})
 }
 
+// TestSelfContaining checks arrays and hashes that contain themselves: they
+// are shown with [...] or {...}, and comparing them ends.
+func TestSelfContaining(t *testing.T) {
+	checkAll(t, []expectation{
+		{"let a = [1]; push(a, a); a", "[1, [...]]"},
+		{"let a = [1]; push(a, a); str(a)", "\"[1, [...]]\""},
+		{"let h = {}; h[\"me\"] = h; h", "{\"me\": {...}}"},
+		{"let a = []; let h = {\"list\": a}; push(a, h); h", "{\"list\": [{...}]}"},
+		{"let a = [1]; [a, a]", "[[1], [1]]"},
+		{"let a = [1]; push(a, a); a == a", "true"},
+		{"let a = [1]; push(a, a); let b = [1]; push(b, b); a === b", "true"},
+		{"let a = [1]; push(a, a); let b = [\"1\"]; push(b, b); a == b", "true"},
+		{"let a = [1]; push(a, a); let b = [\"1\"]; push(b, b); a === b", "false"},
+		{"let a = [1]; push(a, a); let b = [2]; push(b, b); a == b", "false"},
+		{"let a = [1]; push(a, a); a == [1, a]", "true"},
+		{"let a = [1]; push(a, a); a == [1, [1, 2]]", "false"},
+		{"let h = {}; h[\"me\"] = h; let g = {}; g[\"me\"] = g; h == g", "true"},
+		{"let h = {}; h[\"me\"] = h; let g = {}; g[\"me\"] = g; g[\"x\"] = 1; h == g", "false"},
+	})
+}
+
 func TestBuiltins(t *testing.T) {
 	checkAll(t, []expectation{
 		{"len(\"\")", "0"},

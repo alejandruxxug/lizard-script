@@ -439,23 +439,14 @@ func repeatString(tok token.Token, s string, count int64) object.Object {
 // Arrays and hashes are equal when their contents are. Functions are only
 // equal to themselves.
 func strictEquals(left, right object.Object) bool {
-	if left.Type() != right.Type() {
-		return false
-	}
-	return sameTypeEquals(left, right, strictEquals)
+	return (&equality{strict: true}).equals(left, right)
 }
 
 // looseEquals is ==. It works like === but first converts between some
 // types: true and false are 1 and 0, and a string that is a whole number
 // equals that number. So 1 == true and "5" == 5, but 1 !== true.
 func looseEquals(left, right object.Object) bool {
-	if left.Type() == right.Type() {
-		return sameTypeEquals(left, right, looseEquals)
-	}
-
-	leftNumber, leftOk := toNumber(left)
-	rightNumber, rightOk := toNumber(right)
-	return leftOk && rightOk && leftNumber == rightNumber
+	return (&equality{strict: false}).equals(left, right)
 }
 
 // toNumber is the conversion of looseEquals. It fails for anything that
@@ -477,9 +468,32 @@ func toNumber(obj object.Object) (int64, bool) {
 	}
 }
 
-// sameTypeEquals compares two values of the same type. equals compares the
-// elements of arrays and hashes, so == and === apply all the way down.
-func sameTypeEquals(left, right object.Object, equals func(a, b object.Object) bool) bool {
+// pair is two arrays or two hashes being compared.
+type pair struct {
+	left, right object.Object
+}
+
+// equality is one comparison with == or ===, applied all the way down to
+// the elements of arrays and hashes.
+type equality struct {
+	strict bool
+	// open has the pairs being compared right now. Meeting one of them again
+	// means they contain themselves, and that pair is taken as equal: if
+	// anything differs, the comparison finds it somewhere else. Without
+	// this, comparing an array that contains itself would never end.
+	open map[pair]bool
+}
+
+func (e *equality) equals(left, right object.Object) bool {
+	if left.Type() != right.Type() {
+		if e.strict {
+			return false
+		}
+		leftNumber, leftOk := toNumber(left)
+		rightNumber, rightOk := toNumber(right)
+		return leftOk && rightOk && leftNumber == rightNumber
+	}
+
 	switch left := left.(type) {
 	case *object.Integer:
 		return left.Value == right.(*object.Integer).Value
@@ -494,8 +508,12 @@ func sameTypeEquals(left, right object.Object, equals func(a, b object.Object) b
 		if len(left.Elements) != len(right.Elements) {
 			return false
 		}
+		if !e.enter(left, right) {
+			return true
+		}
+		defer e.leave(left, right)
 		for i := range left.Elements {
-			if !equals(left.Elements[i], right.Elements[i]) {
+			if !e.equals(left.Elements[i], right.Elements[i]) {
 				return false
 			}
 		}
@@ -505,9 +523,13 @@ func sameTypeEquals(left, right object.Object, equals func(a, b object.Object) b
 		if len(left.Pairs) != len(right.Pairs) {
 			return false
 		}
-		for key, pair := range left.Pairs {
+		if !e.enter(left, right) {
+			return true
+		}
+		defer e.leave(left, right)
+		for key, entry := range left.Pairs {
 			other, ok := right.Pairs[key]
-			if !ok || !equals(pair.Value, other.Value) {
+			if !ok || !e.equals(entry.Value, other.Value) {
 				return false
 			}
 		}
@@ -515,6 +537,23 @@ func sameTypeEquals(left, right object.Object, equals func(a, b object.Object) b
 	default:
 		return left == right
 	}
+}
+
+// enter marks left and right as being compared. It returns false if they
+// already were.
+func (e *equality) enter(left, right object.Object) bool {
+	if e.open == nil {
+		e.open = map[pair]bool{}
+	}
+	if e.open[pair{left, right}] {
+		return false
+	}
+	e.open[pair{left, right}] = true
+	return true
+}
+
+func (e *equality) leave(left, right object.Object) {
+	delete(e.open, pair{left, right})
 }
 
 // Assignment
