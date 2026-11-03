@@ -1,0 +1,206 @@
+========================================
+numbers
+========================================
+
+1
+12
+1.5
+1e3
+2.5e-4
+1E+6
+010
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (number))
+  (expression_statement
+    (number))
+  (expression_statement
+    (number))
+  (expression_statement
+    (number))
+  (expression_statement
+    (number))
+  (expression_statement
+    (number))
+  (expression_statement
+    (number)))
+
+========================================
+units
+========================================
+
+45deg
+1.5rad
+0.25turn
+10px
+2.5e1deg
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (number
+      (unit)))
+  (expression_statement
+    (number
+      (unit)))
+  (expression_statement
+    (number
+      (unit)))
+  (expression_statement
+    (number
+      (unit)))
+  (expression_statement
+    (number
+      (unit))))
+
+========================================
+colors
+========================================
+
+#fff
+#3fa34d
+#ff00ff80
+#ABC
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (color))
+  (expression_statement
+    (color))
+  (expression_statement
+    (color))
+  (expression_statement
+    (color)))
+
+========================================
+strings and escapes
+========================================
+
+"plain"
+"a\nb\t\"q\" \\ \r"
+"\u00e9 \u{1F98E}"
+"two
+lines"
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (string
+      (string_content)))
+  (expression_statement
+    (string
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)))
+  (expression_statement
+    (string
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)))
+  (expression_statement
+    (string
+      (string_content))))
+
+========================================
+array and hash
+========================================
+
+[]
+[1, 2, 3]
+{}
+{ a: 1, "b": 2, }
+{
+  x: [1],
+  y: { z: 2 }
+}
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (array))
+  (expression_statement
+    (array
+      (number)
+      (number)
+      (number)))
+  (expression_statement
+    (hash))
+  (expression_statement
+    (hash
+      (pair
+        (identifier)
+        (number))
+      (pair
+        (string
+          (string_content))
+        (number))))
+  (expression_statement
+    (hash
+      (pair
+        (identifier)
+        (array
+          (number)))
+      (pair
+        (identifier)
+        (hash
+          (pair
+            (identifier)
+            (number)))))))
+
+========================================
+booleans and null
+========================================
+
+true
+false
+null
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (boolean))
+  (expression_statement
+    (boolean))
+  (expression_statement
+    (identifier)))
+
+========================================
+comments
+========================================
+
+-~> a comment
+let x = 1 -~> at the end
+let y = 2 +  -~> goes on
+  3
+
+----------------------------------------
+
+(source_file
+  (comment)
+  (let_statement
+    (identifier)
+    (number)
+    (comment))
+  (let_statement
+    (identifier)
+    (binary_expression
+      (number)
+      (comment)
+      (number))))

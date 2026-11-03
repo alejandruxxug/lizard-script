@@ -1,0 +1,19 @@
+{
+  "grammars": [
+    {
+      "name": "lizard",
+      "camelcase": "Lizard",
+      "scope": "source.lizard",
+      "path": ".",
+      "file-types": ["liz"],
+      "highlights": "queries/highlights.scm",
+      "locals": "queries/locals.scm",
+      "injections": "queries/injections.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "lizard-script grammar for Tree-sitter"
+  }
+}

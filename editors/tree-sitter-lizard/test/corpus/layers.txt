@@ -1,0 +1,340 @@
+========================================
+a layer owns the lines indented more
+========================================
+
+layer sky
+  push(picture, "sun")
+  push(picture, "birds")
+puts(picture)
+
+----------------------------------------
+
+(source_file
+  (layer_statement
+    (identifier)
+    (expression_statement
+      (call_expression
+        (identifier)
+        (arguments
+          (identifier)
+          (string
+            (string_content)))))
+    (expression_statement
+      (call_expression
+        (identifier)
+        (arguments
+          (identifier)
+          (string
+            (string_content))))))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (identifier)))))
+
+========================================
+layer with a string name
+========================================
+
+layer "tall grass"
+  push(picture, "grass")
+puts(1)
+
+----------------------------------------
+
+(source_file
+  (layer_statement
+    (string
+      (string_content))
+    (expression_statement
+      (call_expression
+        (identifier)
+        (arguments
+          (identifier)
+          (string
+            (string_content))))))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (number)))))
+
+========================================
+nested layers
+========================================
+
+layer a
+  x = 1
+  layer b
+    y = 2
+  z = 3
+w = 4
+
+----------------------------------------
+
+(source_file
+  (layer_statement
+    (identifier)
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number)))
+    (layer_statement
+      (identifier)
+      (expression_statement
+        (assignment_expression
+          (identifier)
+          (number))))
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number))))
+
+========================================
+empty layers
+========================================
+
+layer empty
+layer other
+  x = 1
+layer last
+
+----------------------------------------
+
+(source_file
+  (layer_statement
+    (identifier))
+  (layer_statement
+    (identifier)
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number))))
+  (layer_statement
+    (identifier)))
+
+========================================
+layer header with a semicolon and a comment
+========================================
+
+layer a; puts(1)
+layer b; -~> note
+  x = 1
+layer c -~> note
+  y = 2
+
+----------------------------------------
+
+(source_file
+  (layer_statement
+    (identifier))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (number))))
+  (layer_statement
+    (identifier)
+    (comment)
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number))))
+  (layer_statement
+    (identifier)
+    (comment)
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number)))))
+
+========================================
+comments and blank lines in a body
+========================================
+
+layer a
+  x = 1
+
+  -~> note
+
+  y = 2
+-~> not in the body
+z = 3
+
+----------------------------------------
+
+(source_file
+  (layer_statement
+    (identifier)
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number)))
+    (comment)
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number))))
+
+========================================
+layer inside a block
+========================================
+
+f(function() {
+  layer inner
+    1
+  2
+})
+if (a) {
+  layer l
+    x = 1
+}
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (function_expression
+          (parameters)
+          (block
+            (layer_statement
+              (identifier)
+              (expression_statement
+                (number)))
+            (expression_statement
+              (number)))))))
+  (expression_statement
+    (if_expression
+      (parenthesized_expression
+        (identifier))
+      (block
+        (layer_statement
+          (identifier)
+          (expression_statement
+            (assignment_expression
+              (identifier)
+              (number))))))))
+
+========================================
+a layer ends at the closing brace
+========================================
+
+function f() {
+  layer a
+    x = 1
+}
+y = 2
+
+----------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (layer_statement
+        (identifier)
+        (expression_statement
+          (assignment_expression
+            (identifier)
+            (number))))))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number))))
+
+========================================
+control statements inside a body
+========================================
+
+layer a
+  if (x) {
+    layer b
+      y = 1
+    z = 2
+  }
+  w = 3
+q = 4
+
+----------------------------------------
+
+(source_file
+  (layer_statement
+    (identifier)
+    (expression_statement
+      (if_expression
+        (parenthesized_expression
+          (identifier))
+        (block
+          (layer_statement
+            (identifier)
+            (expression_statement
+              (assignment_expression
+                (identifier)
+                (number))))
+          (expression_statement
+            (assignment_expression
+              (identifier)
+              (number))))))
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number))))
+
+========================================
+tab indentation
+========================================
+
+layer a
+	x = 1
+	layer b
+		y = 2
+z = 3
+
+----------------------------------------
+
+(source_file
+  (layer_statement
+    (identifier)
+    (expression_statement
+      (assignment_expression
+        (identifier)
+        (number)))
+    (layer_statement
+      (identifier)
+      (expression_statement
+        (assignment_expression
+          (identifier)
+          (number)))))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number))))
+
+========================================
+use inside a layer is an error
+:error
+========================================
+
+layer a
+  use "m"
+
+----------------------------------------
+
+

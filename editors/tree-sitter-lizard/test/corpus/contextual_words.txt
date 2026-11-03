@@ -1,0 +1,195 @@
+========================================
+layer as a name
+========================================
+
+let layer = 1
+layer + 1
+layer = 2
+f(layer)
+layer
+
+----------------------------------------
+
+(source_file
+  (let_statement
+    (identifier)
+    (number))
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (identifier))))
+  (expression_statement
+    (identifier)))
+
+========================================
+use as a name
+========================================
+
+let use = 1
+use + 1
+use("x")
+f(use)
+use = 2
+
+----------------------------------------
+
+(source_file
+  (let_statement
+    (identifier)
+    (number))
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (string
+          (string_content)))))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (identifier))))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number))))
+
+========================================
+try as a name
+========================================
+
+let try = 1
+try + 1
+try(1)
+f(try)
+if try { 1 }
+
+----------------------------------------
+
+(source_file
+  (let_statement
+    (identifier)
+    (number))
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (number))))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (identifier))))
+  (expression_statement
+    (if_expression
+      (identifier)
+      (block
+        (expression_statement
+          (number))))))
+
+========================================
+continue as a name
+========================================
+
+let continue = 1
+continue + 1
+continue = 5
+continue(1)
+continue.x
+f(continue)
+
+----------------------------------------
+
+(source_file
+  (let_statement
+    (identifier)
+    (number))
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (number))))
+  (expression_statement
+    (member_expression
+      (identifier)
+      (identifier)))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (identifier)))))
+
+========================================
+catch and as as names
+========================================
+
+let catch = 3
+catch(1)
+let as = 4
+as + 1
+
+----------------------------------------
+
+(source_file
+  (let_statement
+    (identifier)
+    (number))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (number))))
+  (let_statement
+    (identifier)
+    (number))
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (number))))
+
+========================================
+continue alone
+========================================
+
+while true {
+  continue
+  continue; break
+  continue -~> skip
+}
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (while_expression
+      (boolean)
+      (block
+        (continue_statement)
+        (continue_statement)
+        (break_statement)
+        (continue_statement
+          (comment))))))

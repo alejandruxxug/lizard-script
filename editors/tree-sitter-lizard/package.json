@@ -1,0 +1,9 @@
+{
+  "name": "tree-sitter-lizard",
+  "version": "0.1.0",
+  "description": "lizard-script grammar for Tree-sitter",
+  "private": true,
+  "license": "MIT",
+  "main": "grammar.js",
+  "tree-sitter": [{ "scope": "source.lizard", "file-types": ["liz"] }]
+}

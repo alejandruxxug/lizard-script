@@ -1,0 +1,384 @@
+========================================
+let and assignment
+========================================
+
+let x = 5
+x = x + 1
+x += 2;
+x -= 1; x *= 3
+x /= 2
+
+----------------------------------------
+
+(source_file
+  (let_statement
+    (identifier)
+    (number))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (binary_expression
+        (identifier)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (number))))
+
+========================================
+function declaration with defaults
+========================================
+
+function label(name, size = 12, caption = name + "!") {
+  caption
+}
+
+----------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters
+      (parameter
+        (identifier))
+      (parameter
+        (identifier)
+        (number))
+      (parameter
+        (identifier)
+        (binary_expression
+          (identifier)
+          (string
+            (string_content)))))
+    (block
+      (expression_statement
+        (identifier)))))
+
+========================================
+function literal
+========================================
+
+let add = function(a, b) { a + b };
+
+----------------------------------------
+
+(source_file
+  (let_statement
+    (identifier)
+    (function_expression
+      (parameters
+        (parameter
+          (identifier))
+        (parameter
+          (identifier)))
+      (block
+        (expression_statement
+          (binary_expression
+            (identifier)
+            (identifier)))))))
+
+========================================
+if elif else if else
+========================================
+
+if (a) { 1 } elif (b) { 2 } else if (c) { 3 } else { 4 }
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (if_expression
+      (parenthesized_expression
+        (identifier))
+      (block
+        (expression_statement
+          (number)))
+      (elif_clause
+        (parenthesized_expression
+          (identifier))
+        (block
+          (expression_statement
+            (number))))
+      (elif_clause
+        (parenthesized_expression
+          (identifier))
+        (block
+          (expression_statement
+            (number))))
+      (else_clause
+        (block
+          (expression_statement
+            (number)))))))
+
+========================================
+else on the next line
+========================================
+
+if (a) { 1 }
+else { 2 }
+if (b) { 1 }
+-~> a comment between
+elif (c) { 2 }
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (if_expression
+      (parenthesized_expression
+        (identifier))
+      (block
+        (expression_statement
+          (number)))
+      (else_clause
+        (block
+          (expression_statement
+            (number))))))
+  (expression_statement
+    (if_expression
+      (parenthesized_expression
+        (identifier))
+      (block
+        (expression_statement
+          (number)))
+      (comment)
+      (elif_clause
+        (parenthesized_expression
+          (identifier))
+        (block
+          (expression_statement
+            (number)))))))
+
+========================================
+statement after a block on the same line
+========================================
+
+if (a) { 1 } puts(2)
+while x < 3 { x += 1 }; puts(x)
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (if_expression
+      (parenthesized_expression
+        (identifier))
+      (block
+        (expression_statement
+          (number)))))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (number))))
+  (expression_statement
+    (while_expression
+      (binary_expression
+        (identifier)
+        (number))
+      (block
+        (expression_statement
+          (assignment_expression
+            (identifier)
+            (number))))))
+  (empty_statement)
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (identifier)))))
+
+========================================
+while
+========================================
+
+while i < 10 { i += 1 }
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (while_expression
+      (binary_expression
+        (identifier)
+        (number))
+      (block
+        (expression_statement
+          (assignment_expression
+            (identifier)
+            (number)))))))
+
+========================================
+for
+========================================
+
+for (let i = 0; i < 3; i += 1) { puts(i) }
+for (;;) { break }
+for (i = 0; i < 3; i += 1) { continue
+}
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (for_expression
+      (let_declaration
+        (identifier)
+        (number))
+      (binary_expression
+        (identifier)
+        (number))
+      (assignment_expression
+        (identifier)
+        (number))
+      (block
+        (expression_statement
+          (call_expression
+            (identifier)
+            (arguments
+              (identifier)))))))
+  (expression_statement
+    (for_expression
+      (block
+        (break_statement))))
+  (expression_statement
+    (for_expression
+      (assignment_expression
+        (identifier)
+        (number))
+      (binary_expression
+        (identifier)
+        (number))
+      (assignment_expression
+        (identifier)
+        (number))
+      (block
+        (continue_statement)))))
+
+========================================
+return
+========================================
+
+function f() {
+  return
+  return 5
+}
+return
+
+----------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (return_statement)
+      (return_statement
+        (number))))
+  (return_statement))
+
+========================================
+return does not take a value from the next line
+========================================
+
+return
+5
+
+----------------------------------------
+
+(source_file
+  (return_statement)
+  (expression_statement
+    (number)))
+
+========================================
+try catch
+========================================
+
+try { nope } catch (e) { puts(e) }
+try { 1 } catch { 2 }
+try {
+  1
+}
+catch {
+  2
+}
+
+----------------------------------------
+
+(source_file
+  (try_statement
+    (block
+      (expression_statement
+        (identifier)))
+    (identifier)
+    (block
+      (expression_statement
+        (call_expression
+          (identifier)
+          (arguments
+            (identifier))))))
+  (try_statement
+    (block
+      (expression_statement
+        (number)))
+    (block
+      (expression_statement
+        (number))))
+  (try_statement
+    (block
+      (expression_statement
+        (number)))
+    (block
+      (expression_statement
+        (number)))))
+
+========================================
+empty statements
+========================================
+
+; ;
+;
+
+----------------------------------------
+
+(source_file
+  (empty_statement)
+  (empty_statement)
+  (empty_statement))
+
+========================================
+use
+========================================
+
+use "shapes"
+use "draw/shapes" as shapes
+puts(1)
+
+----------------------------------------
+
+(source_file
+  (use_statement
+    (string
+      (string_content)))
+  (use_statement
+    (string
+      (string_content))
+    (identifier))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (number)))))

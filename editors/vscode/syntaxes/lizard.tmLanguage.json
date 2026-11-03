@@ -1,0 +1,392 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "lizard-script",
+  "scopeName": "source.lizard",
+  "fileTypes": [
+    "liz"
+  ],
+  "comment": "TextMate grammar for lizard-script (docs/GRAMMAR.md). Highlighting only: the Tree-sitter grammar in editors/tree-sitter-lizard is the exact one. Words that are not reserved (layer, use, try, continue) are keywords only where the parser reads them as keywords.",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#layer"
+    },
+    {
+      "include": "#use"
+    },
+    {
+      "include": "#try"
+    },
+    {
+      "include": "#continue"
+    },
+    {
+      "include": "#declaration"
+    },
+    {
+      "include": "#keyword"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#color"
+    },
+    {
+      "include": "#point"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#constant"
+    },
+    {
+      "include": "#module"
+    },
+    {
+      "include": "#builtin"
+    },
+    {
+      "include": "#call"
+    },
+    {
+      "include": "#property"
+    },
+    {
+      "include": "#operator"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "comment": "-~> to the end of the line",
+      "name": "comment.line.lizard",
+      "match": "-~>.*$"
+    },
+    "layer": {
+      "comment": "layer name, or layer \"a name\", alone on its line. The body is found by indentation, which a TextMate grammar can't see, so only the header is marked.",
+      "match": "^\\s*(layer)[ \\t]+([A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\")[ \\t]*(;)?[ \\t]*(?=-~>|$)",
+      "captures": {
+        "1": {
+          "name": "keyword.other.layer.lizard"
+        },
+        "2": {
+          "name": "entity.name.section.layer.lizard"
+        },
+        "3": {
+          "name": "punctuation.terminator.statement.lizard"
+        }
+      }
+    },
+    "use": {
+      "comment": "use \"path\" [as name], at the start of a statement",
+      "match": "(?:^|(?<=;))\\s*(use)[ \\t]+(\"[^\"]*\")(?:[ \\t]+(as)[ \\t]+([A-Za-z_][A-Za-z0-9_]*))?",
+      "captures": {
+        "1": {
+          "name": "keyword.control.import.lizard"
+        },
+        "2": {
+          "name": "string.quoted.double.path.lizard"
+        },
+        "3": {
+          "name": "keyword.control.import.lizard"
+        },
+        "4": {
+          "name": "entity.name.namespace.lizard"
+        }
+      }
+    },
+    "try": {
+      "comment": "try { ... } catch (e) { ... }: try only before a {, catch only after a }",
+      "patterns": [
+        {
+          "match": "(?:^|(?<=;))\\s*(try)(?=\\s*\\{)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.trycatch.lizard"
+            }
+          }
+        },
+        {
+          "match": "(?<=\\})\\s*(catch)\\b(?:\\s*(\\()\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(\\)))?",
+          "captures": {
+            "1": {
+              "name": "keyword.control.trycatch.lizard"
+            },
+            "2": {
+              "name": "punctuation.definition.parameters.begin.lizard"
+            },
+            "3": {
+              "name": "variable.parameter.lizard"
+            },
+            "4": {
+              "name": "punctuation.definition.parameters.end.lizard"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(catch)\\b(?:\\s*(\\()\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(\\)))?(?=\\s*(?:\\{|$))",
+          "captures": {
+            "1": {
+              "name": "keyword.control.trycatch.lizard"
+            },
+            "2": {
+              "name": "punctuation.definition.parameters.begin.lizard"
+            },
+            "3": {
+              "name": "variable.parameter.lizard"
+            },
+            "4": {
+              "name": "punctuation.definition.parameters.end.lizard"
+            }
+          }
+        }
+      ]
+    },
+    "continue": {
+      "comment": "continue is a keyword only when it is alone in its statement",
+      "match": "(?:^|(?<=[;{]))\\s*(continue)(?=\\s*(?:;|\\}|-~>|$))",
+      "captures": {
+        "1": {
+          "name": "keyword.control.loop.lizard"
+        }
+      }
+    },
+    "declaration": {
+      "patterns": [
+        {
+          "comment": "function name(params): the name",
+          "match": "\\b(function)[ \\t]+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.function.lizard"
+            },
+            "2": {
+              "name": "entity.name.function.lizard"
+            }
+          }
+        },
+        {
+          "comment": "let name =",
+          "match": "\\b(let)[ \\t]+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.lizard"
+            },
+            "2": {
+              "name": "variable.other.definition.lizard"
+            }
+          }
+        }
+      ]
+    },
+    "keyword": {
+      "patterns": [
+        {
+          "name": "keyword.control.conditional.lizard",
+          "match": "\\b(if|elif|else)\\b"
+        },
+        {
+          "name": "keyword.control.loop.lizard",
+          "match": "\\b(while|for|break)\\b"
+        },
+        {
+          "name": "keyword.control.flow.lizard",
+          "match": "\\breturn\\b"
+        },
+        {
+          "name": "storage.type.function.lizard",
+          "match": "\\bfunction\\b"
+        },
+        {
+          "name": "storage.type.lizard",
+          "match": "\\blet\\b"
+        }
+      ]
+    },
+    "string": {
+      "name": "string.quoted.double.lizard",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.lizard"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.lizard"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.lizard",
+          "match": "\\\\(?:[\"\\\\ntr]|u[0-9A-Fa-f]{4}|u\\{[0-9A-Fa-f]{1,6}\\})"
+        },
+        {
+          "name": "invalid.illegal.escape.lizard",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "color": {
+      "comment": "#rgb, #rrggbb, #rrggbbaa",
+      "name": "constant.other.color.lizard",
+      "match": "#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?![0-9A-Za-z_])"
+    },
+    "point": {
+      "comment": "(x, y) and (x, y, z) written with plain numbers. A point made of other expressions can't be told from a call by a regex, so it is left to the other rules.",
+      "match": "(?<![A-Za-z0-9_)\\]])(\\()\\s*(-?[0-9][0-9A-Za-z_.+-]*)\\s*(,)\\s*(-?[0-9][0-9A-Za-z_.+-]*)(?:\\s*(,)\\s*(-?[0-9][0-9A-Za-z_.+-]*))?\\s*(\\))",
+      "name": "meta.point.lizard",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.point.begin.lizard"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#number"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.separator.point.lizard"
+        },
+        "4": {
+          "patterns": [
+            {
+              "include": "#number"
+            }
+          ]
+        },
+        "5": {
+          "name": "punctuation.separator.point.lizard"
+        },
+        "6": {
+          "patterns": [
+            {
+              "include": "#number"
+            }
+          ]
+        },
+        "7": {
+          "name": "punctuation.definition.point.end.lizard"
+        }
+      }
+    },
+    "number": {
+      "comment": "12, 1.5, 1e3, 2.5e-4, and a unit that touches the number: 90deg 1.5rad 0.25turn 10px",
+      "match": "(?<![A-Za-z0-9_.])([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)((?:deg|rad|turn|px)(?![A-Za-z0-9_]))?",
+      "captures": {
+        "1": {
+          "name": "constant.numeric.lizard"
+        },
+        "2": {
+          "name": "keyword.other.unit.lizard"
+        }
+      }
+    },
+    "constant": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.lizard",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.lizard",
+          "match": "(?<!\\.)\\bnull\\b"
+        }
+      ]
+    },
+    "module": {
+      "comment": "The Terrarium modules, when used as module.name",
+      "match": "(?<![A-Za-z0-9_.])(math|text|list|hash|json|fs|os|time|img|clip|io|lizard|window|pen)(?=\\s*\\.)",
+      "name": "support.class.module.lizard"
+    },
+    "builtin": {
+      "comment": "Functions that exist without being declared",
+      "match": "(?<![A-Za-z0-9_.])(len|puts|push|pop|first|last|rest|keys|values|delete|type|str|error|int|float|range|rgb|rgba|hsl|point|same)(?=\\s*\\()",
+      "name": "support.function.builtin.lizard"
+    },
+    "call": {
+      "match": "([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+      "name": "entity.name.function.call.lizard"
+    },
+    "property": {
+      "comment": "a.name and a.name(...): the name after a dot",
+      "patterns": [
+        {
+          "match": "(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.lizard"
+            },
+            "2": {
+              "name": "entity.name.function.call.lizard"
+            }
+          }
+        },
+        {
+          "match": "(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.lizard"
+            },
+            "2": {
+              "name": "variable.other.property.lizard"
+            }
+          }
+        }
+      ]
+    },
+    "operator": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.lizard",
+          "match": "===|!==|==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.logical.lizard",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.assignment.compound.lizard",
+          "match": "\\+=|-=|\\*=|/="
+        },
+        {
+          "name": "keyword.operator.assignment.lizard",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.arithmetic.lizard",
+          "match": "\\*\\*|//|[-+*/%]"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.comma.lizard",
+          "match": ","
+        },
+        {
+          "name": "punctuation.terminator.statement.lizard",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.separator.key-value.lizard",
+          "match": ":"
+        },
+        {
+          "name": "punctuation.section.brackets.lizard",
+          "match": "[\\[\\](){}]"
+        }
+      ]
+    }
+  }
+}

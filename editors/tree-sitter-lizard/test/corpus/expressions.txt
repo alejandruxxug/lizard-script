@@ -1,0 +1,288 @@
+========================================
+precedence
+========================================
+
+a || b && c == d < e + f * g ** h
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (binary_expression
+        (identifier)
+        (binary_expression
+          (identifier)
+          (binary_expression
+            (identifier)
+            (binary_expression
+              (identifier)
+              (binary_expression
+                (identifier)
+                (binary_expression
+                  (identifier)
+                  (identifier))))))))))
+
+========================================
+unary and power
+========================================
+
+-2 ** 2
+2 ** -1
+!a && b
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (unary_expression
+      (binary_expression
+        (number)
+        (number))))
+  (expression_statement
+    (binary_expression
+      (number)
+      (unary_expression
+        (number))))
+  (expression_statement
+    (binary_expression
+      (unary_expression
+        (identifier))
+      (identifier))))
+
+========================================
+power is right associative
+========================================
+
+2 ** 3 ** 2
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (binary_expression
+      (number)
+      (binary_expression
+        (number)
+        (number)))))
+
+========================================
+assignment is right associative
+========================================
+
+a = b = c + 1
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (identifier)
+      (assignment_expression
+        (identifier)
+        (binary_expression
+          (identifier)
+          (number))))))
+
+========================================
+assignment targets
+========================================
+
+a.b.c = 1
+a.b[0] += 2
+f().x = 3
+a[i][j] = 0
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (member_expression
+        (member_expression
+          (identifier)
+          (identifier))
+        (identifier))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (subscript_expression
+        (member_expression
+          (identifier)
+          (identifier))
+        (number))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (member_expression
+        (call_expression
+          (identifier)
+          (arguments))
+        (identifier))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (subscript_expression
+        (subscript_expression
+          (identifier)
+          (identifier))
+        (identifier))
+      (number))))
+
+========================================
+calls members and indexes
+========================================
+
+f(1, 2)(3)
+a.b(1).c[2]
+x.y.z
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (call_expression
+      (call_expression
+        (identifier)
+        (arguments
+          (number)
+          (number)))
+      (arguments
+        (number))))
+  (expression_statement
+    (subscript_expression
+      (member_expression
+        (call_expression
+          (member_expression
+            (identifier)
+            (identifier))
+          (arguments
+            (number)))
+        (identifier))
+      (number)))
+  (expression_statement
+    (member_expression
+      (member_expression
+        (identifier)
+        (identifier))
+      (identifier))))
+
+========================================
+compare and equality
+========================================
+
+a === b
+a !== b
+a <= b
+a // b % c
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (identifier)))
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (identifier)))
+  (expression_statement
+    (binary_expression
+      (identifier)
+      (identifier)))
+  (expression_statement
+    (binary_expression
+      (binary_expression
+        (identifier)
+        (identifier))
+      (identifier))))
+
+========================================
+if as an expression
+========================================
+
+let x = if (a) { 1 } elif (b) { 2 } else { 3 }
+
+----------------------------------------
+
+(source_file
+  (let_statement
+    (identifier)
+    (if_expression
+      (parenthesized_expression
+        (identifier))
+      (block
+        (expression_statement
+          (number)))
+      (elif_clause
+        (parenthesized_expression
+          (identifier))
+        (block
+          (expression_statement
+            (number))))
+      (else_clause
+        (block
+          (expression_statement
+            (number)))))))
+
+========================================
+function call with a function argument
+========================================
+
+f(function() {
+  1
+  2
+})
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (function_expression
+          (parameters)
+          (block
+            (expression_statement
+              (number))
+            (expression_statement
+              (number))))))))
+
+========================================
+parenthesized and point
+========================================
+
+(1 + 2) * 3
+(1, 2)
+(1, 2, 3)
+f((1, 2))
+
+----------------------------------------
+
+(source_file
+  (expression_statement
+    (binary_expression
+      (parenthesized_expression
+        (binary_expression
+          (number)
+          (number)))
+      (number)))
+  (expression_statement
+    (point
+      (number)
+      (number)))
+  (expression_statement
+    (point
+      (number)
+      (number)
+      (number)))
+  (expression_statement
+    (call_expression
+      (identifier)
+      (arguments
+        (point
+          (number)
+          (number))))))
