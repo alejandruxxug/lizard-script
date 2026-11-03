@@ -86,6 +86,11 @@ Equality never fails, whatever the types.
 - `hash[key]` gives `null` when the key isn't there. The key must be a valid key type. Keys are compared exactly, so `1` and `"1"` are different keys.
 - `array[i] = x` changes an element that already exists. An index outside of the array is an error, so use `push` to add elements.
 - `hash[key] = x` adds or replaces a key.
+- `a.name` is exactly `a["name"]`, for reading and for assigning, so on a hash it gives the value or `null`, and on anything else it gives the same error as indexing it with a string.
+
+## Strings
+
+In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break and `\t` is a tab. The value of the string holds the character, not the two source characters, so `len("a\nb")` is 3.
 
 ## Builtins
 
@@ -116,4 +121,12 @@ Syntax errors are found before the program starts, so a program with one doesn't
 
 ## Known limitations
 
-- An infinite loop runs forever. In the REPL, stop it with Ctrl+C.
+- By default an infinite loop runs forever. In the REPL, stop it with Ctrl+C. A host that embeds the interpreter can limit it, see below.
+
+## Step limit (for hosts)
+
+`evaluator.MaxSteps` is the most steps a run can take. Its default, 0, means no limit. A step is one round of a `while` or `for` loop, or one function call (builtins included). The host sets `MaxSteps` and calls `evaluator.ResetSteps()` before each run; the REPL and `Run` reset it themselves. Past the limit the program stops with a runtime error at the loop or call:
+
+```
+[line 1, column 1] runtime error: the program ran too long (more than 1000 steps)
+```

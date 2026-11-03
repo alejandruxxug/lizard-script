@@ -450,3 +450,107 @@ func TestDeepNesting(t *testing.T) {
 		t.Error("deep hashes should be ===")
 	}
 }
+
+func TestDotAccess(t *testing.T) {
+	checkAll(t, []expectation{
+		{`let h = {"a": 1, "b": {"c": 2}}; h.a`, "1"},
+		{`let h = {"a": 1, "b": {"c": 2}}; h.b.c`, "2"},
+		{`let h = {"a": 1}; h.missing`, "null"},
+		{`let h = {"a": 1}; h.a = 5; h.a`, "5"},
+		{`let h = {}; h.x = 1; h.y = 2; h`, `{"x": 1, "y": 2}`},
+		{`let h = {"l": [1, 2]}; h.l[1]`, "2"},
+		{`let h = {"f": function(x) { x * 2 }}; h.f(4)`, "8"},
+		{`function make() { {"x": 7} } make().x`, "7"},
+		{`let h = {"a": {}}; h.a.b = 3; h["a"]["b"]`, "3"},
+		{`let a = [1]; a[0]`, "1"},
+		{`"say \"hi\""`, `"say "hi""`},
+		{`len("a\nb\t\\")`, "5"},
+	})
+}
+
+func TestDotErrors(t *testing.T) {
+	tests := []expectation{
+		{`let n = 5; n.x`, "[line 1, column 13] runtime error: index operator not supported: INTEGER"},
+		{`let n = 5; n["x"]`, "[line 1, column 13] runtime error: index operator not supported: INTEGER"},
+		{`let a = [1]; a.x`, "[line 1, column 15] runtime error: array index must be INTEGER, got STRING"},
+		{`let n = 5; n.x = 1`, "[line 1, column 13] runtime error: index assignment not supported: INTEGER"},
+		{`let s = "ab"; s.x = 1`, "[line 1, column 16] runtime error: strings can't be changed"},
+	}
+	for _, tt := range tests {
+		result := run(t, tt.input)
+		err, ok := result.(*object.Error)
+		if !ok {
+			t.Errorf("input %q - expected an error, got %s", tt.input, result.Inspect())
+			continue
+		}
+		if err.Message != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %s", tt.input, tt.expected, err.Message)
+		}
+	}
+}
+
+// withMaxSteps runs fn with the step limit set to max, and puts it back.
+func withMaxSteps(max int, fn func()) {
+	MaxSteps = max
+	ResetSteps()
+	defer func() {
+		MaxSteps = 0
+		ResetSteps()
+	}()
+	fn()
+}
+
+func TestStepLimit(t *testing.T) {
+	tests := []expectation{
+		{"while (true) {}", "[line 1, column 1] runtime error: the program ran too long (more than 1000 steps)"},
+		{"for (;;) {}", "[line 1, column 1] runtime error: the program ran too long (more than 1000 steps)"},
+		{"for (let i = 0; i < 100000; i = i + 1) {}", "[line 1, column 1] runtime error: the program ran too long (more than 1000 steps)"},
+		{"function f(n) { f(n + 1) } f(0)", "[line 1, column 18] runtime error: the program ran too long (more than 1000 steps)"},
+		{"let i = 0; while (true) { len(\"a\") }", "[line 1, column 12] runtime error: the program ran too long (more than 1000 steps)"},
+		{"let i = 0; while (i < 10) { i = i + 1 }; while (true) { i = i + 1 }", "[line 1, column 42] runtime error: the program ran too long (more than 1000 steps)"},
+	}
+	for _, tt := range tests {
+		withMaxSteps(1000, func() {
+			result := run(t, tt.input)
+			err, ok := result.(*object.Error)
+			if !ok {
+				t.Errorf("input %q - expected an error, got %s", tt.input, result.Inspect())
+				return
+			}
+			if err.Message != tt.expected {
+				t.Errorf("input %q\nexpected: %s\n     got: %s", tt.input, tt.expected, err.Message)
+			}
+		})
+	}
+}
+
+func TestStepLimitOff(t *testing.T) {
+	// With 0 there is no limit, however many steps the program takes.
+	checkAll(t, []expectation{
+		{"let i = 0; while (i < 5000) { i = i + 1 }; i", "5000"},
+		{"function f(n) { if (n == 0) { 0 } else { f(n - 1) } } f(2000)", "0"},
+	})
+
+	// Under the limit it works, and ResetSteps starts the count again.
+	withMaxSteps(100, func() {
+		for range 3 {
+			ResetSteps()
+			checkAll(t, []expectation{{"let i = 0; while (i < 50) { i = i + 1 }; i", "50"}})
+		}
+	})
+}
+
+// TestStepLimitRecovers checks that a recursion that never ends is
+// stopped by the step limit when it is lower than the call limit, and that
+// the depth counters are back to zero afterwards.
+func TestStepLimitRecovers(t *testing.T) {
+	withMaxSteps(500, func() {
+		result := run(t, "function f(n) { f(n + 1) } f(0)")
+		if !isError(result) || !strings.Contains(result.Inspect(), "ran too long") {
+			t.Errorf("expected the step limit, got %s", result.Inspect())
+		}
+	})
+	if callDepth != 0 || evalDepth != 0 {
+		t.Errorf("depth counters left at %d calls and %d evals", callDepth, evalDepth)
+	}
+}

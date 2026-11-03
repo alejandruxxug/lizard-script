@@ -110,6 +110,8 @@ func (l *Lexer) readToken() token.Token {
 		tok = l.oneOrTwoCharToken('|', token.ILLEGAL, token.OR)
 	case '"':
 		tok = l.readString()
+	case '.':
+		tok = newToken(token.DOT, l.ch)
 	case ';':
 		tok = newToken(token.SEMICOLON, l.ch)
 	case ':':
@@ -218,19 +220,65 @@ func (l *Lexer) readIdentifier() string {
 }
 
 // readString reads a double-quoted string, leaving ch on the closing quote.
-// The literal is the content without quotes. If the input ends first, it
-// returns an ILLEGAL token whose literal keeps the opening quote.
+// The literal is the content without quotes, with the escapes \" \\ \n and
+// \t already replaced by the character they mean. If the input ends first, it
+// returns an ILLEGAL token whose literal keeps the opening quote. An unknown
+// escape returns an ILLEGAL token whose literal is the backslash and the
+// character after it, like \q.
 func (l *Lexer) readString() token.Token {
-	position := l.position + 1
+	start := l.position
+	var content strings.Builder
 	for {
 		l.readChar()
-		if l.ch == '"' {
-			return token.Token{Type: token.STRING, Literal: l.input[position:l.position]}
-		}
 		if l.atEnd() {
-			return token.Token{Type: token.ILLEGAL, Literal: l.input[position-1 : l.position]}
+			return token.Token{Type: token.ILLEGAL, Literal: l.input[start:l.position]}
+		}
+		switch l.ch {
+		case '"':
+			return token.Token{Type: token.STRING, Literal: content.String()}
+		case '\\':
+			l.readChar()
+			if l.atEnd() {
+				return token.Token{Type: token.ILLEGAL, Literal: l.input[start:l.position]}
+			}
+			escaped, ok := unescape(l.ch)
+			if !ok {
+				return l.unknownEscape()
+			}
+			content.WriteByte(escaped)
+		default:
+			content.WriteByte(l.ch)
 		}
 	}
+}
+
+// unescape returns the character that the escape \ch stands for.
+func unescape(ch byte) (byte, bool) {
+	switch ch {
+	case '"', '\\':
+		return ch, true
+	case 'n':
+		return '\n', true
+	case 't':
+		return '\t', true
+	}
+	return 0, false
+}
+
+// unknownEscape returns the ILLEGAL token for an escape like \q, with ch on
+// the character after the backslash. It then skips the rest of the string, so
+// its closing quote is not read as the start of another one.
+func (l *Lexer) unknownEscape() token.Token {
+	_, size := utf8.DecodeRuneInString(l.input[l.position:])
+	literal := "\\" + l.input[l.position:l.position+size]
+
+	for !l.atEnd() && l.ch != '"' {
+		if l.ch == '\\' {
+			l.readChar()
+		}
+		l.readChar()
+	}
+	return token.Token{Type: token.ILLEGAL, Literal: literal}
 }
 
 // readNumber reads consecutive digits and returns them as a string.

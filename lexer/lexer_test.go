@@ -360,3 +360,50 @@ func TestPositions(t *testing.T) {
 		}
 	}
 }
+
+// TestStringEscapes checks the four escapes, the unknown ones and the dot.
+func TestStringEscapes(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []token.Token
+	}{
+		{`"say \"hi\""`, []token.Token{{Type: token.STRING, Literal: `say "hi"`}}},
+		{`"a\\b"`, []token.Token{{Type: token.STRING, Literal: `a\b`}}},
+		{`"a\nb"`, []token.Token{{Type: token.STRING, Literal: "a\nb"}}},
+		{`"a\tb"`, []token.Token{{Type: token.STRING, Literal: "a\tb"}}},
+		{`"\\"`, []token.Token{{Type: token.STRING, Literal: `\`}}},
+		{`"\\n"`, []token.Token{{Type: token.STRING, Literal: `\n`}}},
+		{`"\""`, []token.Token{{Type: token.STRING, Literal: `"`}}},
+		{`"añ\n🦎"`, []token.Token{{Type: token.STRING, Literal: "añ\n🦎"}}},
+		{`"\q"`, []token.Token{{Type: token.ILLEGAL, Literal: `\q`}}},
+		{`"ab\r cd" x`, []token.Token{{Type: token.ILLEGAL, Literal: `\r`}, {Type: token.IDENT, Literal: "x"}}},
+		{`"\ñ \" x" y`, []token.Token{{Type: token.ILLEGAL, Literal: `\ñ`}, {Type: token.IDENT, Literal: "y"}}},
+		{`"open\`, []token.Token{{Type: token.ILLEGAL, Literal: `"open\`}}},
+		{`"open\"`, []token.Token{{Type: token.ILLEGAL, Literal: `"open\"`}}},
+		{`\`, []token.Token{{Type: token.ILLEGAL, Literal: `\`}}},
+		{"a.b", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.DOT, Literal: "."}, {Type: token.IDENT, Literal: "b"}}},
+		{"a.5", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.DOT, Literal: "."}, {Type: token.INT, Literal: "5"}}},
+		{"1.", []token.Token{{Type: token.INT, Literal: "1"}, {Type: token.DOT, Literal: "."}}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, want := range append(tt.expected, token.Token{Type: token.EOF, Literal: ""}) {
+			got := l.NextToken()
+			if got.Type != want.Type || got.Literal != want.Literal {
+				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
+					tt.input, i, want, got)
+			}
+		}
+	}
+}
+
+// TestEscapePositions checks that the lines and columns after a string with
+// escapes still count the source characters, not the decoded ones.
+func TestEscapePositions(t *testing.T) {
+	l := New(`"a\nb" x`)
+	l.NextToken()
+	if got := l.NextToken(); got.Line != 1 || got.Column != 8 {
+		t.Errorf("x at line %d, column %d, want line 1, column 8", got.Line, got.Column)
+	}
+}

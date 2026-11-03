@@ -1,0 +1,25 @@
+-~> Escapes: \" \\ \n \t
+puts("say \"hi\"")
+puts("back\\slash")
+puts("two\nlines")
+puts("a\tb")
+puts(len("a\nb"))
+puts("\\n stays as it is")
+
+-~> Dot access is the same as indexing with a string
+let ana = {"name": "Ana", "pet": {"kind": "lizard"}, "tags": ["a", "b"]}
+puts(ana.name)
+puts(ana.pet.kind)
+puts(ana.tags[1])
+puts(ana.missing)
+
+ana.age = 20
+ana.pet.kind = "gecko"
+puts(ana["age"], ana.pet["kind"])
+
+let counter = {"n": 0, "inc": function() { 1 }}
+counter.n = counter.n + counter.inc()
+puts(counter.n)
+
+function make() { {"x": 7} }
+puts(make().x)

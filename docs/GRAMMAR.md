@@ -44,7 +44,7 @@ sum        = product { ( "+" | "-" ) product } ;
 product    = prefix { ( "*" | "/" | "//" | "%" ) prefix } ;
 prefix     = ( "-" | "!" ) prefix | power ;
 power      = postfix [ "**" prefix ] ;
-postfix    = primary { "(" [ arguments ] ")" | "[" expression "]" } ;
+postfix    = primary { "(" [ arguments ] ")" | "[" expression "]" | "." IDENT } ;
 
 primary    = IDENT | INT | STRING | "true" | "false"
            | "(" expression ")"
@@ -67,7 +67,7 @@ forExpression   = "for" "(" [ forInit ] ";" [ expression ] ";" [ expression ] ")
 forInit         = letStatement | expressionStatement ;
 ```
 
-The left side of `=` must be an identifier or an index expression. The grammar above allows more, so the parser checks it and rejects things like `1 = 2`. In a `for`, the `;` after `forInit` is the one that ends that statement.
+The left side of `=` must be an identifier or an index expression. The grammar above allows more, so the parser checks it and rejects things like `1 = 2`. `a.name` is `a["name"]`, the same tree, so it works wherever an index does: `a.b.c`, `a.b[0]`, `a.b(1)`, `f().x` and `a.b = 1`. After the `.` must come an identifier; a keyword, a number or anything else is the syntax error `expected a name after "."`. In a `for`, the `;` after `forInit` is the one that ends that statement.
 
 ## Precedence and associativity
 
@@ -85,7 +85,7 @@ From weakest to strongest:
 | `PREFIX` | `-x` `!x` | prefix |
 | `EXPONENT` | `**` | right |
 | `CALL` | `f(x)` | left |
-| `INDEX` | `a[i]` | left |
+| `INDEX` | `a[i]` `a.name` | left |
 
 `**` is stronger than prefix operators, so `-2 ** 2` is `-(2 ** 2)`. Its right side can still start with one: `2 ** -1`.
 
@@ -94,7 +94,8 @@ From weakest to strongest:
 ```ebnf
 IDENT   = ( letter | "_" ) { letter | digit | "_" } ;
 INT     = digit { digit } ;
-STRING  = '"' { any character except '"' } '"' ;
+STRING  = '"' { any character except '"' and '\' | escape } '"' ;
+escape  = "\\" ( '"' | "\\" | "n" | "t" ) ;
 comment = "-~>" { any character except newline } ;
 ```
 
@@ -112,7 +113,7 @@ Whitespace and comments are skipped between tokens. Integers are always decimal,
 
 ## Known limitations
 
-- Strings have no escape sequences, so they can't contain a `"`. They can span several lines.
+- Strings can span several lines. Inside a string, `\"` is a quote, `\\` a backslash, `\n` a line break and `\t` a tab. Any other backslash sequence, like `\q`, is the lexical error `unknown escape \q in string`, and a string that ends in a lone `\` is unterminated.
 - Identifiers and comments are ASCII. A non-ASCII character in code is a lexical error, although strings and comments can contain it.
 - `;` is optional at the end of a line, but a line break doesn't end an expression that can continue. A line starting with an operator, `(` or `[` continues the previous expression, so `x` followed by a line with `-1` is a subtraction.
 - For the same reason, `return` takes the expression on the next line as its value, unless a `;` or `}` comes first.

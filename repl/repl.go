@@ -32,6 +32,7 @@ func Start(in io.Reader, out io.Writer) {
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
 	env := object.NewEnvironment()
 	evaluator.Output = out
+	evaluator.ResetSteps()
 
 	var input strings.Builder
 	waitingForElse := false
@@ -95,6 +96,7 @@ func evalInput(input string, env *object.Environment, out io.Writer) {
 		return
 	}
 
+	evaluator.ResetSteps()
 	result := evaluator.Eval(program, env)
 	switch result := result.(type) {
 	case nil, *object.Null:

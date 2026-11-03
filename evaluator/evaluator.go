@@ -40,6 +40,34 @@ const maxStringLength = 1 << 28
 // that leaves room.
 const maxEvalDepth = 300000
 
+// MaxSteps limits how many steps a program can take, so a host that runs
+// code it doesn't control (an editor that runs it on every keystroke) can
+// stop a loop that never ends. A step is one round of a loop or one function
+// call, builtins included. 0 means no limit, which is the default.
+var MaxSteps int
+
+// steps counts the steps taken since ResetSteps.
+var steps int
+
+// ResetSteps starts counting steps from zero. A host that sets MaxSteps calls
+// it before each run.
+func ResetSteps() {
+	steps = 0
+}
+
+// countStep takes one step. It returns an error at tok once the program has
+// gone over MaxSteps, and nil otherwise.
+func countStep(tok token.Token) *object.Error {
+	if MaxSteps == 0 {
+		return nil
+	}
+	steps++
+	if steps > MaxSteps {
+		return newError(tok, "the program ran too long (more than %d steps)", MaxSteps)
+	}
+	return nil
+}
+
 // callDepth counts the function calls open right now, and evalDepth the
 // calls of Eval.
 var callDepth, evalDepth int
@@ -662,6 +690,10 @@ func evalIfExpression(node *ast.IfExpression, env *object.Environment) object.Ob
 // no value of its own, so it produces null.
 func evalWhileExpression(node *ast.WhileExpression, env *object.Environment) object.Object {
 	for {
+		if err := countStep(node.Token); err != nil {
+			return err
+		}
+
 		condition := Eval(node.Condition, env)
 		if isError(condition) {
 			return condition
@@ -688,6 +720,10 @@ func evalForExpression(node *ast.ForExpression, env *object.Environment) object.
 	}
 
 	for {
+		if err := countStep(node.Token); err != nil {
+			return err
+		}
+
 		if node.Condition != nil {
 			condition := Eval(node.Condition, loopEnv)
 			if isError(condition) {
@@ -732,6 +768,9 @@ func evalLoopBody(body *ast.BlockStatement, env *object.Environment) (object.Obj
 func applyFunction(tok token.Token, function object.Object, args []object.Object) object.Object {
 	switch function := function.(type) {
 	case *object.Function:
+		if err := countStep(tok); err != nil {
+			return err
+		}
 		if len(args) != len(function.Parameters) {
 			return newError(tok, "wrong number of arguments: want %d, got %d",
 				len(function.Parameters), len(args))
@@ -759,6 +798,9 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 		return result
 
 	case *object.Builtin:
+		if err := countStep(tok); err != nil {
+			return err
+		}
 		result := function.Fn(args...)
 		if err, ok := result.(*object.Error); ok {
 			return newError(tok, "%s: %s", function.Name, err.Message)

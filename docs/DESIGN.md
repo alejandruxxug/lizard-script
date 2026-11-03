@@ -97,17 +97,16 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 ## 4. Known limitations
 
 - Integers only, with no floating point; overflow wraps around, as in Go.
-- Strings have no escape sequences, so a string can't contain `"`.
 - After a syntax error the parser skips to the next `;` or `}`. Without semicolons, a second error on a later line of the same block may show up only after fixing the first.
 - In the REPL, an `if` without `else` runs once the next line shows it is complete, or after an empty line.
 - Nesting is limited to 10000 levels in the source, and recursion to 10000 calls.
-- An infinite loop runs forever; in the REPL, stop it with Ctrl+C.
+- An infinite loop runs forever unless the host sets `evaluator.MaxSteps`; in the REPL, stop it with Ctrl+C.
 
 ## 5. Testing
 
 `go test ./...` runs everything:
 - unit tests for each package (lexer, parser, evaluator, REPL);
-- the programs in `tests/`: 16 valid programs and 31 that must fail with a lexical, syntax or runtime error, each compared with its `.expected` output;
+- the programs in `tests/`: 17 valid programs and 33 that must fail with a lexical, syntax or runtime error, each compared with its `.expected` output;
 - every program in `examples/`.
 
 ## 6. Use of AI
@@ -116,7 +115,8 @@ We used Claude Code (Anthropic's Claude Opus 5.5) as a programming assistant for
 - writing the `object` and `evaluator` packages (phase 3);
 - the REPL and the `lizardscript` command (phase 4);
 - later fixes: values that contain themselves, `elif`/`else` on a new line in the REPL, and the nesting and stack limits;
-- the `tests/` folder, the examples and a first draft of this document.
+- the `tests/` folder, the examples and a first draft of this document;
+- the extensions of section 7 (string escapes, dot access, the step limit), written with Claude Code.
 
 **To complete by the team:** state here whether AI was also used in phases 1 and 2 (tokens, lexer, AST, parser) and for what.
 
@@ -131,3 +131,6 @@ Phases 1 to 4 follow the course's reference interpreter, and that foundation sta
 
 | Date | Extension | Why | What it adds to the course design |
 | --- | --- | --- | --- |
+| 2026-11-02 | String escapes | A string could not hold `"` or a line break on purpose. | Lexer only: inside a string, `\"`, `\\`, `\n` and `\t` become one character in the STRING literal; any other `\x` is an ILLEGAL token reported as `unknown escape \x in string`. No new token or AST node. No existing program or test had a backslash in a string. |
+| 2026-11-02 | Dot access `a.b` | Reading and writing hash keys with `a["b"]` is noisy. | New token `DOT`, and a parser rule at `INDEX` precedence that builds the same `IndexExpression` with a string key as `a["b"]`, so the evaluator is untouched. A name must follow the dot (`expected a name after "."`). |
+| 2026-11-02 | Step limit | A host that runs programs on every keystroke needs a way to stop `while (true) {}`. | Evaluator: `MaxSteps` (0 = no limit, the default) and `ResetSteps()`; one step per loop round and per function or builtin call; past the limit the runtime error `the program ran too long (more than N steps)`. The REPL and `Run` call `ResetSteps()`. No change to tokens, AST or builtins. |

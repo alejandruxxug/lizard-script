@@ -68,6 +68,7 @@ var precedences = map[token.TokenType]int{
 	token.POW:          EXPONENT,
 	token.LPAREN:       CALL,
 	token.LBRACKET:     INDEX,
+	token.DOT:          INDEX,
 }
 
 type (
@@ -137,6 +138,7 @@ func New(l *lexer.Lexer) *Parser {
 		token.ASSIGN:       p.parseAssignExpression,
 		token.LPAREN:       p.parseCallExpression,
 		token.LBRACKET:     p.parseIndexExpression,
+		token.DOT:          p.parseDotExpression,
 	}
 
 	// Read two tokens so curToken and peekToken are both set.
@@ -174,6 +176,10 @@ func (p *Parser) errorAt(tok token.Token, format string, args ...any) {
 func illegalMessage(tok token.Token) string {
 	if strings.HasPrefix(tok.Literal, "\"") {
 		return "unterminated string"
+	}
+	// A lone backslash outside a string is an unexpected character.
+	if strings.HasPrefix(tok.Literal, "\\") && len(tok.Literal) > 1 {
+		return fmt.Sprintf("unknown escape %s in string", tok.Literal)
 	}
 	return fmt.Sprintf("unexpected character %q", tok.Literal)
 }
@@ -929,6 +935,21 @@ func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
 	if !p.expectPeek(token.RBRACKET) {
 		return nil
 	}
+	return expression
+}
+
+// parseDotExpression parses a.b as a["b"]: the same tree, so the evaluator
+// doesn't know the difference. The name after the dot must be an identifier.
+func (p *Parser) parseDotExpression(left ast.Expression) ast.Expression {
+	expression := &ast.IndexExpression{Token: p.curToken, Left: left}
+
+	if !p.peekTokenIs(token.IDENT) {
+		p.errorAt(p.peekToken, "expected a name after \".\"")
+		return nil
+	}
+	p.nextToken()
+
+	expression.Index = &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
 	return expression
 }
 

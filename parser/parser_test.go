@@ -516,3 +516,65 @@ func TestNestingLimit(t *testing.T) {
 		}
 	}
 }
+
+// TestDotAccess checks that a.b builds the same tree as a["b"].
+func TestDotAccess(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"a.b", `(a["b"])`},
+		{"a.b.c", `((a["b"])["c"])`},
+		{"a.b[0]", `((a["b"])[0])`},
+		{"a.b(1)", `(a["b"])(1)`},
+		{"f().x", `(f()["x"])`},
+		{"a[0].b", `((a[0])["b"])`},
+		{"a.b = 1", `((a["b"]) = 1)`},
+		{"a.b.c = a.d", `(((a["b"])["c"]) = (a["d"]))`},
+		{"-a.b", `(-(a["b"]))`},
+		{"a.b ** 2", `((a["b"]) ** 2)`},
+		{"a.b + c.d", `((a["b"]) + (c["d"]))`},
+		{"a . b", `(a["b"])`},
+		{"a.\nb", `(a["b"])`},
+		{"{\"x\": 1}.x", `({"x": 1}["x"])`},
+	}
+
+	for _, tt := range tests {
+		program := parse(t, tt.input)
+		if got := program.String(); got != tt.expected {
+			t.Errorf("input %q - expected %s, got %s", tt.input, tt.expected, got)
+		}
+		// The same tree as the index form.
+		if tt.input == "a.b" {
+			if got := parse(t, `a["b"]`).String(); got != program.String() {
+				t.Errorf("a.b and a[\"b\"] differ: %s and %s", program.String(), got)
+			}
+		}
+	}
+}
+
+func TestDotErrors(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"a.if", `[line 1, column 3] syntax error: expected a name after "."`},
+		{"a.", `[line 1, column 3] syntax error: expected a name after "."`},
+		{"a.5", `[line 1, column 3] syntax error: expected a name after "."`},
+		{`a."b"`, `[line 1, column 3] syntax error: expected a name after "."`},
+		{"a..b", `[line 1, column 3] syntax error: expected a name after "."`},
+		{".a", `[line 1, column 1] syntax error: expected an expression, got "."`},
+		{`a."\q"`, `[line 1, column 3] lexical error: unknown escape \q in string`},
+		{`let s = "a\qb"`, `[line 1, column 9] lexical error: unknown escape \q in string`},
+		{`let s = "a" \ 1`, `[line 1, column 13] lexical error: unexpected character "\\"`},
+	}
+
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		errors := p.Errors()
+		if len(errors) != 1 || errors[0] != tt.expected {
+			t.Errorf("input %q\n expected: %s\n got:      %v", tt.input, tt.expected, errors)
+		}
+	}
+}
