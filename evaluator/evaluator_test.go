@@ -372,6 +372,8 @@ func TestErrors(t *testing.T) {
 		{"for (let i = 0; i < 3; i = i + true) {}", "[line 1, column 30] runtime error: type mismatch: INTEGER + BOOLEAN"},
 		{"[1, 2 + true, 3]", "[line 1, column 7] runtime error: type mismatch: INTEGER + BOOLEAN"},
 		{"function loop(n) { loop(n + 1) } loop(0)", "[line 1, column 24] runtime error: stack overflow: more than 10000 nested calls"},
+		{"function f(n) { if (n == 0) { return 0 } " + strings.Repeat("1 + (", 100) + "f(n - 1)" + strings.Repeat(")", 100) + " } f(10000)",
+			"[line 1, column 543] runtime error: stack overflow: the calls and the code inside them nest too deeply"},
 	}
 
 	for _, tt := range tests {
@@ -387,10 +389,14 @@ func TestErrors(t *testing.T) {
 	}
 }
 
-// TestCallDepthRecovers checks that a stack overflow doesn't leave the call
-// counter high, so the next program can call functions again.
+// TestCallDepthRecovers checks that a stack overflow doesn't leave the
+// depth counters high, so the next program can call functions again.
 func TestCallDepthRecovers(t *testing.T) {
 	run(t, "function loop(n) { loop(n + 1) } loop(0)")
+	run(t, "function f(n) { "+strings.Repeat("-", 100)+"f(n - 1) } f(0)")
+	if callDepth != 0 || evalDepth != 0 {
+		t.Errorf("depth counters left at %d calls and %d evals", callDepth, evalDepth)
+	}
 	checkAll(t, []expectation{{"function f(n) { if (n == 0) { return 0 } f(n - 1) } f(5000)", "0"}})
 }
 

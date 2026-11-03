@@ -78,7 +78,7 @@ Equality never fails, whatever the types.
 - A function remembers the scope it was created in (it is a closure), and sees the changes made to it later.
 - A function without `return` gives the value of its last statement. A bare `return` gives `null`.
 - `return` outside of a function ends the program. Its value is the value of the program, which the REPL shows.
-- More than 10000 nested calls is a stack overflow error.
+- More than 10000 nested calls is a stack overflow error. So is a smaller number of calls whose bodies are nested deeply enough that, together, they would use too much of the interpreter's memory: `stack overflow: the calls and the code inside them nest too deeply`.
 
 ## Indexing
 

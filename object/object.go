@@ -319,11 +319,12 @@ func NewEnclosedEnvironment(outer *Environment) *Environment {
 
 // Get looks up name in this environment and the ones around it.
 func (e *Environment) Get(name string) (Object, bool) {
-	obj, ok := e.store[name]
-	if !ok && e.outer != nil {
-		return e.outer.Get(name)
+	for env := e; env != nil; env = env.outer {
+		if obj, ok := env.store[name]; ok {
+			return obj, true
+		}
 	}
-	return obj, ok
+	return nil, false
 }
 
 // Define creates name in this environment, hiding any variable with the

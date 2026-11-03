@@ -484,3 +484,35 @@ let hanoi = function(n, origen, destino, auxiliar) {
 		t.Errorf("hanoi body is grouped wrong:\n%s", hanoi)
 	}
 }
+
+// TestNestingLimit checks that deep but reasonable nesting parses, and that
+// nesting past the limit is one syntax error instead of a crash.
+func TestNestingLimit(t *testing.T) {
+	deep := []string{
+		strings.Repeat("(", 5000) + "1" + strings.Repeat(")", 5000),
+		strings.Repeat("-", 5000) + "1",
+		strings.Repeat("[", 5000) + strings.Repeat("]", 5000),
+		strings.Repeat("if (a) { ", 3000) + "1" + strings.Repeat(" }", 3000),
+		"if (a) { 1 }" + strings.Repeat(" elif (a) { 1 }", 5000) + " else { 2 }",
+	}
+	for _, input := range deep {
+		parse(t, input)
+	}
+
+	tooDeep := []string{
+		strings.Repeat("(", 1000000) + "1" + strings.Repeat(")", 1000000),
+		strings.Repeat("-", 1000000) + "1",
+		strings.Repeat("{\"a\": ", 1000000) + "1" + strings.Repeat("}", 1000000),
+		strings.Repeat("if (a) { ", 1000000) + "1" + strings.Repeat(" }", 1000000),
+		strings.Repeat("function() { ", 1000000),
+		strings.Repeat("x = ", 1000000) + "1",
+	}
+	for _, input := range tooDeep {
+		p := New(lexer.New(input))
+		p.ParseProgram()
+		errors := p.Errors()
+		if len(errors) != 1 || !strings.HasSuffix(errors[0], "syntax error: the program is nested too deeply") {
+			t.Errorf("input %q... - expected one nesting error, got %d: %.200s", input[:30], len(errors), strings.Join(errors, "\n"))
+		}
+	}
+}

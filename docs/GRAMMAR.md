@@ -108,6 +108,7 @@ Whitespace and comments are skipped between tokens. Integers are always decimal,
 - `function add(x) { ... }` builds the same tree as `let add = function(x) { ... };`
 - An `if`, `while` or `for` that starts a statement ends at its closing `}`, so the next line is a new statement. As part of a larger expression they do produce a value: `let x = if (a) { 1 } else { 2 };`
 - A `{` where an expression is expected is always a hash. There are no standalone blocks.
+- Nesting is limited to 10000 levels, where every expression, block and `if` inside another one counts as a level. That allows around 10000 parentheses or 3000 `if`s inside each other. Deeper code is the syntax error `the program is nested too deeply`, because the parser and the evaluator call themselves once per level and would otherwise crash.
 
 ## Known limitations
 

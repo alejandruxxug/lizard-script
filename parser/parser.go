@@ -37,6 +37,14 @@ const (
 	INDEX       // a[i]
 )
 
+// maxNestingDepth limits how deeply expressions, blocks and ifs can be
+// nested inside each other. The parser and the evaluator call themselves
+// once per level, so without a limit a program like ((((...)))) nested a
+// million times would overflow Go's stack and crash. Each of those counts as
+// a level, so an if inside an if takes about three: the if, its block and
+// the statement in it.
+const maxNestingDepth = 10000
+
 // precedences lists every token that works as an infix operator. Any other
 // token counts as LOWEST, which is what stops parseExpression.
 var precedences = map[token.TokenType]int{
@@ -83,6 +91,8 @@ type Parser struct {
 	blockBrace int  // braceDepth inside the innermost block, 0 at the top level
 	parenDepth int  // how many '(' are open
 	loopDepth  int  // how many loops are open in the current function
+	depth      int  // how many expressions and blocks are being parsed inside each other
+	abandoned  bool // the program nests too deeply and the rest of it was skipped
 }
 
 // New creates a Parser that reads its tokens from l.
@@ -147,7 +157,7 @@ func (p *Parser) Errors() []string {
 // An ILLEGAL token is reported as a lexical error, whatever the parser was
 // expecting, because that is the stage where the mistake is.
 func (p *Parser) errorAt(tok token.Token, format string, args ...any) {
-	if p.recovering {
+	if p.recovering || p.abandoned {
 		return
 	}
 	p.recovering = true
@@ -208,6 +218,28 @@ func (p *Parser) synchronize() {
 		}
 		p.nextToken()
 	}
+}
+
+// enter counts one more level of nesting. Its caller must defer leave, even
+// when it returns false. Past maxNestingDepth it reports the error and skips
+// the rest of the input, so the levels that are open end quietly instead of
+// each reporting what is missing.
+func (p *Parser) enter() bool {
+	p.depth++
+	if p.depth <= maxNestingDepth {
+		return true
+	}
+
+	p.errorAt(p.curToken, "the program is nested too deeply")
+	p.abandoned = true
+	for !p.curTokenIs(token.EOF) {
+		p.nextToken()
+	}
+	return false
+}
+
+func (p *Parser) leave() {
+	p.depth--
 }
 
 // nextToken moves one token forward and keeps the depth counters up to date.
@@ -447,6 +479,11 @@ func (p *Parser) parseExpressionStatement() ast.Statement {
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	block := &ast.BlockStatement{Token: p.curToken}
 
+	defer p.leave()
+	if !p.enter() {
+		return block
+	}
+
 	outerBlockBrace := p.blockBrace
 	p.blockBrace = p.braceDepth
 	p.nextToken()
@@ -472,6 +509,11 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 // because PRODUCT > SUM, giving (1 + (2 * 3)). With "1 * 2 + 3" the call is
 // parseExpression(PRODUCT), it stops at '+', and the result is ((1 * 2) + 3).
 func (p *Parser) parseExpression(precedence int) ast.Expression {
+	defer p.leave()
+	if !p.enter() {
+		return nil
+	}
+
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
 		p.errorAt(p.curToken, "expected an expression, got %s", describeToken(p.curToken))
@@ -572,6 +614,12 @@ func (p *Parser) parseCondition() ast.Expression {
 // of the previous one. It ends on the last '}'.
 func (p *Parser) parseIfExpression() ast.Expression {
 	expression := &ast.IfExpression{Token: p.curToken}
+
+	// Each elif is an if inside the previous one, so it is a level too.
+	defer p.leave()
+	if !p.enter() {
+		return nil
+	}
 
 	expression.Condition = p.parseCondition()
 	if expression.Condition == nil {

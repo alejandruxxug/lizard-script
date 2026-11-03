@@ -31,12 +31,25 @@ const maxCallDepth = 10000
 // is an error instead of using all the memory.
 const maxStringLength = 1 << 28
 
-// callDepth counts the function calls open right now.
-var callDepth int
+// maxEvalDepth limits how many calls of Eval can be open at once. The
+// parser already limits how deeply a program nests, so they can only pile up
+// through function calls: 10000 calls whose bodies nest deeply would still
+// overflow Go's stack. The deepest path, a chain of operators, takes about
+// 700 bytes of stack per level, so the limit keeps the stack near 200 MB.
+// Go stops a stack before it grows past 1 GB, and it grows by doubling, so
+// that leaves room.
+const maxEvalDepth = 300000
+
+// callDepth counts the function calls open right now, and evalDepth the
+// calls of Eval.
+var callDepth, evalDepth int
 
 // Eval runs node in env and returns its value. A program that fails returns
 // an *object.Error, whose message has the line and column of the mistake.
 func Eval(node ast.Node, env *object.Environment) object.Object {
+	evalDepth++
+	defer func() { evalDepth-- }()
+
 	switch node := node.(type) {
 
 	// Statements
@@ -725,6 +738,9 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 		}
 		if callDepth >= maxCallDepth {
 			return newError(tok, "stack overflow: more than %d nested calls", maxCallDepth)
+		}
+		if evalDepth >= maxEvalDepth {
+			return newError(tok, "stack overflow: the calls and the code inside them nest too deeply")
 		}
 
 		env := object.NewEnclosedEnvironment(function.Env)
