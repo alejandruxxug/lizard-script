@@ -134,6 +134,38 @@ puts(divide(1, 0))
 [line 3, column 10] runtime error: can't divide 1 by zero
 ```
 
+### Errores que señalan a quien llama
+
+En una biblioteca, un argumento equivocado es el error del programa que la llamó, no de la línea de la biblioteca que lo notó. `error(mensaje, {"at": "caller"})` reporta el error en la llamada del programa al archivo de la biblioteca:
+
+```
+-~> plants/pots.liz
+function _need_size(size) {
+  if (type(size) != "INTEGER") {
+    error("make: size must be a whole number, not " + type(size), {"at": "caller"})
+  }
+}
+function make(size) {
+  _need_size(size)
+  return "a pot of size " + str(size)
+}
+```
+
+```
+use "plants/pots"
+puts(make(3))
+let pot = make("big")
+```
+
+**Salida:**
+
+```text
+a pot of size 3
+[line 3, column 15] runtime error: make: size must be a whole number, not STRING
+```
+
+Sin `{"at": "caller"}` el mismo error señala adentro de la biblioteca, en `plants/pots.liz: [line 3, column 10]`, donde quien escribió `make("big")` no tiene nada que arreglar. El error sale de los ayudantes de la propia biblioteca (`_need_size` se llama desde el mismo archivo) y pasa a la primera llamada desde otro archivo. `flower/lily2d` y `flower/lily3d` revisan sus argumentos así.
+
 ## Recuperarse: `try` / `catch`
 
 `try { ... } catch (e) { ... }` ejecuta el primer bloque. Si dentro ocurre un error de ejecución (también en lo profundo de una función que llamó), se salta el resto del bloque y se ejecuta el bloque `catch`:

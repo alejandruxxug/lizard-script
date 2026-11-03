@@ -1,0 +1,2 @@
+4:18 lily3d.cube: size must be a number, not STRING
+6:19 lily3d.translate: offset must be a 3D point like (0, 1, 2), not (1, 2)

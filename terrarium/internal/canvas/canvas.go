@@ -7,7 +7,7 @@
 //	fill(target, rect, color)     paints the rectangle [x, y, w, h]
 //	span(target, y, x0, x1, color) paints row y from x0 up to x1
 //	spans(target, list, color, offset) paints every [y, x0, x1] of list
-//	blit(target, source, pos)     paints the target source with its top left at pos
+//	blit(target, source, pos, options) paints the target source with its top left at pos
 //
 // and, in paint.go, clip and unclip, the gradient spans, the blend layers
 // and composite.
@@ -234,11 +234,13 @@ func spanOf(item object.Object) (y, x0, x1 float64, ok bool) {
 	return y, x0, x1, okY && ok0 && ok1
 }
 
-// blit(target, source, pos) paints the pixels of source, an image or a
-// window, over target with source's top left at pos (rounded down to whole
-// pixels).
+// blit(target, source, pos, options = {}) paints the pixels of source, an
+// image or a window, over target with source's top left at pos (rounded
+// down to whole pixels). The options scale it: "scale", a number above 0
+// (2 is twice the size, 0.25 a quarter), and "filter", "nearest" (the
+// default: sharp, every pixel a square) or "linear" (smooth).
 func blit(args ...object.Object) object.Object {
-	t, err := start(args, 3)
+	t, err := startOr(args, 3, 4)
 	if err != nil {
 		return err
 	}
@@ -250,7 +252,51 @@ func blit(args ...object.Object) object.Object {
 	if err != nil {
 		return err
 	}
-	t.Pixels().Blit(src.Pixels(), int(math.Floor(x)), int(math.Floor(y)))
+	scale, smooth := 1.0, false
+	if len(args) == 4 {
+		if scale, smooth, err = blitOptions(args, 3); err != nil {
+			return err
+		}
+	}
+	at := func(v float64) int { return int(math.Floor(v)) }
+	if scale == 1 && !smooth {
+		t.Pixels().Blit(src.Pixels(), at(x), at(y))
+	} else {
+		t.Pixels().BlitScaled(src.Pixels(), at(x), at(y), scale, smooth)
+	}
 	t.Touched()
 	return arg.Null
+}
+
+// blitOptions reads the options of blit in argument i: the scale and
+// whether the filter is linear.
+func blitOptions(args []object.Object, i int) (scale float64, smooth bool, err *object.Error) {
+	h, err := arg.Hash(args, i, "options")
+	if err != nil {
+		return 0, false, err
+	}
+	scale = 1
+	h.Each(func(pair object.HashPair) {
+		if err != nil {
+			return
+		}
+		switch key := pair.Key.Inspect(); key {
+		case "scale":
+			n, ok := arg.Number(pair.Value)
+			if !ok || !(n > 0) {
+				err = arg.Errorf("the option scale must be a number above 0, got %s", arg.Show(pair.Value))
+			}
+			scale = n
+		case "filter":
+			name, ok := pair.Value.(*object.String)
+			if !ok || (name.Value != "nearest" && name.Value != "linear") {
+				err = arg.Errorf(`the option filter must be "nearest" or "linear", got %s`, arg.Show(pair.Value))
+				return
+			}
+			smooth = name.Value == "linear"
+		default:
+			err = arg.Errorf("unknown option %s, the options are scale and filter", object.Quote(key))
+		}
+	})
+	return scale, smooth, err
 }

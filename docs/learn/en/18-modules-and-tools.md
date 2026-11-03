@@ -204,16 +204,6 @@ waterwater
 plants/thirsty.liz: [line 2, column 15] runtime error: unknown operator: STRING * STRING
 ```
 
-Two modules that use each other can never finish loading, so that is an error too. With `plants/a.liz` saying `use "b"` and `plants/b.liz` saying `use "a"`:
-
-**Output:**
-
-```text
-plants/b.liz: [line 1, column 1] runtime error: use cycle: plants/a.liz uses plants/b.liz, which uses plants/a.liz
-```
-
-Move what both need into a third module that both use.
-
 A `use` inside a function is a syntax error:
 
 ```
@@ -227,6 +217,71 @@ function setup() {
 ```text
 [line 2, column 3] syntax error: use must be at the top level of a file, not inside a block or a layer
 ```
+
+### Modules that use each other
+
+Two modules can use each other: a garden that waters its plants, and a watering can that counts the garden's plants.
+
+```
+-~> plants/garden.liz
+let plants = ["fern"]
+use "water"
+function plant(name) {
+  plants = plants + [name]
+  return water(name)
+}
+```
+
+```
+-~> plants/water.liz
+use "garden"
+let first = plants[0]
+function water(name) {
+  return "watered " + name + ", " + str(len(plants)) + " plants now"
+}
+```
+
+```
+use "plants/garden"
+use "plants/water"
+puts(first)
+puts(plant("cactus"))
+```
+
+**Output:**
+
+```text
+fern
+watered cactus, 2 plants now
+```
+
+When `garden.liz` reaches `use "water"`, it is still loading. `water.liz` runs then, and its `use "garden"` doesn't start the garden again: it sees the garden **as it is so far**, alive. `plants` is already there (it is defined above the `use`), so `first` is `"fern"`; `plant` isn't yet, and appears when the garden goes on. The functions call each other later, when everything has loaded, so they find every name.
+
+The one thing to watch: a line that runs **while the files load** can't use a name defined further down the other file.
+
+```
+-~> plants/early.liz
+use "late"
+let sun = 3
+```
+
+```
+-~> plants/late.liz
+use "early"
+let light = sun * 2
+```
+
+```
+use "plants/early"
+```
+
+**Output:**
+
+```text
+plants/late.liz: [line 2, column 13] runtime error: identifier not found: sun: plants/early.liz defines it further down, but it is still loading (use cycle: plants/early.liz uses plants/late.liz, which uses plants/early.liz)
+```
+
+Move `let sun = 3` above the `use "late"`, or read `sun` inside a function, which runs later.
 
 ### Standard modules
 
@@ -531,6 +586,35 @@ the program ran too long (more than 1000 steps)
 - `steps` stops code that would run forever. An error doesn't stop your program: it comes back in `error`.
 - `on_statement` is called before each statement runs, and `on_layer` when a layer starts and ends: an editor uses them to know which line made what.
 - The Terrarium is not there unless you pass it: `{"globals": {"fs": fs}}` gives the code `fs`.
+
+A library the code should use alive goes in `use`, not `globals`. A name given in `globals` is a copy: changing it changes only the code's copy. A module in `use` is the module itself, as if the code started with `use "plants/settings"`:
+
+```
+-~> plants/settings.liz
+let pot_size = 2
+function pot() { return "a pot of size " + str(pot_size) }
+```
+
+```
+let r = lizard.run("pot_size = 5\npot()", {"name": "sketch.liz", "use": ["plants/settings"]})
+puts(r.value)
+
+let lines = []
+lizard.run("use \"plants/settings\"\nlet p = pot()", {"name": "sketch.liz", "hook_source": "sketch.liz",
+  "on_statement": function(line, column, source) { lines = lines + [line] }})
+puts(lines)
+```
+
+**Output:**
+
+```text
+a pot of size 5
+[1, 2]
+```
+
+- The modules are found from the code's `name`, like its own `use` lines.
+- `hook_source` calls `on_statement` only for the statements of that source: the code's own two lines, not the line inside `pot`. An editor that runs a drawing on every change saves a call per library statement.
+- Running the same libraries again and again is cheap: a module file is parsed (and compiled, on the VM) once while it doesn't change.
 
 ### Checking code
 

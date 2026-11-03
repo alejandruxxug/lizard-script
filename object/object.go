@@ -4,7 +4,6 @@ package object
 
 import (
 	"fmt"
-	"hash/fnv"
 	"lizardscript/ast"
 	"lizardscript/token"
 	"maps"
@@ -131,6 +130,10 @@ type String struct {
 	scanned bool   // Value was looked at
 	ascii   bool   // every byte of Value is below 0x80
 	runes   []rune // the characters, only filled for non-ASCII text
+
+	// buffer is where Value's bytes live when Concat made it, so another
+	// piece can be added to it in place (see strings.go).
+	buffer *strings.Builder
 }
 
 // scan looks at Value once.
@@ -221,10 +224,16 @@ func (b *Boolean) HashKey() HashKey {
 	return HashKey{Type: b.Type(), Value: value}
 }
 
+// HashKey of a string is its 64-bit FNV-1a hash, computed right here (the
+// same as hash/fnv's New64a) so it makes no garbage.
 func (s *String) HashKey() HashKey {
-	h := fnv.New64a()
-	h.Write([]byte(s.Value))
-	return HashKey{Type: s.Type(), Value: h.Sum64()}
+	const offset, prime = 14695981039346656037, 1099511628211
+	h := uint64(offset)
+	for i := 0; i < len(s.Value); i++ {
+		h ^= uint64(s.Value[i])
+		h *= prime
+	}
+	return HashKey{Type: s.Type(), Value: h}
 }
 
 // HashPair keeps the original key next to the value, so the hash can show
@@ -255,7 +264,22 @@ func NewHash() *Hash {
 // NewHashSized returns an empty hash with room for size keys, for a hash
 // whose size is known, like a literal's.
 func NewHashSized(size int) *Hash {
+	if size <= smallHash {
+		// The hash and its order in one block of memory.
+		block := &smallHashBlock{}
+		block.hash = Hash{Pairs: make(map[HashKey]HashPair, size), Order: block.order[:0]}
+		return &block.hash
+	}
 	return &Hash{Pairs: make(map[HashKey]HashPair, size), Order: make([]HashKey, 0, size)}
+}
+
+// smallHash is the most keys a hash made by NewHashSized keeps its order
+// next to it for; a key more moves the order out, like a full slice.
+const smallHash = 4
+
+type smallHashBlock struct {
+	hash  Hash
+	order [smallHash]HashKey
 }
 
 // Version changes whenever Set or Delete changes the hash. An engine that
@@ -523,6 +547,10 @@ type Error struct {
 	// Uncatchable marks the errors that protect the host: the step limit
 	// and the stack overflows. A try statement lets them go through.
 	Uncatchable bool
+	// AtCaller marks an error that is reported where its file was called
+	// from: error(message, {"at": "caller"}). The call into the file moves
+	// it there (see evaluator.AtCaller).
+	AtCaller bool
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
@@ -564,6 +592,13 @@ func (e *Environment) Version() uint64 {
 // NewEnvironment returns an empty top-level environment.
 func NewEnvironment() *Environment {
 	return &Environment{store: map[string]Object{}}
+}
+
+// OwnVersion is the part of Version that counts e's own changes, and
+// whether that is all of it: true when no environment is around e, like a
+// program's. Code that must not make calls can read it inline.
+func (e *Environment) OwnVersion() (version uint64, all bool) {
+	return e.version, e.outer == nil
 }
 
 // NewEnclosedEnvironment returns an empty environment inside outer.

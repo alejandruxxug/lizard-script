@@ -2,9 +2,10 @@
 -~> the program with a message that starts with the call's name, like
 -~> "lily2d.circle: center must be a point like (10, 20), not STRING".
 
--~> Stops with a message for the call.
+-~> Stops with a message for the call, at the line of the program that
+-~> called lily2d (not a line of lily2d), where the mistake is.
 function fail(call, message) {
-  error("lily2d." + call + ": " + message)
+  error("lily2d." + call + ": " + message, {"at": "caller"})
 }
 
 function is_number(v) {

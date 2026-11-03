@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"lizardscript/ast"
 	"lizardscript/code"
 	"lizardscript/evaluator"
 	"lizardscript/object"
@@ -9,583 +8,1168 @@ import (
 
 // run runs the frames until the first one returns, and returns its value,
 // or the error that stopped the run.
-func (vm *VM) run() object.Object {
-	stack := vm.stack
-	sp := vm.sp
-	fr := &vm.frames[len(vm.frames)-1]
-	cl := fr.cl
-	ins := cl.Fn.Instructions
-	unit := cl.Fn.Unit
-	free := cl.Free
-	ip := fr.ip
-	bp := fr.bp
+//
+// Its loop runs the commonest instructions on the commonest values
+// (numbers, locals, jumps, calls of closures) right here, and hands any
+// other to step, which runs it in full. The split is for speed: in Go a call
+// can change every register, so a loop whose cases call functions has to
+// save its variables to memory at each instruction. Here no case calls
+// anything; after step, the variables are read again from the frame, so none
+// of them has to survive the call either. A case either does its whole
+// instruction and continues, or changes nothing and leaves it to step.
+func (vm *VM) run() object.Value {
+	var (
+		stack     []object.Value
+		sp, ip    int
+		bp        int // where the frame's locals start
+		fr        *frame
+		ins       []uint32
+		constants []object.Value
+		free      []*Cell
+	)
+
+load:
+	stack, sp = vm.stack, vm.sp
+	fr = &vm.frames[len(vm.frames)-1]
+	ins, constants, free = fr.code, fr.cl.Fn.Unit.Values, fr.cl.Free
+	ip, bp = fr.ip, fr.bp
 
 	for {
-		var err *object.Error
-		op := code.Opcode(ins[ip])
-
-		switch op {
+		switch code.Opcode(ins[ip]) {
 		case code.OpConstant:
-			stack[sp] = unit.Constants[operand(ins, ip+1)]
+			stack[sp] = constants[int(ins[ip+1])]
 			sp++
-			ip += 5
+			ip += 2
+			continue
 
 		case code.OpNull:
-			stack[sp] = evaluator.NULL
+			stack[sp] = nullValue
 			sp++
 			ip++
+			continue
 
 		case code.OpTrue:
-			stack[sp] = evaluator.TRUE
+			stack[sp] = trueValue
 			sp++
 			ip++
+			continue
 
 		case code.OpFalse:
-			stack[sp] = evaluator.FALSE
+			stack[sp] = falseValue
 			sp++
 			ip++
+			continue
 
 		case code.OpPop:
 			sp--
-			stack[sp] = nil
+			stack[sp] = object.Value{}
 			ip++
-
-		case code.OpBreakValue:
-			stack[sp] = evaluator.BREAK
-			sp++
-			ip++
-
-		case code.OpContinueValue:
-			stack[sp] = evaluator.CONTINUE
-			sp++
-			ip++
-
-		case code.OpMakeReturn:
-			stack[sp-1] = &object.ReturnValue{Value: stack[sp-1]}
-			ip++
-
-		case code.OpUnwrapReturn:
-			if returned, ok := stack[sp-1].(*object.ReturnValue); ok {
-				stack[sp-1] = returned.Value
-			}
-			ip++
-
-		// Variables
+			continue
 
 		case code.OpGetLocal:
-			stack[sp] = stack[bp+operand(ins, ip+1)]
+			stack[sp] = stack[bp+int(ins[ip+1])]
 			sp++
-			ip += 5
+			ip += 2
+			continue
 
 		case code.OpSetLocal:
 			sp--
-			stack[bp+operand(ins, ip+1)] = stack[sp]
-			stack[sp] = nil
-			ip += 5
+			stack[bp+int(ins[ip+1])] = stack[sp]
+			stack[sp] = object.Value{}
+			ip += 2
+			continue
 
 		case code.OpAssignLocal:
-			stack[bp+operand(ins, ip+1)] = stack[sp-1]
-			ip += 5
+			stack[bp+int(ins[ip+1])] = stack[sp-1]
+			ip += 2
+			continue
 
 		case code.OpGetCell:
-			stack[sp] = stack[bp+operand(ins, ip+1)].(*Cell).Value
+			stack[sp] = cellAt(stack[bp+int(ins[ip+1])]).Value
 			sp++
-			ip += 5
+			ip += 2
+			continue
 
 		case code.OpSetCell:
 			sp--
-			stack[bp+operand(ins, ip+1)].(*Cell).Value = stack[sp]
-			stack[sp] = nil
-			ip += 5
+			cellAt(stack[bp+int(ins[ip+1])]).Value = stack[sp]
+			stack[sp] = object.Value{}
+			ip += 2
+			continue
 
 		case code.OpAssignCell:
-			stack[bp+operand(ins, ip+1)].(*Cell).Value = stack[sp-1]
-			ip += 5
+			cellAt(stack[bp+int(ins[ip+1])]).Value = stack[sp-1]
+			ip += 2
+			continue
 
 		case code.OpGetFree:
-			stack[sp] = free[operand(ins, ip+1)].Value
+			stack[sp] = free[int(ins[ip+1])].Value
 			sp++
-			ip += 5
+			ip += 2
+			continue
 
 		case code.OpAssignFree:
-			free[operand(ins, ip+1)].Value = stack[sp-1]
-			ip += 5
+			free[int(ins[ip+1])].Value = stack[sp-1]
+			ip += 2
+			continue
 
 		case code.OpGetName:
-			value, e := lookup(&unit.Names[operand(ins, ip+1)], free, cl.Globals)
-			if e != nil {
-				err = e
+			// A global or a builtin read before, unchanged since.
+			n := &fr.cl.Fn.Unit.Names[int(ins[ip+1])]
+			globals, memo := fr.cl.Globals, &n.Global
+			version, all := globals.OwnVersion()
+			if len(n.Checked) != 0 || n.Final >= 0 || memo.Env != globals || !all ||
+				memo.Version != version || memo.Resets != evaluator.LibraryResets() {
 				break
 			}
-			stack[sp] = value
+			stack[sp] = n.Global.Value
 			sp++
-			ip += 5
+			ip += 2
+			continue
 
-		case code.OpAssignName:
-			if e := assign(&unit.Names[operand(ins, ip+1)], stack[sp-1], free, cl.Globals); e != nil {
-				err = e
+		case code.OpGetLocalField, code.OpGetCellField, code.OpGetNameField, code.OpGetField:
+			// A dot access on a hash it read before, unchanged since, or on
+			// a point: its value is right here. The value read comes from
+			// a local, a cell, a remembered global, or the stack.
+			op := code.Opcode(ins[ip])
+			unit := fr.cl.Fn.Unit
+			var value object.Value
+			var field *code.Field
+			switch op {
+			case code.OpGetLocalField:
+				value, field = stack[bp+int(ins[ip+1])], &unit.Fields[int(ins[ip+2])]
+			case code.OpGetCellField:
+				value, field = cellAt(stack[bp+int(ins[ip+1])]).Value, &unit.Fields[int(ins[ip+2])]
+			case code.OpGetNameField:
+				n := &unit.Names[int(ins[ip+1])]
+				globals, memo := fr.cl.Globals, &n.Global
+				version, all := globals.OwnVersion()
+				if len(n.Checked) == 0 && n.Final < 0 && memo.Env == globals && all &&
+					memo.Version == version && memo.Resets == evaluator.LibraryResets() {
+					value, field = memo.Value, &unit.Fields[int(ins[ip+2])]
+				}
+			default:
+				value, field = stack[sp-1], &unit.Fields[int(ins[ip+1])]
+			}
+			if field == nil {
 				break
 			}
-			ip += 5
-
-		case code.OpDefineGlobal:
-			sp--
-			cl.Globals.Define(unit.Names[operand(ins, ip+1)].Name, stack[sp])
-			stack[sp] = nil
-			ip += 5
-
-		case code.OpEnterScope:
-			enterScope(&unit.Scopes[operand(ins, ip+1)], stack[bp:])
-			ip += 5
-
-		case code.OpSkipScope:
-			ip += 5
-
-		case code.OpMoveIfGiven:
-			if operand(ins, ip+1) < fr.given {
-				stack[bp+operand(ins, ip+5)] = stack[bp+operand(ins, ip+1)]
-			}
-			ip += 9
-
-		case code.OpJumpIfGiven:
-			if operand(ins, ip+1) < fr.given {
-				ip = operand(ins, ip+5)
+			var result object.Value
+			if h, ok := value.Ref().(*object.Hash); ok && field.Cache.Hash == h && field.Cache.Version == h.Version() {
+				result = field.Cache.Value
+			} else if p, ok := value.Ref().(*object.Point); ok && field.Coord >= 0 && field.Coord < len(p.Coords) {
+				// A coordinate is an integer or a float.
+				switch c := p.Coords[field.Coord].(type) {
+				case *object.Float:
+					result = object.ValueOfFloat(c)
+				case *object.Integer:
+					result = object.ValueOfInteger(c)
+				default:
+					result = object.ObjectValue(c)
+				}
 			} else {
-				ip += 9
-			}
-
-		// Operators
-
-		case code.OpAdd, code.OpSub, code.OpMul, code.OpDiv, code.OpFloorDiv, code.OpMod, code.OpPow,
-			code.OpEqual, code.OpNotEqual, code.OpExact, code.OpNotExact,
-			code.OpLess, code.OpGreater, code.OpLessEqual, code.OpGreaterEqual:
-			left, right := stack[sp-2], stack[sp-1]
-			if l, ok := left.(*object.Integer); ok {
-				if r, ok := right.(*object.Integer); ok {
-					if result, ok := integerInfix(op, l.Value, r.Value); ok {
-						sp--
-						stack[sp] = nil
-						stack[sp-1] = result
-						ip += 5
-						continue
-					}
-				}
-			}
-			result, ok := fastInfix(op, left, right)
-			if !ok {
-				result = evaluator.Infix(unit.Tokens[operand(ins, ip+1)], operators[op], left, right)
-				if e, ok := result.(*object.Error); ok {
-					err = e
-					break
-				}
-			}
-			sp--
-			stack[sp] = nil
-			stack[sp-1] = result
-			ip += 5
-
-		case code.OpMinus:
-			if i, ok := stack[sp-1].(*object.Integer); ok {
-				stack[sp-1] = integer(-i.Value)
-				ip += 5
-				continue
-			}
-			fallthrough
-
-		case code.OpPrefix:
-			node := unit.Nodes[operand(ins, ip+1)].(*ast.PrefixExpression)
-			result := evaluator.Prefix(node, stack[sp-1])
-			if e, ok := result.(*object.Error); ok {
-				err = e
 				break
 			}
-			stack[sp-1] = result
-			ip += 5
+			if op == code.OpGetField {
+				stack[sp-1] = result
+				ip += 3
+			} else {
+				stack[sp] = result
+				sp++
+				ip += 4
+			}
+			continue
 
-		case code.OpNot:
-			stack[sp-1] = evaluator.NativeBool(!truthy(stack[sp-1]))
-			ip++
+		case code.OpCheckCoord:
+			if !stack[sp-1].IsNumber() {
+				break
+			}
+			ip += 2
+			continue
 
-		case code.OpAnd:
-			if !truthy(stack[sp-1]) {
-				stack[sp-1] = evaluator.FALSE
-				ip = operand(ins, ip+1)
+		case code.OpAnd, code.OpOr:
+			// For numbers, booleans and null; step knows the rest.
+			v := stack[sp-1]
+			var truth bool
+			if v.IsInt() {
+				truth = v.Int() != 0
+			} else if v.IsFloat() {
+				truth = v.Float() != 0
+			} else if v.Ref() == evaluator.TRUE {
+				truth = true
+			} else if v.Ref() != evaluator.FALSE && v.Ref() != evaluator.NULL {
+				break
+			}
+			if op := code.Opcode(ins[ip]); op == code.OpAnd && !truth {
+				stack[sp-1] = falseValue
+				ip = int(ins[ip+1])
+			} else if op == code.OpOr && truth {
+				stack[sp-1] = trueValue
+				ip = int(ins[ip+1])
 			} else {
 				sp--
-				stack[sp] = nil
-				ip += 5
+				stack[sp] = object.Value{}
+				ip += 2
 			}
-
-		case code.OpOr:
-			if truthy(stack[sp-1]) {
-				stack[sp-1] = evaluator.TRUE
-				ip = operand(ins, ip+1)
-			} else {
-				sp--
-				stack[sp] = nil
-				ip += 5
-			}
+			continue
 
 		case code.OpToBool:
-			stack[sp-1] = evaluator.NativeBool(truthy(stack[sp-1]))
+			v := stack[sp-1]
+			var truth bool
+			if v.IsInt() {
+				truth = v.Int() != 0
+			} else if v.IsFloat() {
+				truth = v.Float() != 0
+			} else if v.Ref() == evaluator.TRUE {
+				truth = true
+			} else if v.Ref() != evaluator.FALSE && v.Ref() != evaluator.NULL {
+				break
+			}
+			stack[sp-1] = boolValue(truth)
 			ip++
+			continue
 
-		// Control flow
+		case code.OpIndex:
+			array, ok := stack[sp-2].Ref().(*object.Array)
+			index := stack[sp-1]
+			if !ok || !index.IsInt() || index.Int() < 0 || index.Int() >= int64(len(array.Elements)) {
+				break
+			}
+			switch e := array.Elements[index.Int()].(type) {
+			case *object.Integer:
+				stack[sp-2] = object.ValueOfInteger(e)
+			case *object.Float:
+				stack[sp-2] = object.ValueOfFloat(e)
+			default:
+				stack[sp-2] = object.ObjectValue(e)
+			}
+			sp--
+			ip += 2
+			continue
 
 		case code.OpJump:
-			ip = operand(ins, ip+1)
+			ip = int(ins[ip+1])
+			continue
 
 		case code.OpJumpNotTruthy:
-			sp--
-			condition := stack[sp]
-			stack[sp] = nil
-			if truthy(condition) {
-				ip += 5
-			} else {
-				ip = operand(ins, ip+1)
+			v := stack[sp-1]
+			var truth bool
+			if v.IsInt() {
+				truth = v.Int() != 0
+			} else if v.IsFloat() {
+				truth = v.Float() != 0
+			} else if v.Ref() == evaluator.TRUE {
+				truth = true
+			} else if v.Ref() != evaluator.FALSE && v.Ref() != evaluator.NULL {
+				// Strings, arrays, hashes: step knows them.
+				break
 			}
+			sp--
+			stack[sp] = object.Value{}
+			if truth {
+				ip += 2
+			} else {
+				ip = int(ins[ip+1])
+			}
+			continue
 
 		case code.OpStep:
 			if evaluator.MaxSteps != 0 {
-				if e := evaluator.CountStep(unit.Tokens[operand(ins, ip+1)]); e != nil {
-					err = e
-					break
-				}
+				break
 			}
-			ip += 5
+			ip += 2
+			continue
 
 		case code.OpStatement:
-			if hook := evaluator.OnStatement; hook != nil {
-				hook(unit.Statements[operand(ins, ip+1)])
+			if evaluator.OnStatement != nil {
+				break
 			}
-			ip += 5
+			ip += 2
+			continue
 
 		case code.OpCheckSignal:
-			switch stack[sp-1].(type) {
+			switch stack[sp-1].Ref().(type) {
 			case *object.ReturnValue:
-				ip = operand(ins, ip+1)
+				ip = int(ins[ip+1])
 			case *object.Break:
-				ip = operand(ins, ip+5)
+				ip = int(ins[ip+2])
 			case *object.Continue:
-				ip = operand(ins, ip+9)
+				ip = int(ins[ip+3])
 			default:
-				ip += 13
+				ip += 4
 			}
+			continue
 
-		case code.OpReturnValue:
-			value := stack[sp-1]
-			if fr.profile != nil {
-				vm.leaveFrames(len(vm.frames) - 1)
+		// The fused instructions of quickened code (see quicken.go).
+
+		case opGetLocals:
+			stack[sp] = stack[bp+int(ins[ip+1])]
+			stack[sp+1] = stack[bp+int(ins[ip+2])]
+			sp += 2
+			ip += 3
+			continue
+
+		case opGetLocalConst:
+			stack[sp] = stack[bp+int(ins[ip+1])]
+			stack[sp+1] = constants[int(ins[ip+2])]
+			sp += 2
+			ip += 3
+			continue
+
+		case opLoop:
+			if evaluator.MaxSteps != 0 {
+				break
 			}
-			vm.closeLayers(fr.layers)
-			vm.handlers = vm.handlers[:fr.handlers]
-			if len(vm.frames) == 1 {
-				vm.frames = vm.frames[:0]
-				vm.sp = 0
-				return value
+			ip = int(ins[ip+2])
+			continue
+
+		case opSetFree:
+			sp--
+			free[int(ins[ip+1])].Value = stack[sp]
+			stack[sp] = object.Value{}
+			ip += 2
+			continue
+
+		// Operators on numbers, in every form quickening makes (see
+		// quicken.go). Each is written out in full: Go inlines almost nothing
+		// into a function this big, and a call would cost the loop its
+		// registers. Anything that is not a number, and any result that would
+		// be an error, goes to step.
+
+		case code.OpAdd:
+			a, b := stack[sp-2], stack[sp-1]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() + b.Int())
+			} else if f := a.Number() + b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
 			}
-			clear(stack[fr.bp:sp])
-			sp = fr.bp - 1
-			stack[sp] = value
-			sp++
-			vm.frames = vm.frames[:len(vm.frames)-1]
-			fr = &vm.frames[len(vm.frames)-1]
-			cl = fr.cl
-			ins, unit, free = cl.Fn.Instructions, cl.Fn.Unit, cl.Free
-			ip, bp = fr.ip, fr.bp
+			stack[sp-2] = result
+			sp--
+			ip += 2
+			continue
 
-		case code.OpPushHandler:
-			vm.handlers = append(vm.handlers, handler{
-				frame:  len(vm.frames) - 1,
-				sp:     sp,
-				catch:  operand(ins, ip+1),
-				layers: len(vm.layers),
-			})
-			ip += 5
+		case code.OpSub:
+			a, b := stack[sp-2], stack[sp-1]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() - b.Int())
+			} else if f := a.Number() - b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp-2] = result
+			sp--
+			ip += 2
+			continue
 
-		case code.OpPopHandler:
-			vm.handlers = vm.handlers[:len(vm.handlers)-1]
-			ip++
+		case code.OpMul:
+			a, b := stack[sp-2], stack[sp-1]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() * b.Int())
+			} else if f := a.Number() * b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp-2] = result
+			sp--
+			ip += 2
+			continue
 
-		case code.OpLayerEnter:
-			vm.openLayer(unit.Nodes[operand(ins, ip+1)].(*ast.LayerStatement))
-			ip += 5
+		case code.OpDiv:
+			a, b := stack[sp-2], stack[sp-1]
+			var result object.Value
+			if a.IsInt() && b.IsInt() && b.Int() != 0 {
+				result = object.IntValue(a.Int() / b.Int())
+			} else if f := a.Number() / b.Number(); a.IsNumber() && b.IsNumber() && !(a.IsInt() && b.IsInt()) && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp-2] = result
+			sp--
+			ip += 2
+			continue
 
-		case code.OpLayerExit:
-			vm.closeLayers(len(vm.layers) - 1)
-			ip++
+		case code.OpMod:
+			a, b := stack[sp-2], stack[sp-1]
+			if !a.IsInt() || !b.IsInt() || b.Int() == 0 {
+				break
+			}
+			// The quotient rounded down, like floorDiv.
+			x, y := a.Int(), b.Int()
+			q := x / y
+			if x%y != 0 && (x < 0) != (y < 0) {
+				q--
+			}
+			result := object.IntValue(x - q*y)
+			stack[sp-2] = result
+			sp--
+			ip += 2
+			continue
 
-		case code.OpUse:
-			result := evaluator.Use(unit.Nodes[operand(ins, ip+1)].(*ast.UseStatement), cl.Globals, Run)
-			if e, ok := result.(*object.Error); ok {
-				err = e
+		case code.OpFloorDiv:
+			a, b := stack[sp-2], stack[sp-1]
+			if !a.IsInt() || !b.IsInt() || b.Int() == 0 {
+				break
+			}
+			// The quotient rounded down, like floorDiv.
+			x, y := a.Int(), b.Int()
+			q := x / y
+			if x%y != 0 && (x < 0) != (y < 0) {
+				q--
+			}
+			result := object.IntValue(q)
+			stack[sp-2] = result
+			sp--
+			ip += 2
+			continue
+
+		case opAddX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() + b.Int())
+			} else if f := a.Number() + b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
 				break
 			}
 			stack[sp] = result
 			sp++
-			ip += 5
+			ip += 4
+			continue
 
-		case code.OpFail:
-			failure := unit.Failures[operand(ins, ip+1)]
-			err = evaluator.NewError(failure.Token, "%s", failure.Message)
+		case opSubX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() - b.Int())
+			} else if f := a.Number() - b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp] = result
+			sp++
+			ip += 4
+			continue
 
-		// Functions
+		case opMulX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() * b.Int())
+			} else if f := a.Number() * b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp] = result
+			sp++
+			ip += 4
+			continue
+
+		case opDivX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var result object.Value
+			if a.IsInt() && b.IsInt() && b.Int() != 0 {
+				result = object.IntValue(a.Int() / b.Int())
+			} else if f := a.Number() / b.Number(); a.IsNumber() && b.IsNumber() && !(a.IsInt() && b.IsInt()) && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp] = result
+			sp++
+			ip += 4
+			continue
+
+		case opModX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			if !a.IsInt() || !b.IsInt() || b.Int() == 0 {
+				break
+			}
+			// The quotient rounded down, like floorDiv.
+			x, y := a.Int(), b.Int()
+			q := x / y
+			if x%y != 0 && (x < 0) != (y < 0) {
+				q--
+			}
+			result := object.IntValue(x - q*y)
+			stack[sp] = result
+			sp++
+			ip += 4
+			continue
+
+		case opFloorDivX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			if !a.IsInt() || !b.IsInt() || b.Int() == 0 {
+				break
+			}
+			// The quotient rounded down, like floorDiv.
+			x, y := a.Int(), b.Int()
+			q := x / y
+			if x%y != 0 && (x < 0) != (y < 0) {
+				q--
+			}
+			result := object.IntValue(q)
+			stack[sp] = result
+			sp++
+			ip += 4
+			continue
+
+		case opAddS:
+			a, b := stack[sp-1], source(stack, bp, constants, int(ins[ip+1]))
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() + b.Int())
+			} else if f := a.Number() + b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp-1] = result
+			ip += 3
+			continue
+
+		case opSubS:
+			a, b := stack[sp-1], source(stack, bp, constants, int(ins[ip+1]))
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() - b.Int())
+			} else if f := a.Number() - b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp-1] = result
+			ip += 3
+			continue
+
+		case opMulS:
+			a, b := stack[sp-1], source(stack, bp, constants, int(ins[ip+1]))
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() * b.Int())
+			} else if f := a.Number() * b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp-1] = result
+			ip += 3
+			continue
+
+		case opDivS:
+			a, b := stack[sp-1], source(stack, bp, constants, int(ins[ip+1]))
+			var result object.Value
+			if a.IsInt() && b.IsInt() && b.Int() != 0 {
+				result = object.IntValue(a.Int() / b.Int())
+			} else if f := a.Number() / b.Number(); a.IsNumber() && b.IsNumber() && !(a.IsInt() && b.IsInt()) && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[sp-1] = result
+			ip += 3
+			continue
+
+		case opModS:
+			a, b := stack[sp-1], source(stack, bp, constants, int(ins[ip+1]))
+			if !a.IsInt() || !b.IsInt() || b.Int() == 0 {
+				break
+			}
+			// The quotient rounded down, like floorDiv.
+			x, y := a.Int(), b.Int()
+			q := x / y
+			if x%y != 0 && (x < 0) != (y < 0) {
+				q--
+			}
+			result := object.IntValue(x - q*y)
+			stack[sp-1] = result
+			ip += 3
+			continue
+
+		case opFloorDivS:
+			a, b := stack[sp-1], source(stack, bp, constants, int(ins[ip+1]))
+			if !a.IsInt() || !b.IsInt() || b.Int() == 0 {
+				break
+			}
+			// The quotient rounded down, like floorDiv.
+			x, y := a.Int(), b.Int()
+			q := x / y
+			if x%y != 0 && (x < 0) != (y < 0) {
+				q--
+			}
+			result := object.IntValue(q)
+			stack[sp-1] = result
+			ip += 3
+			continue
+
+		case opAddSet:
+			// Both were numbers: the slots left need no clearing.
+			a, b := stack[sp-2], stack[sp-1]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() + b.Int())
+			} else if f := a.Number() + b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[bp+int(ins[ip+1])] = result
+			sp -= 2
+			ip += 3
+			continue
+
+		case opSubSet:
+			// Both were numbers: the slots left need no clearing.
+			a, b := stack[sp-2], stack[sp-1]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() - b.Int())
+			} else if f := a.Number() - b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[bp+int(ins[ip+1])] = result
+			sp -= 2
+			ip += 3
+			continue
+
+		case opMulSet:
+			// Both were numbers: the slots left need no clearing.
+			a, b := stack[sp-2], stack[sp-1]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() * b.Int())
+			} else if f := a.Number() * b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[bp+int(ins[ip+1])] = result
+			sp -= 2
+			ip += 3
+			continue
+
+		case opDivSet:
+			// Both were numbers: the slots left need no clearing.
+			a, b := stack[sp-2], stack[sp-1]
+			var result object.Value
+			if a.IsInt() && b.IsInt() && b.Int() != 0 {
+				result = object.IntValue(a.Int() / b.Int())
+			} else if f := a.Number() / b.Number(); a.IsNumber() && b.IsNumber() && !(a.IsInt() && b.IsInt()) && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[bp+int(ins[ip+1])] = result
+			sp -= 2
+			ip += 3
+			continue
+
+		case opModSet:
+			// Both were numbers: the slots left need no clearing.
+			a, b := stack[sp-2], stack[sp-1]
+			if !a.IsInt() || !b.IsInt() || b.Int() == 0 {
+				break
+			}
+			// The quotient rounded down, like floorDiv.
+			x, y := a.Int(), b.Int()
+			q := x / y
+			if x%y != 0 && (x < 0) != (y < 0) {
+				q--
+			}
+			result := object.IntValue(x - q*y)
+			stack[bp+int(ins[ip+1])] = result
+			sp -= 2
+			ip += 3
+			continue
+
+		case opFloorDivSet:
+			// Both were numbers: the slots left need no clearing.
+			a, b := stack[sp-2], stack[sp-1]
+			if !a.IsInt() || !b.IsInt() || b.Int() == 0 {
+				break
+			}
+			// The quotient rounded down, like floorDiv.
+			x, y := a.Int(), b.Int()
+			q := x / y
+			if x%y != 0 && (x < 0) != (y < 0) {
+				q--
+			}
+			result := object.IntValue(q)
+			stack[bp+int(ins[ip+1])] = result
+			sp -= 2
+			ip += 3
+			continue
+
+		case opIncLocal:
+			slot := bp + int(ins[ip+1])
+			a, b := stack[slot], constants[int(ins[ip+2])]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() + b.Int())
+			} else if f := a.Number() + b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[slot] = result
+			ip += 4
+			continue
+
+		case opDecLocal:
+			slot := bp + int(ins[ip+1])
+			a, b := stack[slot], constants[int(ins[ip+2])]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() - b.Int())
+			} else if f := a.Number() - b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			stack[slot] = result
+			ip += 4
+			continue
+
+		case opIncFree:
+			cell := free[int(ins[ip+1])]
+			a, b := cell.Value, constants[int(ins[ip+2])]
+			var result object.Value
+			if a.IsInt() && b.IsInt() {
+				result = object.IntValue(a.Int() + b.Int())
+			} else if f := a.Number() + b.Number(); a.IsNumber() && b.IsNumber() && f-f == 0 {
+				result = object.FloatValue(f)
+			} else {
+				break
+			}
+			cell.Value = result
+			ip += 4
+			continue
+
+		case code.OpLess:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() < b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() < b.Number()
+			} else {
+				break
+			}
+			stack[sp-2] = boolValue(holds)
+			sp--
+			ip += 2
+			continue
+
+		case code.OpGreater:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() > b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() > b.Number()
+			} else {
+				break
+			}
+			stack[sp-2] = boolValue(holds)
+			sp--
+			ip += 2
+			continue
+
+		case code.OpLessEqual:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() <= b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() <= b.Number()
+			} else {
+				break
+			}
+			stack[sp-2] = boolValue(holds)
+			sp--
+			ip += 2
+			continue
+
+		case code.OpGreaterEqual:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() >= b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() >= b.Number()
+			} else {
+				break
+			}
+			stack[sp-2] = boolValue(holds)
+			sp--
+			ip += 2
+			continue
+
+		case code.OpEqual:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() == b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() == b.Number()
+			} else if x, y := a.Ref(), b.Ref(); !a.IsNumber() && !b.IsNumber() &&
+				(x == evaluator.NULL || x == evaluator.TRUE || x == evaluator.FALSE) &&
+				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
+				holds = ((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
+					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else {
+				break
+			}
+			stack[sp-2] = boolValue(holds)
+			sp--
+			ip += 2
+			continue
+
+		case code.OpNotEqual:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() != b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() != b.Number()
+			} else if x, y := a.Ref(), b.Ref(); !a.IsNumber() && !b.IsNumber() &&
+				(x == evaluator.NULL || x == evaluator.TRUE || x == evaluator.FALSE) &&
+				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
+				holds = !((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
+					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else {
+				break
+			}
+			stack[sp-2] = boolValue(holds)
+			sp--
+			ip += 2
+			continue
+
+		case opJumpUnlessLess:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() < b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() < b.Number()
+			} else {
+				break
+			}
+			sp -= 2
+			if holds {
+				ip += 3
+			} else {
+				ip = int(ins[ip+2])
+			}
+			continue
+
+		case opJumpUnlessGreater:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() > b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() > b.Number()
+			} else {
+				break
+			}
+			sp -= 2
+			if holds {
+				ip += 3
+			} else {
+				ip = int(ins[ip+2])
+			}
+			continue
+
+		case opJumpUnlessLessEqual:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() <= b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() <= b.Number()
+			} else {
+				break
+			}
+			sp -= 2
+			if holds {
+				ip += 3
+			} else {
+				ip = int(ins[ip+2])
+			}
+			continue
+
+		case opJumpUnlessGreaterEqual:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() >= b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() >= b.Number()
+			} else {
+				break
+			}
+			sp -= 2
+			if holds {
+				ip += 3
+			} else {
+				ip = int(ins[ip+2])
+			}
+			continue
+
+		case opJumpUnlessEqual:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() == b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() == b.Number()
+			} else if x, y := a.Ref(), b.Ref(); !a.IsNumber() && !b.IsNumber() &&
+				(x == evaluator.NULL || x == evaluator.TRUE || x == evaluator.FALSE) &&
+				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
+				holds = ((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
+					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else {
+				break
+			}
+			sp -= 2
+			if holds {
+				ip += 3
+			} else {
+				ip = int(ins[ip+2])
+			}
+			continue
+
+		case opJumpUnlessNotEqual:
+			a, b := stack[sp-2], stack[sp-1]
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() != b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() != b.Number()
+			} else if x, y := a.Ref(), b.Ref(); !a.IsNumber() && !b.IsNumber() &&
+				(x == evaluator.NULL || x == evaluator.TRUE || x == evaluator.FALSE) &&
+				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
+				holds = !((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
+					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else {
+				break
+			}
+			sp -= 2
+			if holds {
+				ip += 3
+			} else {
+				ip = int(ins[ip+2])
+			}
+			continue
+
+		case opJumpUnlessLessX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() < b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() < b.Number()
+			} else {
+				break
+			}
+			if holds {
+				ip += 5
+			} else {
+				ip = int(ins[ip+4])
+			}
+			continue
+
+		case opJumpUnlessGreaterX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() > b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() > b.Number()
+			} else {
+				break
+			}
+			if holds {
+				ip += 5
+			} else {
+				ip = int(ins[ip+4])
+			}
+			continue
+
+		case opJumpUnlessLessEqualX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() <= b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() <= b.Number()
+			} else {
+				break
+			}
+			if holds {
+				ip += 5
+			} else {
+				ip = int(ins[ip+4])
+			}
+			continue
+
+		case opJumpUnlessGreaterEqualX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() >= b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() >= b.Number()
+			} else {
+				break
+			}
+			if holds {
+				ip += 5
+			} else {
+				ip = int(ins[ip+4])
+			}
+			continue
+
+		case opJumpUnlessEqualX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() == b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() == b.Number()
+			} else if x, y := a.Ref(), b.Ref(); !a.IsNumber() && !b.IsNumber() &&
+				(x == evaluator.NULL || x == evaluator.TRUE || x == evaluator.FALSE) &&
+				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
+				holds = ((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
+					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else {
+				break
+			}
+			if holds {
+				ip += 5
+			} else {
+				ip = int(ins[ip+4])
+			}
+			continue
+
+		case opJumpUnlessNotEqualX:
+			a, b := source(stack, bp, constants, int(ins[ip+1])), source(stack, bp, constants, int(ins[ip+2]))
+			var holds bool
+			if a.IsInt() && b.IsInt() {
+				holds = a.Int() != b.Int()
+			} else if a.IsNumber() && b.IsNumber() {
+				holds = a.Number() != b.Number()
+			} else if x, y := a.Ref(), b.Ref(); !a.IsNumber() && !b.IsNumber() &&
+				(x == evaluator.NULL || x == evaluator.TRUE || x == evaluator.FALSE) &&
+				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
+				holds = !((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
+					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else {
+				break
+			}
+			if holds {
+				ip += 5
+			} else {
+				ip = int(ins[ip+4])
+			}
+			continue
+
+		case code.OpMinus:
+			v := stack[sp-1]
+			if v.IsInt() {
+				stack[sp-1] = object.IntValue(-v.Int())
+			} else if v.IsFloat() {
+				stack[sp-1] = object.FloatValue(-v.Float())
+			} else {
+				break
+			}
+			ip += 2
+			continue
+
+		// Calls of closures and returns, when nothing special is going on:
+		// no step limit, no profiler, room on the stacks, no layer to close.
 
 		case code.OpCall:
-			count := operand(ins, ip+1)
-			tok := operand(ins, ip+5)
-			callee := stack[sp-1-count]
-			next, ok := callee.(*Closure)
-			if !ok {
-				// The arguments are lent from the stack, without a copy (see
-				// object.BuiltinFunction); the cap keeps an append off it.
-				result := vm.callForeign(tok, unit, callee, stack[sp-count:sp:sp])
-				if e, ok := result.(*object.Error); ok {
-					err = e
-					break
+			count := int(ins[ip+1])
+			callee := stack[sp-1-count].Ref()
+			if b, ok := callee.(*object.Builtin); ok && b == lenBuiltin && count == 1 && evaluator.MaxSteps == 0 && profiler == nil {
+				// len itself, with nothing to count: its value is right here.
+				n := -1
+				switch arg := stack[sp-1].Ref().(type) {
+				case *object.Array:
+					n = len(arg.Elements)
+				case *object.Hash:
+					n = len(arg.Pairs)
+				case *object.String:
+					n = arg.KnownLen()
 				}
-				clear(stack[sp-count : sp])
-				sp -= count
-				stack[sp-1] = result
-				ip += 9
-				continue
+				if n >= 0 {
+					sp--
+					stack[sp] = object.Value{}
+					stack[sp-1] = object.IntValue(int64(n))
+					ip += 3
+					continue
+				}
 			}
-
-			if evaluator.MaxSteps != 0 {
-				if e := evaluator.CountStep(unit.Tokens[tok]); e != nil {
-					err = e
-					break
-				}
+			next, ok := callee.(*Closure)
+			if !ok || evaluator.MaxSteps != 0 || profiler != nil || evaluator.OnStatement != nil || next.Fn.Bare == nil {
+				break
 			}
 			fn := next.Fn
-			if e := arityError(unit.Tokens[tok], fn, count); e != nil {
-				err = e
+			base := sp - count
+			top := base + fn.NumLocals + fn.MaxStack
+			if count < fn.Required || count > fn.NumParams || top > len(stack) ||
+				len(vm.frames) == cap(vm.frames) || vm.depthBase+len(vm.frames) >= evaluator.MaxCallDepth {
 				break
 			}
-			if vm.depthBase+len(vm.frames) >= evaluator.MaxCallDepth {
-				err = overflow(unit.Tokens[tok])
-				break
+			vm.used = max(vm.used, top)
+			for i := sp; i < base+fn.NumLocals; i++ {
+				stack[i] = object.Value{}
 			}
-
-			fr.ip = ip + 9
-			vm.sp = sp
-			vm.pushFrame(next, count)
-			stack, sp = vm.stack, vm.sp
+			fr.ip = ip + 3
+			vm.frames = vm.frames[:len(vm.frames)+1]
 			fr = &vm.frames[len(vm.frames)-1]
-			cl = next
-			ins, unit, free = fn.Instructions, fn.Unit, next.Free
-			ip, bp = 0, fr.bp
+			fr.cl, fr.code, fr.ip, fr.bp, fr.given, fr.profile = next, fn.Bare, 0, base, count, nil
+			fr.handlers, fr.layers = len(vm.handlers), len(vm.layers)
+			ins, constants, free = fn.Bare, fn.Unit.Values, next.Free
+			sp, ip, bp = base+fn.NumLocals, 0, base
+			continue
 
-		case code.OpClosure:
-			fn := unit.Functions[operand(ins, ip+1)]
-			cells := captureCells(unit.Captures[operand(ins, ip+5)], stack[bp:], free)
-			stack[sp] = &Closure{Fn: fn, Free: cells, Globals: cl.Globals}
-			sp++
-			ip += 9
-
-		// Data structures
-
-		case code.OpArray:
-			count := operand(ins, ip+1)
-			array := arrayOf(stack[sp-count : sp])
-			clear(stack[sp-count : sp])
-			sp -= count
-			stack[sp] = array
-			sp++
-			ip += 5
-
-		case code.OpHash:
-			count := operand(ins, ip+1)
-			hash := makeHash(stack[sp-2*count : sp])
-			clear(stack[sp-2*count : sp])
-			sp -= 2 * count
-			stack[sp] = hash
-			sp++
-			ip += 5
-
-		case code.OpCheckKey:
-			if _, ok := stack[sp-1].(object.Hashable); !ok {
-				err = evaluator.NewError(unit.Tokens[operand(ins, ip+1)], "unusable as hash key: %s", stack[sp-1].Type())
+		case code.OpReturnValue:
+			if len(vm.frames) == 1 || fr.profile != nil || len(vm.layers) > fr.layers {
 				break
 			}
-			ip += 5
-
-		case code.OpPoint:
-			count := int(ins[ip+1])
-			point := pointOf(stack[sp-count : sp])
-			clear(stack[sp-count : sp])
-			sp -= count
-			stack[sp] = point
-			sp++
-			ip += 2
-
-		case code.OpCheckCoord:
-			if !evaluator.IsNumber(stack[sp-1]) {
-				err = evaluator.NewError(unit.Tokens[operand(ins, ip+1)],
-					"a point coordinate must be INTEGER or FLOAT, got %s", stack[sp-1].Type())
-				break
+			value := stack[sp-1]
+			vm.handlers = vm.handlers[:fr.handlers]
+			for i := bp; i < sp; i++ {
+				stack[i] = object.Value{}
 			}
-			ip += 5
-
-		case code.OpIndex:
-			left, index := stack[sp-2], stack[sp-1]
-			var result object.Object
-			array, isArray := left.(*object.Array)
-			i, isInteger := index.(*object.Integer)
-			if isArray && isInteger {
-				if i.Value >= 0 && i.Value < int64(len(array.Elements)) {
-					result = array.Elements[i.Value]
-				} else {
-					result = evaluator.NULL
-				}
-			} else {
-				result = evaluator.Index(unit.Tokens[operand(ins, ip+1)], left, index)
-				if e, ok := result.(*object.Error); ok {
-					err = e
-					break
-				}
-			}
-			sp--
-			stack[sp] = nil
-			stack[sp-1] = result
-			ip += 5
-
-		case code.OpIndexKeep:
-			result := evaluator.Index(unit.Tokens[operand(ins, ip+1)], stack[sp-2], stack[sp-1])
-			if e, ok := result.(*object.Error); ok {
-				err = e
-				break
-			}
-			stack[sp] = result
-			sp++
-			ip += 5
-
-		case code.OpGetField:
-			result := getField(&unit.Fields[operand(ins, ip+1)], operand(ins, ip+5), unit, stack[sp-1])
-			if e, ok := result.(*object.Error); ok {
-				err = e
-				break
-			}
-			stack[sp-1] = result
-			ip += 9
-
-		case code.OpGetLocalField, code.OpGetCellField:
-			value := stack[bp+operand(ins, ip+1)]
-			if op == code.OpGetCellField {
-				value = value.(*Cell).Value
-			}
-			result := getField(&unit.Fields[operand(ins, ip+5)], operand(ins, ip+9), unit, value)
-			if e, ok := result.(*object.Error); ok {
-				err = e
-				break
-			}
-			stack[sp] = result
-			sp++
-			ip += 13
-
-		case code.OpGetNameField:
-			value, e := lookup(&unit.Names[operand(ins, ip+1)], free, cl.Globals)
-			if e != nil {
-				err = e
-				break
-			}
-			result := getField(&unit.Fields[operand(ins, ip+5)], operand(ins, ip+9), unit, value)
-			if e, ok := result.(*object.Error); ok {
-				err = e
-				break
-			}
-			stack[sp] = result
-			sp++
-			ip += 13
-
-		case code.OpSetIndex:
-			container, index, value := stack[sp-3], stack[sp-2], stack[sp-1]
-			array, isArray := container.(*object.Array)
-			i, isInteger := index.(*object.Integer)
-			if isArray && isInteger && i.Value >= 0 && i.Value < int64(len(array.Elements)) {
-				array.Elements[i.Value] = value
-			} else {
-				result := evaluator.SetIndex(unit.Tokens[operand(ins, ip+1)], container, index, value)
-				if e, ok := result.(*object.Error); ok {
-					err = e
-					break
-				}
-			}
-			clear(stack[sp-2 : sp])
-			sp -= 2
+			sp = bp
 			stack[sp-1] = value
-			ip += 5
-
-		case code.OpFormula:
-			if result, ok := formula(&unit.Formulas[operand(ins, ip+1)], unit, stack[bp:], free, cl.Globals); ok {
-				stack[sp] = result
-				sp++
-				ip = operand(ins, ip+5)
-			} else {
-				ip += 9
-			}
-
-		default:
-			def, _ := code.Lookup(byte(op))
-			name := "?"
-			if def != nil {
-				name = def.Name
-			}
-			panic("vm: unknown instruction " + name)
-		}
-
-		if err == nil {
+			vm.frames = vm.frames[:len(vm.frames)-1]
+			fr = &vm.frames[len(vm.frames)-1]
+			ins, constants, free = fr.code, fr.cl.Fn.Unit.Values, fr.cl.Free
+			ip, bp = fr.ip, fr.bp
 			continue
 		}
 
-		// An error: to the innermost try that catches it, or out of the run.
-		vm.sp = sp
-		if !vm.throw(err) {
-			clear(stack[:sp])
-			vm.sp = 0
-			return err
+		vm.sp, fr.ip = sp, ip
+		if value, done := vm.step(); done {
+			return value
 		}
-		stack = vm.stack
-		sp = vm.sp
-		fr = &vm.frames[len(vm.frames)-1]
-		cl = fr.cl
-		ins, unit, free = cl.Fn.Instructions, cl.Fn.Unit, cl.Free
-		ip, bp = fr.ip, fr.bp
+		goto load
 	}
-}
-
-// enterScope gives the shared locals of a scope that starts their cells:
-// new and empty for a block, holding the argument for a function's scope.
-func enterScope(scope *code.Scope, locals []object.Object) {
-	for _, slot := range scope.Slots {
-		if scope.Wrap {
-			locals[slot] = &Cell{Value: locals[slot]}
-		} else {
-			locals[slot] = &Cell{}
-		}
-	}
-}
-
-// captureCells collects the cells a new closure captures: locals of the
-// frame that makes it, or that frame's own captured cells.
-func captureCells(captures []code.Capture, locals []object.Object, free []*Cell) []*Cell {
-	cells := make([]*Cell, len(captures))
-	for i, capture := range captures {
-		if capture.Local {
-			cells[i] = locals[capture.Index].(*Cell)
-		} else {
-			cells[i] = free[capture.Index]
-		}
-	}
-	return cells
-}
-
-// makeHash builds a hash from key, value pairs, in order. The keys were
-// checked with OpCheckKey.
-func makeHash(pairs []object.Object) *object.Hash {
-	hash := object.NewHashSized(len(pairs) / 2)
-	for i := 0; i < len(pairs); i += 2 {
-		hash.Set(pairs[i].(object.Hashable), pairs[i+1])
-	}
-	return hash
 }

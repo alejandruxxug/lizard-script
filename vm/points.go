@@ -8,8 +8,8 @@ import (
 // Point arithmetic (p + q, p - q, p * n, n * p, p / n), the evaluator's
 // rules for each coordinate, with one allocation per point: the point, its
 // coordinates and their floats share one block of memory. Points and floats
-// can't change, so sharing it is invisible to a program. Point literals get
-// one block too.
+// can't change, so sharing it is invisible to a program. A point literal
+// gets one block too.
 
 // point2 and point3 are a point with room for its coordinates and their
 // floats, for two and three coordinates.
@@ -26,7 +26,7 @@ type point3 struct {
 }
 
 // newPoint makes the point of coords, two or three numbers.
-func newPoint(coords []number) *object.Point {
+func newPoint(coords []object.Value) *object.Point {
 	if len(coords) == 2 {
 		block := &point2{}
 		block.point.Coords = fillCoords(block.coords[:], block.floats[:], coords)
@@ -39,84 +39,54 @@ func newPoint(coords []number) *object.Point {
 
 // fillCoords writes coords into a block's coordinates, the floats in the
 // block's own floats, and returns the coordinates.
-func fillCoords(dst []object.Object, floats []object.Float, coords []number) []object.Object {
+func fillCoords(dst []object.Object, floats []object.Float, coords []object.Value) []object.Object {
 	for i, c := range coords {
-		if c.isFloat {
-			floats[i].Value = c.f
+		if c.IsFloat() {
+			floats[i].Value = c.Float()
 			dst[i] = &floats[i]
 		} else {
-			dst[i] = integer(c.i)
+			dst[i] = object.IntegerOf(c.Int())
 		}
 	}
 	return dst[:len(coords):len(coords)]
 }
 
-// literal2 and literal3 are a point and its coordinates, for a point
-// literal, whose coordinates are already values.
-type literal2 struct {
-	point  object.Point
-	coords [2]object.Object
-}
-
-type literal3 struct {
-	point  object.Point
-	coords [3]object.Object
-}
-
-// pointOf makes the point of a literal from values already checked to be
-// numbers, two or three.
-func pointOf(values []object.Object) *object.Point {
-	if len(values) == 2 {
-		block := &literal2{coords: [2]object.Object{values[0], values[1]}}
-		block.point.Coords = block.coords[:]
-		return &block.point
-	}
-	block := &literal3{}
-	n := copy(block.coords[:], values)
-	block.point.Coords = block.coords[:n:n]
-	return &block.point
-}
-
 // pointInfix is an operator with a point on one side. ok is false where the
 // evaluator must answer: an error, or an operator points don't have.
-func pointInfix(op code.Opcode, left, right object.Object) (object.Object, bool) {
-	lp, leftIsPoint := left.(*object.Point)
-	rp, rightIsPoint := right.(*object.Point)
+func pointInfix(op code.Opcode, left, right object.Value) (object.Value, bool) {
+	lp, leftIsPoint := left.Ref().(*object.Point)
+	rp, rightIsPoint := right.Ref().(*object.Point)
+	var point *object.Point
+	var ok bool
 	switch {
 	case leftIsPoint && rightIsPoint:
 		if (op != code.OpAdd && op != code.OpSub) || len(lp.Coords) != len(rp.Coords) {
-			return nil, false
+			return object.Value{}, false
 		}
-		return addPoints(op, lp.Coords, rp.Coords)
-	case leftIsPoint && (op == code.OpMul || op == code.OpDiv):
-		scale, ok := toNumber(right)
-		if !ok {
-			return nil, false
-		}
-		return scalePoint(op, lp.Coords, scale, false)
-	case rightIsPoint && op == code.OpMul:
-		scale, ok := toNumber(left)
-		if !ok {
-			return nil, false
-		}
-		return scalePoint(op, rp.Coords, scale, true)
+		point, ok = addPoints(op, lp.Coords, rp.Coords)
+	case leftIsPoint && right.IsNumber() && (op == code.OpMul || op == code.OpDiv):
+		point, ok = scalePoint(op, lp.Coords, right, false)
+	case rightIsPoint && left.IsNumber() && op == code.OpMul:
+		point, ok = scalePoint(op, rp.Coords, left, true)
 	}
-	return nil, false
+	if !ok {
+		return object.Value{}, false
+	}
+	return object.ObjectValue(point), true
 }
 
 // addPoints is p + q or p - q, coordinate by coordinate.
-func addPoints(op code.Opcode, p, q []object.Object) (object.Object, bool) {
-	var coords [3]number
+func addPoints(op code.Opcode, p, q []object.Object) (*object.Point, bool) {
+	var coords [3]object.Value
 	if len(p) > len(coords) {
 		return nil, false
 	}
 	for i := range p {
-		a, aok := toNumber(p[i])
-		b, bok := toNumber(q[i])
-		if !aok || !bok {
+		a, b := object.ValueOf(p[i]), object.ValueOf(q[i])
+		if !a.IsNumber() || !b.IsNumber() {
 			return nil, false
 		}
-		c, ok := arithmetic(op, a, b)
+		c, ok := numberInfix(op, a, b)
 		if !ok {
 			return nil, false
 		}
@@ -126,21 +96,22 @@ func addPoints(op code.Opcode, p, q []object.Object) (object.Object, bool) {
 }
 
 // scalePoint is p * n or p / n, or n * p when first is true.
-func scalePoint(op code.Opcode, p []object.Object, scale number, first bool) (object.Object, bool) {
-	var coords [3]number
+func scalePoint(op code.Opcode, p []object.Object, scale object.Value, first bool) (*object.Point, bool) {
+	var coords [3]object.Value
 	if len(p) > len(coords) {
 		return nil, false
 	}
 	for i := range p {
-		a, ok := toNumber(p[i])
-		if !ok {
+		coord := object.ValueOf(p[i])
+		if !coord.IsNumber() {
 			return nil, false
 		}
-		var c number
+		var c object.Value
+		var ok bool
 		if first {
-			c, ok = arithmetic(op, scale, a)
+			c, ok = numberInfix(op, scale, coord)
 		} else {
-			c, ok = arithmetic(op, a, scale)
+			c, ok = numberInfix(op, coord, scale)
 		}
 		if !ok {
 			return nil, false

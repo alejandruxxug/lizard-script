@@ -75,6 +75,20 @@ true ["lizards.txt"]
 - `fs.read(path)` da todo el texto. La línea vacía de la salida es el último `\n` del archivo más el que agrega `puts`.
 - `fs.join(a, b, ...)` arma una ruta con `/`, que funciona en todos los sistemas, también en Windows.
 - `fs.mkdir` crea una carpeta (y las que falten encima de ella); `fs.list` da los nombres que hay adentro, en orden alfabético.
+- `fs.digest(path)` es una huella del contenido del archivo (SHA-256, en hexadecimal), igual que `text.digest` de su texto: dos archivos con la misma huella tienen los mismos bytes, así que es un buen nombre para una miniatura o un caché del archivo. `fs.digest(path, "fnv")` es una más corta y rápida para cachés.
+
+```
+fs.write("note.txt", "abc")
+puts(fs.digest("note.txt"))
+puts(fs.digest("note.txt", "fnv"), text.digest("abc", "fnv"))
+```
+
+**Salida:**
+
+```text
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+e71fa2190541574b e71fa2190541574b
+```
 
 Cuando algo sale mal (un archivo que no existe, una carpeta que no está), la función lanza un error de ejecución, y `try` lo atrapa como a cualquier otro (capítulo 14):
 
@@ -202,20 +216,24 @@ puts(type(took), took >= 100)
 
 let now = time.now()
 puts(keys(now))
-puts(now.month >= 1 && now.month <= 12)
+puts(now.month >= 1 && now.month <= 12, now.weekday >= 1 && now.weekday <= 7)
+puts(type(now.epoch), time.utc().utc_offset)
 ```
 
 **Salida:**
 
 ```text
 FLOAT true
-["year", "month", "day", "hour", "minute", "second"]
-true
+["year", "month", "day", "hour", "minute", "second", "weekday", "epoch", "utc_offset"]
+true true
+FLOAT 0
 ```
 
 - `time.ms()` son los milisegundos desde que empezó el programa, como flotante. Resta dos de ellos para medir cuánto tardó algo.
 - `time.sleep(ms)` espera.
-- `time.now()` es la fecha y la hora como un hash de enteros, así que `now.hour` y `now.minute` están listos para imprimir o para dibujar un reloj.
+- `time.now()` es la fecha y la hora como un hash, así que `now.hour` y `now.minute` están listos para imprimir o para dibujar un reloj. `weekday` es 1 para el lunes hasta 7 para el domingo.
+- `now.epoch` son los segundos desde 1970 (UTC), un flotante: el mismo instante en todos los computadores, así que es el que se guarda, y dos de ellos restados son los segundos entre ellos ("hace 2 h" es `int((time.now().epoch - saved) / 3600)`). `now.utc_offset` es cuántos segundos va adelantado el reloj local respecto a UTC (`-18000` en Bogotá).
+- `time.utc()` es el mismo hash en UTC, con un `utc_offset` de 0.
 
 > **Pruébalo.** Mide con `time.ms()` cuánto tarda `range(1000000)`. Luego imprime la hora como `14:05` (completa los minutos con un `"0"` cuando sean menos de 10).
 
@@ -357,7 +375,28 @@ puts(img.pixels(picture))
 [#000000, #ffffff, #ffffff, #ffffff, #000000, #800000, #ff7f7f, #ff7f7f, #ff7f7f, #800000, #000000, #ffffff, #ffffff, #ffffff, #000000]
 ```
 
-La fila del medio es rojo semitransparente: sobre negro da un rojo oscuro (`#800000`), sobre blanco un rosado (`#ff7f7f`). Las otras funciones de dibujo son `img.clear(image, color)` (todos los píxeles, sin mezclar) e `img.blit(image, other, pos)` (pinta una imagen sobre otra).
+La fila del medio es rojo semitransparente: sobre negro da un rojo oscuro (`#800000`), sobre blanco un rosado (`#ff7f7f`). Las otras funciones de dibujo son `img.clear(image, color)` (todos los píxeles, sin mezclar) e `img.blit(image, other, pos)` (pinta una imagen sobre otra). `blit` recibe opciones para pintarla de otro tamaño: `{"scale": 2}` la duplica con píxeles cuadrados nítidos, y `{"scale": 0.25, "filter": "linear"}` la achica suavemente, para una miniatura.
+
+```
+let tile = img.from_pixels((2, 1), [#000000, #ffffff])
+let big = img.new(4, 1)
+img.blit(big, tile, (0, 0), {"scale": 2})
+puts(img.pixels(big))
+img.blit(big, tile, (0, 0), {"scale": 2, "filter": "linear"})
+puts(img.pixels(big))
+let small = img.new(1, 1)
+img.blit(small, tile, (0, 0), {"scale": 0.5, "filter": "linear"})
+puts(img.pixels(small))
+```
+
+**Salida:**
+
+```text
+[#000000, #000000, #ffffff, #ffffff]
+[#000000, #404040, #bfbfbf, #ffffff]
+[#808080]
+```
+
 
 > **Error común: un píxel fuera de la imagen.** `img.get` e `img.set` solo aceptan píxeles que existen:
 >
@@ -740,7 +779,7 @@ window.run(w, function(events) {
 img.save(window.screenshot(w), "after-a-click.png")
 ```
 
-Devolver `false` en el primer `tick` termina la ejecución después de un cuadro.
+Devolver `false` en el primer `tick` termina la ejecución después de un cuadro. `window.screenshot(w, {"full": true})` da en cambio todos los píxeles de la pantalla, el tamaño de la ventana por su escala, como la ve el usuario.
 
 ### Dejar que otro programa la maneje
 
@@ -776,9 +815,9 @@ Agrega `--vm` antes del archivo para ejecutarlos en el motor más rápido: `./li
 
 - Los módulos del Terrario son hashes de funciones integradas que tiene todo programa: `fs`, `os`, `time`, `json`, `img`, `clip`, `window`, `pen`.
 - Sus errores son errores de ejecución con el nombre de la función al principio, y `try` los atrapa.
-- `fs.read`, `fs.write`, `fs.append`, `fs.list`, `fs.mkdir`, `fs.remove` (solo carpetas vacías), `fs.join`.
+- `fs.read`, `fs.write`, `fs.append`, `fs.list`, `fs.mkdir`, `fs.remove` (solo carpetas vacías), `fs.join`, `fs.digest`.
 - `os.args()` da lo que sigue al nombre del archivo; `os.exit(code)` detiene el programa.
-- `time.ms()` mide, `time.sleep(ms)` espera, `time.now()` es la fecha y la hora.
+- `time.ms()` mide, `time.sleep(ms)` espera, `time.now()` es la fecha y la hora (con `epoch` para guardar), `time.utc()` lo mismo en UTC.
 - `json.write(value, indent)` y `json.parse(text)`; los colores vuelven como cadenas.
 - `img.new`, `img.get`, `img.set`, `img.save`, `img.load`; `fill`, `span`, `clear` y `blit` dibujan igual en imágenes y ventanas.
 - `window.run(w, tick)` llama a `tick(events)` en cada cuadro hasta que devuelva `false`; un programa de pintura es un círculo, un arrastre, un trazo que rellena los huecos y `e.pen.pressure`.

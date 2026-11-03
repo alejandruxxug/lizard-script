@@ -75,6 +75,20 @@ true ["lizards.txt"]
 - `fs.read(path)` gives the whole text. The empty line in the output is the file's last `\n` plus the one `puts` adds.
 - `fs.join(a, b, ...)` builds a path with `/`, which works on every system, Windows too.
 - `fs.mkdir` makes a folder (and the ones above it); `fs.list` gives the names inside, in alphabetical order.
+- `fs.digest(path)` is a fingerprint of the file's contents (SHA-256, as hex), the same as `text.digest` of its text: two files with the same digest hold the same bytes, so it is a good name for a thumbnail or a cache of the file. `fs.digest(path, "fnv")` is a shorter, faster one for caches.
+
+```
+fs.write("note.txt", "abc")
+puts(fs.digest("note.txt"))
+puts(fs.digest("note.txt", "fnv"), text.digest("abc", "fnv"))
+```
+
+**Output:**
+
+```text
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+e71fa2190541574b e71fa2190541574b
+```
 
 When something goes wrong (a missing file, a folder that isn't there), the builtin raises a runtime error, and `try` catches it like any other (chapter 14):
 
@@ -202,20 +216,24 @@ puts(type(took), took >= 100)
 
 let now = time.now()
 puts(keys(now))
-puts(now.month >= 1 && now.month <= 12)
+puts(now.month >= 1 && now.month <= 12, now.weekday >= 1 && now.weekday <= 7)
+puts(type(now.epoch), time.utc().utc_offset)
 ```
 
 **Output:**
 
 ```text
 FLOAT true
-["year", "month", "day", "hour", "minute", "second"]
-true
+["year", "month", "day", "hour", "minute", "second", "weekday", "epoch", "utc_offset"]
+true true
+FLOAT 0
 ```
 
 - `time.ms()` is milliseconds since the program started, as a float. Subtract two of them to measure how long something took.
 - `time.sleep(ms)` waits.
-- `time.now()` is the date and time as a hash of integers, so `now.hour` and `now.minute` are ready to print or to draw a clock with.
+- `time.now()` is the date and time as a hash, so `now.hour` and `now.minute` are ready to print or to draw a clock with. `weekday` is 1 for Monday to 7 for Sunday.
+- `now.epoch` is the seconds since 1970 (UTC), a float: the same instant on every computer, so it is the one to store, and two of them subtracted are the seconds between them ("2 h ago" is `int((time.now().epoch - saved) / 3600)`). `now.utc_offset` is how many seconds the local clock is ahead of UTC (`-18000` in Bogotá).
+- `time.utc()` is the same hash in UTC, with a `utc_offset` of 0.
 
 > **Try it.** Measure how long `range(1000000)` takes with `time.ms()`. Then print the time as `14:05` (pad the minutes with a `"0"` when they are below 10).
 
@@ -357,7 +375,28 @@ puts(img.pixels(picture))
 [#000000, #ffffff, #ffffff, #ffffff, #000000, #800000, #ff7f7f, #ff7f7f, #ff7f7f, #800000, #000000, #ffffff, #ffffff, #ffffff, #000000]
 ```
 
-The middle row is half-transparent red: over black it gives dark red (`#800000`), over white a pink (`#ff7f7f`). The other drawing functions are `img.clear(image, color)` (every pixel, no mixing) and `img.blit(image, other, pos)` (paints one image over another).
+The middle row is half-transparent red: over black it gives dark red (`#800000`), over white a pink (`#ff7f7f`). The other drawing functions are `img.clear(image, color)` (every pixel, no mixing) and `img.blit(image, other, pos)` (paints one image over another). `blit` takes options to paint it at another size: `{"scale": 2}` doubles it with sharp square pixels, and `{"scale": 0.25, "filter": "linear"}` shrinks it smoothly, for a thumbnail.
+
+```
+let tile = img.from_pixels((2, 1), [#000000, #ffffff])
+let big = img.new(4, 1)
+img.blit(big, tile, (0, 0), {"scale": 2})
+puts(img.pixels(big))
+img.blit(big, tile, (0, 0), {"scale": 2, "filter": "linear"})
+puts(img.pixels(big))
+let small = img.new(1, 1)
+img.blit(small, tile, (0, 0), {"scale": 0.5, "filter": "linear"})
+puts(img.pixels(small))
+```
+
+**Output:**
+
+```text
+[#000000, #000000, #ffffff, #ffffff]
+[#000000, #404040, #bfbfbf, #ffffff]
+[#808080]
+```
+
 
 > **Common mistake: a pixel outside the image.** `img.get` and `img.set` only take pixels that exist:
 >
@@ -740,7 +779,7 @@ window.run(w, function(events) {
 img.save(window.screenshot(w), "after-a-click.png")
 ```
 
-Returning `false` from the first `tick` ends the run after one frame.
+Returning `false` from the first `tick` ends the run after one frame. `window.screenshot(w, {"full": true})` gives every pixel of the screen instead, the window's size times its scale, as a user sees it.
 
 ### Letting another program drive it
 
@@ -776,9 +815,9 @@ Add `--vm` before the file to run them on the faster engine: `./lizardscript --v
 
 - The Terrarium's modules are hashes of builtins that every program has: `fs`, `os`, `time`, `json`, `img`, `clip`, `window`, `pen`.
 - Their errors are runtime errors with the function's name in front, and `try` catches them.
-- `fs.read`, `fs.write`, `fs.append`, `fs.list`, `fs.mkdir`, `fs.remove` (empty folders only), `fs.join`.
+- `fs.read`, `fs.write`, `fs.append`, `fs.list`, `fs.mkdir`, `fs.remove` (empty folders only), `fs.join`, `fs.digest`.
 - `os.args()` gives what follows the file name; `os.exit(code)` stops the program.
-- `time.ms()` measures, `time.sleep(ms)` waits, `time.now()` is the date and time.
+- `time.ms()` measures, `time.sleep(ms)` waits, `time.now()` is the date and time (with `epoch` to store), `time.utc()` the same in UTC.
 - `json.write(value, indent)` and `json.parse(text)`; colors come back as strings.
 - `img.new`, `img.get`, `img.set`, `img.save`, `img.load`; `fill`, `span`, `clear` and `blit` draw on images and windows alike.
 - `window.run(w, tick)` calls `tick(events)` every frame until it returns `false`; a paint program is a circle, a drag, a stroke that fills the gaps, and `e.pen.pressure`.

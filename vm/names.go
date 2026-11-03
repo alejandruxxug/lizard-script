@@ -13,9 +13,9 @@ import (
 // lookup reads a name through n: the captured variables that might be set,
 // then the one that surely is, or the globals and the builtins (see
 // globals.go).
-func lookup(n *code.Name, free []*Cell, globals *object.Environment) (object.Object, *object.Error) {
+func lookup(n *code.Name, free []*Cell, globals *object.Environment) (object.Value, *object.Error) {
 	for _, i := range n.Checked {
-		if value := free[i].Value; value != nil {
+		if value := free[i].Value; !value.IsEmpty() {
 			return value, nil
 		}
 	}
@@ -27,9 +27,9 @@ func lookup(n *code.Name, free []*Cell, globals *object.Environment) (object.Obj
 
 // assign does name = value through n, like lookup finds it. Builtins can't
 // be assigned.
-func assign(n *code.Name, value object.Object, free []*Cell, globals *object.Environment) *object.Error {
+func assign(n *code.Name, value object.Value, free []*Cell, globals *object.Environment) *object.Error {
 	for _, i := range n.Checked {
-		if free[i].Value != nil {
+		if !free[i].Value.IsEmpty() {
 			free[i].Value = value
 			return nil
 		}
@@ -38,7 +38,7 @@ func assign(n *code.Name, value object.Object, free []*Cell, globals *object.Env
 		free[n.Final].Value = value
 		return nil
 	}
-	if !globals.Assign(n.Name, value) {
+	if !globals.Assign(n.Name, value.Object()) {
 		return evaluator.NewError(n.Token, "can't assign to %s: it was never declared, use let %s = ...",
 			n.Name, n.Name)
 	}

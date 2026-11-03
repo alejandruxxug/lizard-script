@@ -82,7 +82,7 @@ An opacity below 1 on a shape that has both a fill and a stroke, or any blend mo
 
 ## Shapes
 
-Every error starts with the function's name and says what was wanted: `lily2d.circle: center must be a point like (10, 20), not STRING`.
+Every error starts with the function's name and says what was wanted: `lily2d.circle: center must be a point like (10, 20), not STRING`. A wrong argument is reported at the line of your program that called lily2d, not inside it (`error(message, {"at": "caller"})`, see [SEMANTICS.md](../SEMANTICS.md#errors-at-the-caller)).
 
 ### lily2d.circle(target, center, r, style)
 A circle of radius `r` round `center`.

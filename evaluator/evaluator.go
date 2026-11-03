@@ -508,7 +508,7 @@ func evalInfixValues(tok token.Token, operator string, left, right object.Object
 		}
 		return pointInfixError(tok, operator, left, right)
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
-		return evalStringInfixExpression(tok, operator, left.(*object.String).Value, right.(*object.String).Value)
+		return evalStringInfixExpression(tok, operator, left.(*object.String), right.(*object.String))
 	case operator == "*" && left.Type() == object.STRING_OBJ && right.Type() == object.INTEGER_OBJ:
 		return repeatString(tok, left.(*object.String).Value, right.(*object.Integer).Value)
 	case operator == "*" && left.Type() == object.INTEGER_OBJ && right.Type() == object.STRING_OBJ:
@@ -597,13 +597,14 @@ func power(base, exponent int64) int64 {
 	return result
 }
 
-func evalStringInfixExpression(tok token.Token, operator string, left, right string) object.Object {
+func evalStringInfixExpression(tok token.Token, operator string, leftString, rightString *object.String) object.Object {
+	left, right := leftString.Value, rightString.Value
 	switch operator {
 	case "+":
 		if len(left)+len(right) > maxStringLength {
 			return newError(tok, "string too long")
 		}
-		return &object.String{Value: left + right}
+		return object.Concat(leftString, rightString)
 	case "<":
 		return nativeBoolToBooleanObject(left < right)
 	case ">":
@@ -1026,6 +1027,9 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 			return err
 		}
 		result := evalBlockStatement(function.Body, env)
+		if err, ok := result.(*object.Error); ok {
+			AtCaller(err, tok)
+		}
 
 		// A function without return gives the value of its last statement.
 		if returnValue, ok := result.(*object.ReturnValue); ok {
@@ -1042,7 +1046,9 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 			// error(message) is the program's own error: its message
 			// is shown as it is, without the builtin name in front.
 			if function == builtins["error"] {
-				return newError(tok, "%s", err.Message)
+				raised := newError(tok, "%s", err.Message)
+				raised.AtCaller = err.AtCaller
+				return raised
 			}
 			// An error from a function the builtin called (list.sort
 			// with a comparison) keeps being one a try lets through.
@@ -1054,7 +1060,11 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 
 	case object.Callable:
 		// A function of another engine does the same checks itself.
-		return function.Call(tok, args)
+		result := function.Call(tok, args)
+		if err, ok := result.(*object.Error); ok {
+			AtCaller(err, tok)
+		}
+		return result
 
 	default:
 		return newError(tok, "not a function: %s", function.Type())
@@ -1132,7 +1142,7 @@ func evalIndexExpression(tok token.Token, left, index object.Object) object.Obje
 		if i < 0 || i >= int64(left.Len()) {
 			return NULL
 		}
-		return &object.String{Value: string(left.RuneAt(int(i)))}
+		return object.Char(left.RuneAt(int(i)))
 
 	case *object.Color:
 		return evalColorProperty(tok, left, index)

@@ -49,6 +49,15 @@ func Name(o object.Object) string {
 	return string(o.Type())
 }
 
+// Show is a value the way a message shows what it got: a string in
+// quotes, anything else as puts shows it.
+func Show(o object.Object) string {
+	if s, ok := o.(*object.String); ok {
+		return object.Quote(s.Value)
+	}
+	return o.Inspect()
+}
+
 // article is "a" or "an" for word.
 func article(word string) string {
 	if word != "" && (word[0] == 'a' || word[0] == 'e' || word[0] == 'i' || word[0] == 'o' || word[0] == 'u' ||

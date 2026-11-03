@@ -3,9 +3,10 @@
 -~> "lily3d.cube: size must be a number, not STRING". They run once per
 -~> call, never per vertex or per pixel.
 
--~> Stops with a message for the call.
+-~> Stops with a message for the call, at the line of the program that
+-~> called lily3d (not a line of lily3d), where the mistake is.
 function fail(call, message) {
-  error("lily3d." + call + ": " + message)
+  error("lily3d." + call + ": " + message, {"at": "caller"})
 }
 
 function is_number(v) {

@@ -330,25 +330,25 @@ puts(fib(20), total)
 
 ```text
 6765 332836390
-profile: 3.363ms
+profile: 2.77ms
 
 functions by self time
         self        total      calls  name
-     2.528ms      2.528ms      21891  fib (slow.liz:1)
-     0.290ms      3.011ms          1  program (slow.liz:1)
-     0.040ms      0.040ms       1000  square (slow.liz:5)
+     1.878ms      1.878ms      21891  fib (slow.liz:1)
+     0.300ms      2.297ms          1  program (slow.liz:1)
+     0.023ms      0.023ms       1000  square (slow.liz:5)
 
 functions by total time
         self        total      calls  name
-     0.290ms      3.011ms          1  program (slow.liz:1)
-     2.528ms      2.528ms      21891  fib (slow.liz:1)
-     0.040ms      0.040ms       1000  square (slow.liz:5)
+     0.300ms      2.297ms          1  program (slow.liz:1)
+     1.878ms      1.878ms      21891  fib (slow.liz:1)
+     0.023ms      0.023ms       1000  square (slow.liz:5)
 
 builtins by self time
         self        total      calls  name
-     0.077ms      0.077ms       1000  str
-     0.046ms      0.046ms          1  puts
-     0.031ms      0.031ms       1000  len
+     0.067ms      0.067ms       1000  str
+     0.023ms      0.023ms       1000  len
+     0.006ms      0.006ms          1  puts
 ```
 
 `fib` is called 21891 times to compute `fib(20)`: almost all the time is there, and it is the function to make faster (it computes the same values again and again). `square` was called 1000 times but costs nothing.

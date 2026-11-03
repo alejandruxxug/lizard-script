@@ -1,0 +1,2 @@
+5:20 lily2d.circle: center must be a point like (10, 20), not STRING
+8:16 lily2d.circle: center must be a point like (10, 20), not INTEGER

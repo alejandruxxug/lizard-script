@@ -244,8 +244,21 @@ func builtinStr(args ...object.Object) object.Object {
 
 // error(message) stops the program with a runtime error. The message is a
 // string; any other value is turned into one the way str does it. The
-// position is added where the call is made.
+// position is added where the call is made. error(message, options) takes
+// a hash of options: {"at": "caller"} reports it where the program called
+// into this file (see caller.go).
 func builtinError(args ...object.Object) object.Object {
+	if len(args) == 2 {
+		if options, ok := args[1].(*object.Hash); ok {
+			atCaller, bad := errorOptions(options)
+			if bad != nil {
+				return bad
+			}
+			err := argError("%s", args[0].Inspect())
+			err.AtCaller = atCaller
+			return err
+		}
+	}
 	if len(args) != 1 {
 		// A misuse of error itself is reported like any other builtin.
 		return argError("error: wrong number of arguments: want 1, got %d", len(args))

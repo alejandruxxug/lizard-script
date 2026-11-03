@@ -112,14 +112,22 @@ func TestTextFunctions(t *testing.T) {
 		{`text.number("-")`, "null"},
 		{`text.number("١٢")`, "null"},
 
+		{`text.digest("abc")`, `"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"`},
+		{`text.digest("abc", "sha256") == text.digest("abc")`, "true"},
+		{`text.digest("abc", "fnv")`, `"e71fa2190541574b"`},
+		{`text.digest("", "fnv")`, `"cbf29ce484222325"`},
+		{`len(text.digest("ñ"))`, "64"},
+
 		{`let text = 1; text`, "1"},
-		{`len(keys(text))`, "14"},
+		{`len(keys(text))`, "15"},
 	})
 }
 
 func TestTextErrors(t *testing.T) {
 	ResetMath()
 	checkErrors(t, []expectation{
+		{`text.digest("a", "md5")`, `[line 1, column 12] runtime error: text.digest: unknown algorithm "md5", the algorithms are "sha256" and "fnv"`},
+		{`text.digest(1)`, "[line 1, column 12] runtime error: text.digest: argument 1 must be STRING, got INTEGER"},
 		{`text.slice("a", 0)`, "[line 1, column 11] runtime error: text.slice: wrong number of arguments: want 3, got 2"},
 		{`text.slice(1, 0, 1)`, "[line 1, column 11] runtime error: text.slice: argument 1 must be STRING, got INTEGER"},
 		{`text.slice("a", "0", 1)`, "[line 1, column 11] runtime error: text.slice: argument 2 must be INTEGER, got STRING"},

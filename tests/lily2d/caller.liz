@@ -1,0 +1,10 @@
+-~> A wrong argument is reported at the program's call, not inside lily2d.
+use "flower/lily2d" as lily2d
+
+let w = img.new(10, 10)
+try { lily2d.circle(w, "x", 4, #fff) } catch (e) { puts(str(e.line) + ":" + str(e.column) + " " + e.message) }
+
+function draw_dot(at) {
+  lily2d.circle(w, at, 2, #000)
+}
+try { draw_dot(5) } catch (e) { puts(str(e.line) + ":" + str(e.column) + " " + e.message) }

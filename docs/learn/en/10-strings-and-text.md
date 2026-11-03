@@ -249,6 +249,24 @@ puts(text.number("12px"), text.number("twelve"))
 null null
 ```
 
+### Fingerprints of text
+
+`text.digest(s)` is a fingerprint of a string: 64 hex digits (SHA-256) that change completely when the text changes at all, and are the same on every computer. `text.digest(s, "fnv")` is a shorter, faster one, good for caches but easy to fake on purpose.
+
+```
+puts(text.digest("lizard"))
+puts(text.digest("lizard", "fnv"))
+puts(text.digest("lizard") == text.digest("Lizard"))
+```
+
+**Output:**
+
+```text
+b95cbcfe0cd25ed09eef361239fee7d50a3f31545465ca2421f4e791be2624b6
+06c79e6c935a3779
+false
+```
+
 ## Example: reversing and checking palindromes
 
 ```

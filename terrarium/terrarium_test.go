@@ -132,7 +132,7 @@ func TestRegister(t *testing.T) {
 
 func TestModulesAreSorted(t *testing.T) {
 	check(t, []testCase{
-		{"fs", `keys(fs)`, `["append", "copy", "exists", "home", "info", "join", "list", "mkdir", "read", "remove", "rename", "trash", "write"]`, false},
+		{"fs", `keys(fs)`, `["append", "copy", "digest", "exists", "home", "info", "join", "list", "mkdir", "read", "remove", "rename", "trash", "write"]`, false},
 		{"os", `keys(os)`, `["args", "config_dir", "env", "exit", "locale", "memory", "open_url", "platform", "program_dir", "reveal"]`, false},
 		{"img", `keys(img)`, `["blit", "clear", "clip", "composite", "fill", "from_pixels", "get", "load", "new", "pixels", "png_base64", "pop_layer", "push_layer", "save", "set", "size", "span", "span_gradient", "spans", "spans_gradient", "triangles", "unclip"]`, false},
 	})

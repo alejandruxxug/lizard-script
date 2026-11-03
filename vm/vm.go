@@ -41,12 +41,12 @@ func RunUnit(unit *code.Unit, env *object.Environment) object.Object {
 	// The program's own frame is not a call.
 	vm.depthBase = evaluator.CallDepth() - 1
 	vm.start(&Closure{Fn: unit.Main, Globals: env}, nil)
-	return vm.run()
+	return vm.run().Object()
 }
 
 // VM is one run: of a program, or of one closure called from Go.
 type VM struct {
-	stack    []object.Object
+	stack    []object.Value
 	sp       int
 	frames   []frame
 	handlers []handler
@@ -54,6 +54,11 @@ type VM struct {
 	// depthBase plus the frames is the number of calls open, for the
 	// call depth limit.
 	depthBase int
+	// args is where the arguments of a builtin call are boxed.
+	args []object.Object
+	// used is how much of the stack this run may have written, for putVM
+	// to clear.
+	used int
 }
 
 // VMs are kept for the next run, since builtins like list.sort start one
@@ -66,14 +71,15 @@ func getVM() *VM {
 		pool = pool[:n-1]
 		return vm
 	}
-	return &VM{stack: make([]object.Object, 256)}
+	return &VM{stack: make([]object.Value, 256)}
 }
 
 func putVM(vm *VM) {
 	if len(vm.stack) > 1<<14 || len(pool) >= 16 {
 		return
 	}
-	clear(vm.stack)
+	clear(vm.stack[:vm.used])
+	vm.used = 0
 	vm.frames = vm.frames[:0]
 	vm.handlers = vm.handlers[:0]
 	vm.layers = vm.layers[:0]
@@ -84,10 +90,12 @@ func putVM(vm *VM) {
 func (vm *VM) start(cl *Closure, args []object.Object) {
 	fn := cl.Fn
 	vm.ensure(fn.NumLocals + fn.MaxStack)
-	copy(vm.stack, args)
+	for i, arg := range args {
+		vm.stack[i] = object.ValueOf(arg)
+	}
 	clear(vm.stack[len(args):fn.NumLocals])
 	vm.sp = fn.NumLocals
-	vm.frames = append(vm.frames[:0], frame{cl: cl, given: len(args), profile: profiler})
+	vm.frames = append(vm.frames[:0], frame{cl: cl, code: quick(fn), given: len(args), profile: profiler})
 	if profiler != nil {
 		profiler.enterFunction(fn)
 	}
@@ -95,10 +103,11 @@ func (vm *VM) start(cl *Closure, args []object.Object) {
 
 // ensure grows the stack to at least size slots.
 func (vm *VM) ensure(size int) {
+	vm.used = max(vm.used, size)
 	if size <= len(vm.stack) {
 		return
 	}
-	grown := make([]object.Object, max(size, 2*len(vm.stack)))
+	grown := make([]object.Value, max(size, 2*len(vm.stack)))
 	copy(grown, vm.stack)
 	vm.stack = grown
 }

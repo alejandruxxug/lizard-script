@@ -8,7 +8,7 @@
 
 ## Summary
 
-`use "draw/shapes"` runs the file `draw/shapes.liz` (next to the file that says it, or in a folder of the module path) once per run, in a top scope of its own, and lets the file see every name the module defined, alive: reading one reads the module's variable and `=` changes it. `use "draw/shapes" as shapes` gives a hash of those names instead. Names that start with `_` stay inside the module. A use is only allowed at the top level of a file, cycles are an error, and a module's errors carry its file name.
+`use "draw/shapes"` runs the file `draw/shapes.liz` (next to the file that says it, or in a folder of the module path) once per run, in a top scope of its own, and lets the file see every name the module defined, alive: reading one reads the module's variable and `=` changes it. `use "draw/shapes" as shapes` gives a hash of those names instead. Names that start with `_` stay inside the module. A use is only allowed at the top level of a file, cycles are an error (allowed since Amendment 2), and a module's errors carry its file name.
 
 ## Motivation
 
@@ -40,7 +40,7 @@ Meaning (see [SEMANTICS.md](../docs/SEMANTICS.md#modules)):
 4. **`as`.** `use "x" as m` defines `m`, a hash of the module's names made when the module has just run, the same hash for every `use ... as`. Its functions work on the module's live variables.
 5. **Private names.** A name that starts with `_` is not seen from outside, in either form.
 6. **Not passed on.** What a module itself uses is not seen by the files that use it.
-7. **Errors.** A syntax error in a module fails the use with all its messages. A runtime error keeps the module's position and source name; the command line shows `draw/shapes.liz: [line 3, column 5] runtime error: ...`. Using a module that is still loading is `use cycle: a.liz uses b.liz, which uses a.liz`.
+7. **Errors.** A syntax error in a module fails the use with all its messages. A runtime error keeps the module's position and source name; the command line shows `draw/shapes.liz: [line 3, column 5] runtime error: ...`. Using a module that is still loading is `use cycle: a.liz uses b.liz, which uses a.liz` (changed by Amendment 2: a cycle now loads).
 
 ```
 -~> counter.liz
@@ -96,4 +96,58 @@ lily2d.circle(picture, (50, 50), 20, #f2a65a)
 - **Tools.** `lizardscript build` leaves standard modules out of the bundle (every `lizardscript` has them); `evaluator.IsStandardModule(path)` tells their source names.
 
 What breaks: nothing. A `use` that found a file before finds the same file; one that failed with `can't find the module` may now find a standard module of that path, which no program could rely on failing.
+
+## Amendment 2 (2026-11-03): use cycles
+
+Modules can use each other in a cycle, the way Python allows it: a use of a module that is still loading gets it **as it is so far** instead of the error `use cycle: ...`. Rule 7's cycle error goes away.
+
+### Why
+
+Programs of many files call each other. An editor's input code calls the painting, the painting asks the layout where things are, and the layout reads the app's state, which the input changes: thirteen files of one real editor form one cycle. Each call happens when the program runs, long after every file has loaded, so the order of loading doesn't matter to them. With the error, the only ways out were one huge file, or passing every function around as an argument; both are worse than the cycle. Live names (rule 3) already make the partly loaded module work: the file sees the module's own scope, so the names that appear after the use are seen as soon as they are defined.
+
+### The rule
+
+```
+-~> input.liz
+let pressed = 0
+use "paint"                 -~> paint.liz runs now, and uses input.liz back
+function press() { pressed += 1; return repaint() }
+
+-~> paint.liz
+use "input"                 -~> input.liz is loading: this gets it as it is
+let seen = pressed          -~> 0: defined before input.liz's use of paint
+function repaint() { return "painted after " + str(pressed) }
+
+-~> main.liz
+use "input"
+puts(press())               -~> painted after 1
+```
+
+1. The first use of a file in a run loads it (rule 2). A use of it while it is loading, from a file it uses directly or through others, doesn't run it again: it makes the file see the module's scope, alive, with the names it has defined so far. The rest appear as the module goes on.
+2. `use "a" as m` while `a.liz` is loading gives the module's hash with the names defined so far; it is the same hash every `use ... as` of the module gets, and it is filled with every name when `a.liz` has run. So `m.f()` in a function works; `m.f` read at load time, before `a.liz` defines `f`, is `null`.
+3. A file that uses itself already sees its names: that use does nothing.
+4. A module that fails stops the run as before; the files of the cycle that were loading fail with it.
+
+### The pitfall: a name used at load time before its module defines it
+
+Only the names used *while the cycle loads* can be missing: a top-level line of `paint.liz` that reads a name `input.liz` defines after its `use "paint"`, or a function called at that time that does. That is the error
+
+```
+paint.liz: [line 3, column 12] runtime error: identifier not found: late: input.liz defines it further down, but it is still loading (use cycle: input.liz uses paint.liz, which uses input.liz)
+```
+
+The message is precise: the loader adds the explanation only when a module of the cycle that is still loading defines that name at its top level (or in a layer) further down its file and hasn't yet; any other unknown name stays a plain `identifier not found`. The fix is to move the use below the definitions the other file needs at load time, or to read the name inside a function, which runs later.
+
+### How `check` should warn about it
+
+`check` already follows `use` to know a module's names. It should also follow the cycle: for each file of a cycle, the names each other file of it may read **at load time** are the ones defined above the line where the loading of the cycle reaches it. A top-level statement (not a function body) that reads a name of a module of its cycle that the module defines only below its `use` that leads back is a warning at that name: `late is defined in input.liz below its use of paint.liz, so it doesn't exist yet when this line runs`. Names read in function bodies are not warned about, since a function usually runs after loading; a function called at load time is the one case `check` can't tell without following the calls, and is left to the error at run time. This is not built yet.
+
+### What breaks
+
+A program with a use cycle stopped with the error `use cycle: ...`; it now runs. No program can have relied on that error to work (a `use` can't be inside a `try`), but the tests of the error change on purpose: in `evaluator/modules_test.go`, the rows `cycle` and `uses itself` of `TestUse` (now `null`, the value of a use) and the cycle row of `TestUseErrorsCarryTheModule` (now the not-loaded-yet error of a cycle that reads a name too early). The VM's `TestModulesOnBothEngines` keeps its `use "cycle"` program, which now gives `null` on both engines. No `.expected` file changed.
+
+### Also in this amendment
+
+- **Parsed once.** A module file is parsed again only when its text changed: the programs are kept by path and text across runs (`ResetModules` keeps them), and the VM keeps the code it compiled for each program. The code still runs once per run, so a run's state is its own.
+- **Errors at the caller.** `error(message, {"at": "caller"})` reports an error where the program called into the file that raised it (the standard modules count as one file), so a library's checks of its arguments point at the program's line; lily2d and lily3d use it. See [SEMANTICS.md](../docs/SEMANTICS.md#errors-at-the-caller).
 

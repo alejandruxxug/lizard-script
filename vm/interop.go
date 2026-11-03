@@ -58,7 +58,7 @@ func (cl *Closure) Call(tok token.Token, args []object.Object) object.Object {
 	defer putVM(vm)
 	vm.depthBase = depth
 	vm.start(cl, args)
-	return vm.run()
+	return vm.run().Object()
 }
 
 // arityError is the error of a call with the wrong number of arguments, the
@@ -80,20 +80,39 @@ func overflow(tok token.Token) *object.Error {
 	return err
 }
 
+// lenBuiltin is the builtin len, which the fast loop runs itself when a
+// call finds it (see run.go).
+var lenBuiltin = func() *object.Builtin {
+	builtin, _ := evaluator.Builtin("len")
+	return builtin.(*object.Builtin)
+}()
+
 // callForeign calls anything that is not a closure of the VM (a builtin, a
 // function of the evaluator) through the evaluator, which counts the open
-// calls of this run too.
-func (vm *VM) callForeign(tok int, unit *code.Unit, function object.Object, args []object.Object) object.Object {
+// calls of this run too. The arguments are boxed into the VM's own buffer
+// and lent to the callee (see object.BuiltinFunction), so a call makes no
+// slice.
+func (vm *VM) callForeign(tok int, unit *code.Unit, function object.Object, args []object.Value) (object.Value, *object.Error) {
 	saved := evaluator.CallDepth()
 	evaluator.SetCallDepth(vm.depthBase + len(vm.frames))
+	start := len(vm.args)
+	vm.args = append(vm.args, make([]object.Object, len(args))...)
+	boxed := box(vm.args[start:], args)
+	// The cap keeps an append off the rest of the buffer.
+	boxed = boxed[:len(boxed):len(boxed)]
 	var result object.Object
 	if p := profiler; p != nil {
 		p.enterForeign(function)
-		result = evaluator.ApplyFunction(unit.Tokens[tok], function, args)
+		result = evaluator.ApplyFunction(unit.Tokens[tok], function, boxed)
 		p.leave()
 	} else {
-		result = evaluator.ApplyFunction(unit.Tokens[tok], function, args)
+		result = evaluator.ApplyFunction(unit.Tokens[tok], function, boxed)
 	}
+	clear(boxed)
+	vm.args = vm.args[:start]
 	evaluator.SetCallDepth(saved)
-	return result
+	if err, ok := result.(*object.Error); ok {
+		return object.Value{}, err
+	}
+	return object.ValueOf(result), nil
 }

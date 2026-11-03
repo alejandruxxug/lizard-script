@@ -3,6 +3,8 @@ package terrarium
 import (
 	"bytes"
 	"lizardscript/evaluator"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -87,6 +89,45 @@ seen`, `[["sun", true, 1], ["sun", false, 1]]`, false},
 		{"bad engine", `lizard.run("1", {"engine": "fast"})`, `the option engine must be "evaluator" or "vm"`, true},
 		{"bad globals", `lizard.run("1", {"globals": 1})`, "the option globals must be a HASH, got INTEGER", true},
 	})
+}
+
+// TestLizardRunModules checks the options use and hook_source, on both
+// engines inside.
+func TestLizardRunModules(t *testing.T) {
+	dir := filepath.ToSlash(t.TempDir())
+	for name, source := range map[string]string{
+		"counter.liz": "let count = 0\nfunction bump() { count += 1; return count }",
+		"twice.liz":   "function twice(n) { return n * 2 }",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var cases []testCase
+	for _, engine := range []string{"evaluator", "vm"} {
+		options := func(more string) string {
+			return `{"name": "` + dir + `/drawing.liz", "engine": "` + engine + `"` + more + `}`
+		}
+		cases = append(cases,
+			testCase{engine + "/live modules", `lizard.run("count = 10\nbump()", ` + options(`, "use": ["counter", "twice"]`) + `).value`, "11", false},
+			testCase{engine + "/several in order", `lizard.run("twice(bump())", ` + options(`, "use": ["counter", "twice"]`) + `).value`, "2", false},
+			testCase{engine + "/not in globals", `keys(lizard.run("let mine = 1", ` + options(`, "use": ["counter"]`) + `).globals)`, `["mine"]`, false},
+			testCase{engine + "/a missing module", `lizard.run("1", ` + options(`, "use": ["nope"]`) + `).error.message`,
+				`can't find the module "nope": there is no ` + dir + `/nope.liz`, false},
+			testCase{engine + "/the hook sees every source", `let seen = []
+lizard.run("use \"twice\"\ntwice(2)", ` + options(`, "on_statement": function(l, c, s) { seen = seen + [s] }`) + `)
+len(seen)`, "4", false},
+			testCase{engine + "/hook_source keeps the run's own", `let seen = []
+lizard.run("use \"twice\"\ntwice(2)", ` + options(`, "hook_source": "`+dir+`/drawing.liz", "on_statement": function(l, c, s) { seen = seen + [l] }`) + `)
+seen`, "[1, 2]", false},
+		)
+	}
+	cases = append(cases,
+		testCase{"bad use", `lizard.run("1", {"use": "counter"})`, "the option use must be a list of module paths, got STRING", true},
+		testCase{"bad use item", `lizard.run("1", {"use": [1]})`, "the option use must be a list of module paths, got INTEGER in it", true},
+		testCase{"bad hook_source", `lizard.run("1", {"hook_source": 1})`, "the option hook_source must be a STRING, got INTEGER", true},
+	)
+	check(t, cases)
 }
 
 // TestLizardRunKeepsTheCaller checks that a run inside a run leaves the

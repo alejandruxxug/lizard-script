@@ -30,6 +30,7 @@ docs/learn/en/12-colors-and-points.md: error arguments: wrong number of argument
 docs/learn/en/12-colors-and-points.md: warning literals: both sides of == are literals, so it is always false
 docs/learn/en/12-colors-and-points.md: warning literals: both sides of == are literals, so it is always true
 docs/learn/en/13-layers.md: error unknown-name: identifier not found: step
+docs/learn/en/14-errors.md: error module: can't find the module "plants/pots": there is no docs/learn/en/plants/pots.liz
 docs/learn/en/14-errors.md: error unknown-name: identifier not found: nope
 docs/learn/en/14-errors.md: warning unused: x is never used
 docs/learn/en/17-terrarium.md: error unknown-name: identifier not found: dab
@@ -43,19 +44,28 @@ docs/learn/en/17-terrarium.md: warning unused: the parameter events is never use
 docs/learn/en/18-modules-and-tools.md: error arguments: wrong number of arguments to area: want 2, got 1
 docs/learn/en/18-modules-and-tools.md: error assign: can't assign to total: it was never declared, use let total = ...
 docs/learn/en/18-modules-and-tools.md: error member: math has no sine
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "early": there is no docs/learn/en/early.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "garden": there is no docs/learn/en/garden.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "late": there is no docs/learn/en/late.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "loud": there is no docs/learn/en/loud.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/cactus": there is no docs/learn/en/plants/cactus.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/early": there is no docs/learn/en/plants/early.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/en/plants/flowers.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/en/plants/flowers.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/en/plants/flowers.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/garden": there is no docs/learn/en/plants/garden.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/garden_bed": there is no docs/learn/en/plants/garden_bed.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/loud": there is no docs/learn/en/plants/loud.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/thirsty": there is no docs/learn/en/plants/thirsty.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/water": there is no docs/learn/en/plants/water.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/en/plants/watering.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/en/plants/watering.liz
 docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/en/plants/watering.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "water": there is no docs/learn/en/water.liz
 docs/learn/en/18-modules-and-tools.md: error unknown-name: identifier not found: forgs
 docs/learn/en/18-modules-and-tools.md: warning unused: the parameter column is never used
+docs/learn/en/18-modules-and-tools.md: warning unused: the parameter column is never used
+docs/learn/en/18-modules-and-tools.md: warning unused: the parameter source is never used
 docs/learn/en/18-modules-and-tools.md: warning unused: the parameter source is never used
 docs/learn/en/18-modules-and-tools.md: warning unused: unit is never used
 docs/learn/en/19-lily2d.md: error arguments: wrong number of arguments to lily2d.circle: want 4, got 5
@@ -112,6 +122,7 @@ docs/learn/es/12-colors-and-points.md: error arguments: wrong number of argument
 docs/learn/es/12-colors-and-points.md: warning literals: both sides of == are literals, so it is always false
 docs/learn/es/12-colors-and-points.md: warning literals: both sides of == are literals, so it is always true
 docs/learn/es/13-layers.md: error unknown-name: identifier not found: step
+docs/learn/es/14-errors.md: error module: can't find the module "plants/pots": there is no docs/learn/es/plants/pots.liz
 docs/learn/es/14-errors.md: error unknown-name: identifier not found: nope
 docs/learn/es/14-errors.md: warning unused: x is never used
 docs/learn/es/17-terrarium.md: error unknown-name: identifier not found: dab
@@ -125,19 +136,28 @@ docs/learn/es/17-terrarium.md: warning unused: the parameter events is never use
 docs/learn/es/18-modules-and-tools.md: error arguments: wrong number of arguments to area: want 2, got 1
 docs/learn/es/18-modules-and-tools.md: error assign: can't assign to total: it was never declared, use let total = ...
 docs/learn/es/18-modules-and-tools.md: error member: math has no sine
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "early": there is no docs/learn/es/early.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "garden": there is no docs/learn/es/garden.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "late": there is no docs/learn/es/late.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "loud": there is no docs/learn/es/loud.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/cactus": there is no docs/learn/es/plants/cactus.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/early": there is no docs/learn/es/plants/early.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/es/plants/flowers.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/es/plants/flowers.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/es/plants/flowers.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/garden": there is no docs/learn/es/plants/garden.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/garden_bed": there is no docs/learn/es/plants/garden_bed.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/loud": there is no docs/learn/es/plants/loud.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/thirsty": there is no docs/learn/es/plants/thirsty.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/water": there is no docs/learn/es/plants/water.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/es/plants/watering.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/es/plants/watering.liz
 docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/es/plants/watering.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "water": there is no docs/learn/es/water.liz
 docs/learn/es/18-modules-and-tools.md: error unknown-name: identifier not found: forgs
 docs/learn/es/18-modules-and-tools.md: warning unused: the parameter column is never used
+docs/learn/es/18-modules-and-tools.md: warning unused: the parameter column is never used
+docs/learn/es/18-modules-and-tools.md: warning unused: the parameter source is never used
 docs/learn/es/18-modules-and-tools.md: warning unused: the parameter source is never used
 docs/learn/es/18-modules-and-tools.md: warning unused: unit is never used
 docs/learn/es/19-lily2d.md: error arguments: wrong number of arguments to lily2d.circle: want 4, got 5

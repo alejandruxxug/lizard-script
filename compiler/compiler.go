@@ -207,6 +207,7 @@ func (c *Compiler) statementIndex(st ast.Statement) int {
 
 func (c *Compiler) constant(obj object.Object) int {
 	c.unit.Constants = append(c.unit.Constants, obj)
+	c.unit.Values = append(c.unit.Values, object.ValueOf(obj))
 	return len(c.unit.Constants) - 1
 }
 

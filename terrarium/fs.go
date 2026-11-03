@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"lizardscript/bundle"
+	"lizardscript/evaluator"
 	"lizardscript/object"
 	"lizardscript/terrarium/internal/arg"
 	"os"
@@ -15,7 +16,7 @@ import (
 // every system (Windows takes it too), so a program never has to know which
 // one it runs on. In a program built with lizardscript build, the paths
 // that start with "bundle:" (os.program_dir()) are its own files, which
-// read, exists, list, info and copy read and nothing changes.
+// read, exists, list, info, digest and copy read and nothing changes.
 
 func fsModule() *object.Hash {
 	return arg.Module("fs", map[string]object.BuiltinFunction{
@@ -32,6 +33,7 @@ func fsModule() *object.Hash {
 		"rename": fsRename,
 		"copy":   fsCopy,
 		"trash":  fsTrash,
+		"digest": fsDigest,
 	})
 }
 
@@ -82,6 +84,34 @@ func fsRead(args ...object.Object) object.Object {
 		return systemError("read", s[0], rerr)
 	}
 	return arg.Str(string(data))
+}
+
+// fs.digest(path, algorithm = "sha256") is the hash of the file's bytes,
+// as hex, like text.digest of its text: "sha256" or "fnv". It reads a
+// built program's own files (a bundle: path) too.
+func fsDigest(args ...object.Object) object.Object {
+	if err := arg.Count(args, 1, 2); err != nil {
+		return err
+	}
+	path, err := arg.String(args, 0, "path")
+	if err != nil {
+		return err
+	}
+	algorithm := evaluator.DigestAlgorithms[0]
+	if len(args) == 2 {
+		if algorithm, err = arg.String(args, 1, "algorithm"); err != nil {
+			return err
+		}
+	}
+	data, rerr := bundle.ReadFile(path)
+	if rerr != nil {
+		return systemError("read", path, rerr)
+	}
+	digest, ok := evaluator.Digest(data, algorithm)
+	if !ok {
+		return evaluator.UnknownDigest(algorithm)
+	}
+	return arg.Str(digest)
 }
 
 // fs.write(path, text) replaces the file with text, or makes it. Another

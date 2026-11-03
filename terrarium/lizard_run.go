@@ -21,6 +21,8 @@ type runOptions struct {
 	vm          bool
 	onStatement object.Object
 	onLayer     object.Object
+	hookSource  *string  // on_statement only for statements of this source
+	uses        []string // modules the code sees alive, as if it used them
 }
 
 // lizard.run(code, options = {}) runs code in a sandbox: a new top scope
@@ -35,8 +37,12 @@ type runOptions struct {
 // it may take, 0 for no limit), "name" (its source name, where its use
 // statements look for modules), "engine" ("evaluator" or "vm"),
 // "on_statement" (a function called with line, column and source before
-// each statement) and "on_layer" (called with the name, true or false and
-// the line when a layer starts and ends). The hooks run as the calling
+// each statement), "hook_source" (a source name: on_statement is called only
+// for the statements of that source, not the ones of the modules), "on_layer"
+// (called with the name, true or false and the line when a layer starts and
+// ends) and "use" (a list of module paths the code sees alive before its
+// first line, as if it started with use "path" for each one, so writing a
+// module's variable changes the module). The hooks run as the calling
 // program: their steps and output are its own.
 func lizardRun(args ...object.Object) object.Object {
 	if err := arg.Count(args, 1, 2); err != nil {
@@ -109,6 +115,27 @@ func readRunOptions(hash *object.Hash, o *runOptions) *object.Error {
 				return
 			}
 			o.vm = s.Value == "vm"
+		case "hook_source":
+			s, ok := value.(*object.String)
+			if !ok {
+				wrong("a STRING")
+				return
+			}
+			o.hookSource = &s.Value
+		case "use":
+			list, ok := value.(*object.Array)
+			if !ok {
+				wrong("a list of module paths")
+				return
+			}
+			for _, e := range list.Elements {
+				path, ok := e.(*object.String)
+				if !ok {
+					bad = arg.Errorf("the option use must be a list of module paths, got %s in it", arg.Name(e))
+					return
+				}
+				o.uses = append(o.uses, path.Value)
+			}
 		case "on_statement", "on_layer":
 			switch value.Type() {
 			case object.FUNCTION_OBJ, object.BUILTIN_OBJ, object.NULL_OBJ:
@@ -122,7 +149,7 @@ func readRunOptions(hash *object.Hash, o *runOptions) *object.Error {
 				o.onLayer = value
 			}
 		default:
-			bad = arg.Errorf("unknown option %s, the options are globals, steps, name, engine, on_statement and on_layer",
+			bad = arg.Errorf("unknown option %s, the options are globals, steps, name, engine, use, on_statement, hook_source and on_layer",
 				object.Quote(key))
 		}
 	})
@@ -161,9 +188,13 @@ func sandbox(program *ast.Program, o runOptions, result *object.Hash) object.Obj
 	evaluator.OnStatement, evaluator.OnLayer = nil, nil
 	if o.onStatement != nil && o.onStatement != arg.Null {
 		evaluator.OnStatement = func(node ast.Statement) {
+			source := statementSource(node)
+			if o.hookSource != nil && source != *o.hookSource {
+				return
+			}
 			span := node.Range()
 			call(o.onStatement, arg.Int64(int64(span.StartLine)), arg.Int64(int64(span.StartColumn)),
-				arg.Str(statementSource(node)))
+				arg.Str(source))
 		}
 	}
 	if o.onLayer != nil && o.onLayer != arg.Null {
@@ -172,11 +203,14 @@ func sandbox(program *ast.Program, o runOptions, result *object.Hash) object.Obj
 		}
 	}
 
-	var value object.Object
+	// The engine of the code, and the one its modules run on.
+	run, runModule := evalProgram, evaluator.Runner(evalProgram)
 	if o.vm {
-		value = vm.Run(program, env)
-	} else {
-		value = evaluator.Eval(program, env)
+		run, runModule = vm.Run, vm.RunModule
+	}
+	value := useModules(o, env, runModule)
+	if value == nil {
+		value = run(program, env)
 	}
 	steps := evaluator.Steps()
 	outer.Restore()
@@ -195,6 +229,26 @@ func sandbox(program *ast.Program, o runOptions, result *object.Hash) object.Obj
 	}
 	fillRunResult(result, value, errValue, printed.String(), steps, env)
 	return result
+}
+
+// evalProgram runs a program on the evaluator.
+func evalProgram(program *ast.Program, env *object.Environment) object.Object {
+	return evaluator.Eval(program, env)
+}
+
+// useModules makes env use the modules of the option use, in order, the
+// way use statements at the top of the code would: found from the code's
+// source name and run on its engine. It gives the error of the first one
+// that fails, or nil.
+func useModules(o runOptions, env *object.Environment, run evaluator.Runner) object.Object {
+	for _, path := range o.uses {
+		tok := token.Token{Type: token.IDENT, Literal: "use", Line: 1, Column: 1, Source: o.name}
+		node := &ast.UseStatement{Token: tok, Path: &ast.StringLiteral{Token: tok, Value: path}}
+		if err, ok := evaluator.Use(node, env, run).(*object.Error); ok {
+			return err
+		}
+	}
+	return nil
 }
 
 // fillRunResult puts the parts of the result of lizard.run in h.

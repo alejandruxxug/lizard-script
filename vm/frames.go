@@ -14,7 +14,10 @@ import (
 
 // frame is a call being run.
 type frame struct {
-	cl    *Closure
+	cl *Closure
+	// code is the quickened code it runs: the function's Quick, or its Bare
+	// when no OnStatement hook was set at the call.
+	code  []uint32
 	ip    int
 	bp    int // where its locals start in the stack
 	given int // how many arguments the call gave
@@ -64,6 +67,7 @@ func (vm *VM) closeLayers(depth int) {
 // the stack as it was at the try plus the error's hash. Otherwise every
 // layer of the run ends and the run stops with err.
 func (vm *VM) throw(err *object.Error) bool {
+	vm.toCaller(err)
 	if !err.Uncatchable && len(vm.handlers) > 0 {
 		h := vm.handlers[len(vm.handlers)-1]
 		vm.handlers = vm.handlers[:len(vm.handlers)-1]
@@ -72,7 +76,7 @@ func (vm *VM) throw(err *object.Error) bool {
 		vm.frames = vm.frames[:h.frame+1]
 		vm.frames[h.frame].ip = h.catch
 		vm.sp = h.sp
-		vm.stack[vm.sp] = evaluator.ErrorHash(err)
+		vm.stack[vm.sp] = object.ObjectValue(evaluator.ErrorHash(err))
 		vm.sp++
 		return true
 	}
@@ -94,6 +98,7 @@ func (vm *VM) pushFrame(cl *Closure, count int) {
 	vm.sp = base + fn.NumLocals
 	vm.frames = append(vm.frames, frame{
 		cl:       cl,
+		code:     quick(fn),
 		bp:       base,
 		given:    count,
 		handlers: len(vm.handlers),

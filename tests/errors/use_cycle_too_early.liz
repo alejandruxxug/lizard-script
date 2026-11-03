@@ -1,0 +1,3 @@
+-~> In a use cycle, a name the other module defines further down is not
+-~> there yet while the cycle loads: the error says so.
+use "modules/cycle/first"

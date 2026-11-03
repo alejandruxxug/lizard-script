@@ -1,0 +1,1 @@
+modules/cycle/second.liz: [line 2, column 13] runtime error: identifier not found: late: errors/modules/cycle/first.liz defines it further down, but it is still loading (use cycle: errors/modules/cycle/first.liz uses errors/modules/cycle/second.liz, which uses errors/modules/cycle/first.liz)

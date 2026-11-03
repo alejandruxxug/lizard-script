@@ -23,7 +23,7 @@ const (
 )
 
 // global reads a name in the global environment, then the builtins.
-func global(n *code.Name, globals *object.Environment) (object.Object, *object.Error) {
+func global(n *code.Name, globals *object.Environment) (object.Value, *object.Error) {
 	memo := &n.Global
 	version, resets := globals.Version(), evaluator.LibraryResets()
 	if memo.Env == globals && memo.Resets == resets {
@@ -33,13 +33,14 @@ func global(n *code.Name, globals *object.Environment) (object.Object, *object.E
 		}
 		memo.Misses++
 	}
-	value, ok := globals.Get(n.Name)
+	found, ok := globals.Get(n.Name)
 	if !ok {
-		value, ok = evaluator.Builtin(n.Name)
+		found, ok = evaluator.Builtin(n.Name)
 	}
 	if !ok {
-		return nil, evaluator.NewError(n.Token, "identifier not found: %s", n.Name)
+		return object.Value{}, evaluator.NewError(n.Token, "identifier not found: %s", n.Name)
 	}
+	value := object.ValueOf(found)
 	if memo.Misses < missesBeforeBackoff || memo.Misses%backoff == 0 {
 		memo.Env, memo.Version, memo.Resets, memo.Value = globals, version, resets, value
 	}

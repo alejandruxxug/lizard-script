@@ -1,0 +1,10 @@
+-~> Modules can use each other: a use of a module that is still loading
+-~> sees the names it has defined so far, and the rest as they come.
+use "modules/cycle/input"
+use "modules/cycle/paint"
+puts(seen_at_load)
+puts(press())
+puts(press())
+-~> The hash of use ... as is filled when the module has run, even when it
+-~> was taken during the cycle.
+puts(has_press())

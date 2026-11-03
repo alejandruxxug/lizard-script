@@ -1,0 +1,11 @@
+-~> A library that checks its arguments: a wrong one is the caller's
+-~> mistake, so it is reported at the caller's line.
+function _need_number(v) {
+  if (type(v) != "INTEGER" && type(v) != "FLOAT") {
+    error("half: want a number, not " + type(v), {"at": "caller"})
+  }
+}
+function half(v) {
+  _need_number(v)
+  return v / 2
+}

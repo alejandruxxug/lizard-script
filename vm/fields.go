@@ -11,23 +11,27 @@ import (
 // the same hash as last time, unchanged since, gives the value it found
 // then, and a point's coordinate is read directly. Anything else goes to
 // the evaluator's index, with the same result and errors.
-func getField(field *code.Field, tok int, unit *code.Unit, left object.Object) object.Object {
-	switch left := left.(type) {
+func getField(field *code.Field, tok int, unit *code.Unit, left object.Value) (object.Value, *object.Error) {
+	switch container := left.Ref().(type) {
 	case *object.Hash:
 		cache := &field.Cache
-		if cache.Hash == left && cache.Version == left.Version() {
-			return cache.Value
+		if cache.Hash == container && cache.Version == container.Version() {
+			return cache.Value, nil
 		}
-		var value object.Object = evaluator.NULL
-		if pair, ok := left.Pairs[field.Key]; ok {
-			value = pair.Value
+		value := nullValue
+		if pair, ok := container.Pairs[field.Key]; ok {
+			value = object.ValueOf(pair.Value)
 		}
-		*cache = code.FieldCache{Hash: left, Version: left.Version(), Value: value}
-		return value
+		*cache = code.FieldCache{Hash: container, Version: container.Version(), Value: value}
+		return value, nil
 	case *object.Point:
-		if field.Coord >= 0 && field.Coord < len(left.Coords) {
-			return left.Coords[field.Coord]
+		if field.Coord >= 0 && field.Coord < len(container.Coords) {
+			return object.ValueOf(container.Coords[field.Coord]), nil
 		}
 	}
-	return evaluator.Index(unit.Tokens[tok], left, field.Name)
+	result := evaluator.Index(unit.Tokens[tok], left.Object(), field.Name)
+	if err, ok := result.(*object.Error); ok {
+		return object.Value{}, err
+	}
+	return object.ValueOf(result), nil
 }

@@ -1,0 +1,7 @@
+-~> A wrong argument is reported at the program's call, not inside lily3d.
+use "flower/lily3d" as lily3d
+
+try { lily3d.cube("big") } catch (e) { puts(str(e.line) + ":" + str(e.column) + " " + e.message) }
+try {
+  lily3d.translate((1, 2))
+} catch (e) { puts(str(e.line) + ":" + str(e.column) + " " + e.message) }

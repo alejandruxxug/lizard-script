@@ -21,6 +21,7 @@ Las funciones integradas se buscan **después** de tus variables, así que `let 
 | `range(fin)` | `[0, 1, ..., fin - 1]` | `range(4)` | `[0, 1, 2, 3]` |
 | `range(inicio, fin)` | `[inicio, ..., fin - 1]`; vacío si `fin <= inicio` | `range(2, 5)` | `[2, 3, 4]` |
 | `error(mensaje)` | se detiene con un error de ejecución con ese mensaje | `error("bad input")` | `runtime error: bad input` |
+| `error(mensaje, {"at": "caller"})` | lo mismo, reportado en la llamada a este archivo (para las revisiones de una biblioteca) | `error("bad size", {"at": "caller"})` | `runtime error: bad size`, en la línea de quien llama |
 | `null` | el valor "ningún valor" | `type(null)` | `"NULL"` |
 
 ## Arreglos y hashes
@@ -94,6 +95,7 @@ Los índices cuentan caracteres. Donde se indica, un índice negativo cuenta des
 | `text.lower(s)` | en minúsculas | `text.lower("Liz")` | `"liz"` |
 | `text.code(s, i)` | el código del carácter en `i`, o `null` | `text.code("A", 0)` | `65` |
 | `text.char(código)` | el carácter con ese código | `text.char(955)` | `"λ"` |
+| `text.digest(s, algorithm)` | una huella del texto en hexadecimal: `"sha256"` (por defecto) o `"fnv"` | `text.digest("abc", "fnv")` | `"e71fa2190541574b"` |
 | `text.number(s)` | el número escrito en `s`, o `null` | `text.number("2.5")` | `2.5` |
 | | | `text.number("12px")` | `null` |
 

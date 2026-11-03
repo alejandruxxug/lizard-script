@@ -26,14 +26,21 @@ type Function struct {
 	// profiler shows it.
 	Name string
 	Unit *Unit
+	// Quick and Bare are the VM's own forms of Instructions, made the first
+	// time the function runs: words, one for the opcode and one for each
+	// operand (see vm/quicken.go). Bare leaves out the OnStatement hook's
+	// instructions, for the calls made while no hook is set.
+	Quick, Bare []uint32
 }
 
 // Unit is one compiled program: its functions and the tables their
 // instructions point into.
 type Unit struct {
-	Main       *Function
-	Functions  []*Function
-	Constants  []object.Object
+	Main      *Function
+	Functions []*Function
+	Constants []object.Object
+	// Values are the Constants as the VM holds them (see object.Value).
+	Values     []object.Value
 	Tokens     []token.Token
 	Statements []ast.Statement
 	Nodes      []ast.Node
@@ -67,7 +74,7 @@ type Global struct {
 	Env     *object.Environment
 	Version uint64
 	Resets  uint64
-	Value   object.Object
+	Value   object.Value
 	// Misses counts the reads in a row that found Env changed.
 	Misses uint32
 }
@@ -90,7 +97,7 @@ type Field struct {
 type FieldCache struct {
 	Hash    *object.Hash
 	Version uint64
-	Value   object.Object
+	Value   object.Value
 }
 
 // Formula is arithmetic (+ - * /, with at most one comparison < > <= >= at

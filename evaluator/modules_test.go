@@ -28,6 +28,15 @@ var moduleFiles = map[string]string{
 	"sub/inner.liz": "use \"../shapes\"\nlet both = sides * 2",
 	"uses.liz":      "use \"shapes\"\nlet mine = 1",
 	"lib/found.liz": "let found = \"on the path\"",
+	"ring_a.liz":    "let first = 1\nuse \"ring_b\"\nlet later = 2\nfunction from_a() { return from_b() + later }",
+	"ring_b.liz":    "use \"ring_a\"\nuse \"ring_a\" as a\nlet seen = first\nlet seen_in_hash = a.first\nfunction from_b() { return later * 10 }\nfunction hash_later() { return a.later }",
+	"early_a.liz":   "use \"early_b\"\nlet late = 5",
+	"early_b.liz":   "use \"early_a\"\nlet x = late + 1",
+	"typo_a.liz":    "use \"typo_b\"\nlet late = 5",
+	"typo_b.liz":    "use \"typo_a\"\nlet x = nope",
+	"checks.liz": "function _need(v) {\n  if (type(v) != \"INTEGER\") { error(\"twice: want an INTEGER\", {\"at\": \"caller\"}) }\n}\n" +
+		"function twice(v) { _need(v); return v * 2 }\nfunction inside() { try { _need(\"x\") } catch (e) { return [e.line, e.column] } }\n" +
+		"function each(f) { return f() }",
 }
 
 // writeModules writes moduleFiles into a new folder and returns it, with "/".
@@ -87,8 +96,12 @@ func TestUse(t *testing.T) {
 		{"private names in the hash", "use \"shapes\" as s\ns._secret", "null"},
 		{"a module doesn't see the program", "let secret = 1\nuse \"peek\"", "identifier not found: secret"},
 		{"missing", "use \"nope\"", `can't find the module "nope": there is no ` + dir + "/nope.liz"},
-		{"cycle", "use \"cycle_a\"", "use cycle: " + dir + "/cycle_a.liz uses " + dir + "/cycle_b.liz, which uses " + dir + "/cycle_a.liz"},
-		{"uses itself", "use \"self\"", "use cycle: " + dir + "/self.liz uses itself"},
+		{"cycle", "use \"cycle_a\"", "null"},
+		{"uses itself", "use \"self\"", "null"},
+		{"a cycle sees the names so far, then the rest", "use \"ring_a\"\nuse \"ring_b\"\n[seen, seen_in_hash, from_a(), hash_later()]", "[1, 1, 22, 2]"},
+		{"a name used before its module defines it", "use \"early_a\"",
+			"identifier not found: late: " + dir + "/early_a.liz defines it further down, but it is still loading (use cycle: " +
+				dir + "/early_a.liz uses " + dir + "/early_b.liz, which uses " + dir + "/early_a.liz)"},
 		{"syntax errors", "use \"broken\"", "[line 1, column 5] syntax error: let needs a name before the \"=\", like let x = 1\n[line 2, column 5]"},
 		{"runtime errors", "use \"fails\"", "[line 2, column 11] runtime error: type mismatch: INTEGER + STRING"},
 	}
@@ -128,7 +141,7 @@ func TestUseErrorsCarryTheModule(t *testing.T) {
 		{"use \"broken\"", dir + "/broken.liz", 1, 5},
 		{"use \"peek\"", dir + "/peek.liz", 1, 12},
 		{"\nuse \"nope\"", dir + "/main.liz", 2, 1},
-		{"use \"cycle_a\"", dir + "/cycle_b.liz", 1, 1},
+		{"use \"early_a\"", dir + "/early_b.liz", 2, 9},
 	}
 	for _, tt := range tests {
 		got, _ := runModuleProgram(t, dir, tt.input)
@@ -140,6 +153,68 @@ func TestUseErrorsCarryTheModule(t *testing.T) {
 	got, _ := runModuleProgram(t, dir, "use \"broken\"")
 	if lines := strings.Split(got.(*object.Error).Message, "\n"); len(lines) != 2 {
 		t.Errorf("a module with two syntax errors gave %q", lines)
+	}
+}
+
+// TestUseCycleNamesNoOtherFile checks that a name no module of the cycle
+// defines is only "not found".
+func TestUseCycleNamesNoOtherFile(t *testing.T) {
+	dir := writeModules(t)
+	got, _ := runModuleProgram(t, dir, "use \"typo_a\"")
+	if err, ok := got.(*object.Error); !ok || !strings.HasSuffix(err.Message, "identifier not found: nope") {
+		t.Errorf("got %s, want only identifier not found: nope", got.Inspect())
+	}
+}
+
+// TestModulesAreParsedOnce checks that a module file is parsed again only
+// when its text changed.
+func TestModulesAreParsedOnce(t *testing.T) {
+	dir := writeModules(t)
+	path := dir + "/shapes.liz"
+	program := func() any {
+		runModuleProgram(t, dir, "use \"shapes\"")
+		return parsedModules[moduleKey(path)].program
+	}
+	first := program()
+	if first == nil || program() != first {
+		t.Fatalf("the second run parsed shapes.liz again")
+	}
+	if err := os.WriteFile(filepath.FromSlash(path), []byte("let sides = 4"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := runModuleProgram(t, dir, "use \"shapes\"\nsides"); got.Inspect() != "4" {
+		t.Errorf("a changed file gave %s, want 4", got.Inspect())
+	}
+	if program() == first {
+		t.Errorf("a changed file kept its old program")
+	}
+}
+
+// TestErrorAtCaller checks that error(message, {"at": "caller"}) in a
+// module is reported at the program's call into it.
+func TestErrorAtCaller(t *testing.T) {
+	dir := writeModules(t)
+	tests := []struct {
+		name, input, want string
+		line, column      int
+		source            string
+	}{
+		{"at the call into the module", "use \"checks\"\n\ntwice(\"a\")", "[line 3, column 6] runtime error: twice: want an INTEGER", 3, 6, dir + "/main.liz"},
+		{"a value when it is right", "use \"checks\"\ntwice(4)", "8", 0, 0, ""},
+		{"a try in the program sees it moved", "use \"checks\"\ntry { twice(1.5) } catch (e) { [e.line, e.column] }", "[2, 12]", 0, 0, ""},
+		{"a try in the module sees it where it was raised", "use \"checks\"\ninside()", "[2, 36]", 0, 0, ""},
+		{"through a function of the program", "use \"checks\"\nfunction go() { twice(\"b\") }\ngo()", "[line 2, column 22] runtime error: twice: want an INTEGER", 2, 22, dir + "/main.liz"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _ := runModuleProgram(t, dir, tt.input)
+			if got.Inspect() != tt.want {
+				t.Fatalf("got %s, want %s", got.Inspect(), tt.want)
+			}
+			if err, ok := got.(*object.Error); ok && (err.Line != tt.line || err.Column != tt.column || err.Source != tt.source || err.AtCaller) {
+				t.Errorf("the error is at %s %d:%d (at caller %t), want %s %d:%d", err.Source, err.Line, err.Column, err.AtCaller, tt.source, tt.line, tt.column)
+			}
+		})
 	}
 }
 

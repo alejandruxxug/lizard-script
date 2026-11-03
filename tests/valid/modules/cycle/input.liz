@@ -1,0 +1,8 @@
+-~> The input of a little editor: it calls the painting, which reads the
+-~> input's state back. Each file uses the other.
+let pressed = 0
+use "paint"
+function press() {
+  pressed += 1
+  return repaint()
+}

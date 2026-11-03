@@ -54,6 +54,11 @@ func TestSurfaces(t *testing.T) {
 		{"screenshot", `let w = window.open(2, 1, "", {"scale": 2}); window.clear(w, #ffffff); let s = window.surface(w, "a", [1, 0, 1, 1], 1); window.fill(s, [0, 0, 1, 2], #ff0000); let shot = window.screenshot(w); [img.size(shot), img.get(shot, 1, 0), img.get(shot, 2, 1), img.get(shot, 3, 1)]`,
 			"[(4, 2), #ffffff, #ff0000, #ffffff]"},
 		{"screenshot with no surfaces", `let w = window.open(3, 2, "", {"scale": 3}); img.size(window.screenshot(w))`, "(3, 2)"},
+		{"full screenshot with no surfaces", `let w = window.open(2, 1, "", {"scale": 3}); window.fill(w, [1, 0, 1, 1], #ff0000); let shot = window.screenshot(w, {"full": true}); [img.size(shot), img.get(shot, 2, 2), img.get(shot, 3, 0), img.get(shot, 5, 2)]`,
+			"[(6, 3), #000000, #ff0000, #ff0000]"},
+		{"full screenshot with surfaces", `let w = window.open(2, 1, "", {"scale": 2}); let s = window.surface(w, "a", [1, 0, 1, 1], 2); window.fill(s, [0, 0, 1, 1], #00ff00); let a = window.screenshot(w); let b = window.screenshot(w, {"full": true}); [img.size(a), img.size(b), img.get(b, 1, 1), img.get(b, 2, 1), img.get(b, 3, 0)]`,
+			"[(2, 1), (4, 2), #000000, #00ff00, #00ff00]"},
+		{"full false", `let w = window.open(3, 2, "", {"scale": 3}); img.size(window.screenshot(w, {"full": false}))`, "(3, 2)"},
 		{"dirty", `let w = window.open(4, 4, ""); window.dirty(w, [0, 0, 1, 1]); window.dirty(window.surface(w, "a", [0, 0, 1, 1]), [0, 0, 1, 1])`, "null"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -71,6 +76,8 @@ func TestSurfaceErrors(t *testing.T) {
 		{"bad rect", `window.surface(window.open(1, 1, ""), "a", [0, 0])`, "want a rect [x, y, w, h] of numbers"},
 		{"bad scale", `window.surface(window.open(1, 1, ""), "a", [0, 0, 1, 1], 9)`, "the scale must be from 1 to 8, got 9"},
 		{"dirty an image", `window.dirty(img.new(1, 1), [0, 0, 1, 1])`, "want a window or a surface, got an image"},
+		{"screenshot unknown option", `window.screenshot(window.open(1, 1, ""), {"all": true})`, `unknown option "all", the only option is full`},
+		{"screenshot bad full", `window.screenshot(window.open(1, 1, ""), {"full": 1})`, "the option full must be true or false, got 1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, ok := runProgram(t, tc.source, nil).(*object.Error)

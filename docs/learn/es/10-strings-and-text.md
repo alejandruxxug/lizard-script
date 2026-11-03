@@ -249,6 +249,24 @@ puts(text.number("12px"), text.number("twelve"))
 null null
 ```
 
+### Huellas de un texto
+
+`text.digest(s)` es una huella de una cadena: 64 dígitos hexadecimales (SHA-256) que cambian por completo cuando el texto cambia en lo más mínimo, y son los mismos en todos los computadores. `text.digest(s, "fnv")` es una más corta y rápida, buena para cachés pero fácil de falsificar a propósito.
+
+```
+puts(text.digest("lizard"))
+puts(text.digest("lizard", "fnv"))
+puts(text.digest("lizard") == text.digest("Lizard"))
+```
+
+**Salida:**
+
+```text
+b95cbcfe0cd25ed09eef361239fee7d50a3f31545465ca2421f4e791be2624b6
+06c79e6c935a3779
+false
+```
+
 ## Ejemplo: invertir y reconocer palíndromos
 
 ```

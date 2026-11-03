@@ -21,6 +21,7 @@ Builtins are found **after** your variables, so `let len = 5` hides `len`. The s
 | `range(end)` | `[0, 1, ..., end - 1]` | `range(4)` | `[0, 1, 2, 3]` |
 | `range(start, end)` | `[start, ..., end - 1]`; empty if `end <= start` | `range(2, 5)` | `[2, 3, 4]` |
 | `error(message)` | stops with a runtime error with that message | `error("bad input")` | `runtime error: bad input` |
+| `error(message, {"at": "caller"})` | the same, reported at the call into this file (for a library's checks) | `error("bad size", {"at": "caller"})` | `runtime error: bad size`, at the caller's line |
 | `null` | the "no value" value | `type(null)` | `"NULL"` |
 
 ## Arrays and hashes
@@ -94,6 +95,7 @@ Indexes count characters. Where noted, a negative index counts from the end.
 | `text.lower(s)` | in lowercase | `text.lower("Liz")` | `"liz"` |
 | `text.code(s, i)` | the code of the character at `i`, or `null` | `text.code("A", 0)` | `65` |
 | `text.char(code)` | the character with that code | `text.char(955)` | `"λ"` |
+| `text.digest(s, algorithm)` | a fingerprint of the text as hex: `"sha256"` (the default) or `"fnv"` | `text.digest("abc", "fnv")` | `"e71fa2190541574b"` |
 | `text.number(s)` | the number written in `s`, or `null` | `text.number("2.5")` | `2.5` |
 | | | `text.number("12px")` | `null` |
 

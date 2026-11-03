@@ -16,7 +16,8 @@ import (
 // Modules: use "draw/shapes" runs the file draw/shapes.liz once per run, in
 // a top scope of its own, and lets the file that says it see the names it
 // defines (see object.Environment). use "draw/shapes" as shapes puts them in
-// a hash instead.
+// a hash instead. Modules can use each other in a cycle: a use of a module
+// that is still loading sees what it has defined so far.
 
 // ReadModule reads the file of a module. A host can replace it to read
 // modules from somewhere else, like the files built into a program.
@@ -58,7 +59,9 @@ type module struct {
 	name    string              // the path it was found at, its source name
 	env     *object.Environment // its top scope
 	names   *object.Hash        // its names, for use ... as
+	program *ast.Program        // its statements
 	loading bool                // it is running now: a use of it is a cycle
+	cycle   string              // the first use cycle back to it, or ""
 }
 
 // moduleState is what use keeps for one run.
@@ -77,10 +80,24 @@ func newModuleState() *moduleState {
 // ResetModules forgets the modules loaded so far, so the next use of each
 // runs its file again. The REPL and Run call it before a run, like
 // ResetMath; a host that runs programs one after another calls it when the
-// files may have changed.
+// files may have changed. The parsed files stay (see parsedModules): a file
+// whose text is the same is not parsed again.
 func ResetModules() {
 	modules = newModuleState()
 }
+
+// parsedModule is a module file parsed before: its text and its program.
+type parsedModule struct {
+	source  string
+	program *ast.Program
+}
+
+// parsedModules keeps every module file parsed so far, by moduleKey, so a
+// later run that reads the same text uses the same program instead of
+// parsing it again. An engine that compiles programs keeps its code by
+// program too (the VM does), so a module is compiled once, not once per
+// run. A file whose text changed is parsed again and replaces its entry.
+var parsedModules = map[string]parsedModule{}
 
 // Use runs the statement node in env, the top scope of a file: it loads the
 // module with run, if this run hasn't loaded it yet, and makes its names
@@ -91,15 +108,20 @@ func Use(node *ast.UseStatement, env *object.Environment, run Runner) object.Obj
 	if err != nil {
 		return err
 	}
-	if node.Name != nil {
+	switch {
+	case node.Name != nil:
 		env.Define(node.Name.Value, m.names)
-	} else {
+	case m.env != env:
+		// A file that uses itself already sees its names.
 		env.Use(m.env)
 	}
 	return NULL
 }
 
-// loadModule finds the module of node and runs it, once per run.
+// loadModule finds the module of node and runs it, once per run. A use of
+// a module that is still loading, a cycle, gets it as it is so far: the
+// names it defined before the use that started the cycle are there, and
+// the rest appear as it goes on, since its names are alive.
 func loadModule(node *ast.UseStatement, run Runner) (*module, *object.Error) {
 	name, source, err := findModule(node)
 	if err != nil {
@@ -108,22 +130,33 @@ func loadModule(node *ast.UseStatement, run Runner) (*module, *object.Error) {
 	key := moduleKey(name)
 	if m, ok := modules.loaded[key]; ok {
 		if m.loading {
-			return nil, newError(node.Token, "%s", cycleMessage(m))
+			if m.cycle == "" {
+				m.cycle = cycleMessage(m, modules.chain)
+			}
+			fillNames(m.names, m.env)
 		}
 		return m, nil
 	}
 
-	p := parser.New(lexer.NewNamed(string(source), name))
-	program := p.ParseProgram()
-	if len(p.Errors()) != 0 {
-		return nil, syntaxErrors(name, p.Errors())
+	program, err := parseModule(key, name, source)
+	if err != nil {
+		return nil, err
 	}
-
-	m := &module{name: name, env: object.NewEnclosedEnvironment(modules.preludeEnv()), loading: true}
+	m := &module{
+		name:    name,
+		env:     object.NewEnclosedEnvironment(modules.preludeEnv()),
+		names:   object.NewHash(),
+		program: program,
+		loading: true,
+	}
 	state := modules
 	state.loaded[key] = m
 	state.chain = append(state.chain, m)
 	result := run(program, m.env)
+	if err, ok := result.(*object.Error); ok {
+		// Explained while the chain still holds the modules of the cycle.
+		result = explainNotLoaded(err, state)
+	}
 	state.chain = state.chain[:len(state.chain)-1]
 	m.loading = false
 	if err, ok := result.(*object.Error); ok {
@@ -132,8 +165,23 @@ func loadModule(node *ast.UseStatement, run Runner) (*module, *object.Error) {
 		delete(state.loaded, key)
 		return nil, err
 	}
-	m.names = namesHash(m.env)
+	fillNames(m.names, m.env)
 	return m, nil
+}
+
+// parseModule is the program of the module file name, with the text
+// source: the one parsed before when the text is the same.
+func parseModule(key, name string, source []byte) (*ast.Program, *object.Error) {
+	if parsed, ok := parsedModules[key]; ok && parsed.source == string(source) {
+		return parsed.program, nil
+	}
+	p := parser.New(lexer.NewNamed(string(source), name))
+	program := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		return nil, syntaxErrors(name, p.Errors())
+	}
+	parsedModules[key] = parsedModule{source: string(source), program: program}
+	return program, nil
 }
 
 // FindModule finds the file of the module that node uses, the way use
@@ -241,23 +289,76 @@ func (s *moduleState) preludeEnv() *object.Environment {
 	return s.prelude
 }
 
-// namesHash is the value of use ... as: a hash of the names the module
-// defined, as they are when its file has just run.
-func namesHash(env *object.Environment) *object.Hash {
-	names := object.NewHash()
+// fillNames puts in names, the value of use ... as, the names the module
+// env defined so far, as they are now. A module's hash is made when it
+// starts loading and filled when its file has run, so every use ... as of
+// it, even one in a cycle, gets the same hash.
+func fillNames(names *object.Hash, env *object.Environment) {
 	for _, name := range env.Names() {
 		if object.Exported(name) {
 			value, _ := env.Get(name)
 			names.Set(&object.String{Value: name}, value)
 		}
 	}
-	return names
 }
 
-// cycleMessage explains a use of m while m is still loading: the chain of
-// uses from m back to it, like "a.liz uses b.liz, which uses a.liz".
-func cycleMessage(m *module) string {
-	chain := modules.chain
+// notFound starts the message of a name that isn't defined.
+const notFound = "identifier not found: "
+
+// explainNotLoaded adds to err, when it is a name that isn't defined, why:
+// a module of the cycle that is still loading defines that name further
+// down its file, so it isn't there yet. Any other error comes back as it
+// is.
+func explainNotLoaded(err *object.Error, state *moduleState) *object.Error {
+	at := strings.Index(err.Message, notFound)
+	if at < 0 || strings.Contains(err.Message, "still loading") {
+		return err
+	}
+	name := err.Message[at+len(notFound):]
+	if end := strings.IndexByte(name, '\n'); end >= 0 {
+		name = name[:end]
+	}
+	for _, m := range state.chain {
+		if m.cycle == "" || !definesLater(m, name) {
+			continue
+		}
+		explained := *err
+		explained.Message = strings.Replace(err.Message, notFound+name,
+			fmt.Sprintf("%s%s: %s defines it further down, but it is still loading (%s)",
+				notFound, name, m.name, m.cycle), 1)
+		return &explained
+	}
+	return err
+}
+
+// definesLater reports whether the file of m defines name at its top level
+// (in a layer too) and hasn't yet.
+func definesLater(m *module, name string) bool {
+	if _, done := m.env.Get(name); done {
+		return false
+	}
+	var defines func(statements []ast.Statement) bool
+	defines = func(statements []ast.Statement) bool {
+		for _, st := range statements {
+			switch st := st.(type) {
+			case *ast.LetStatement:
+				if st.Name != nil && st.Name.Value == name {
+					return true
+				}
+			case *ast.LayerStatement:
+				if st.Body != nil && defines(st.Body.Statements) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return defines(m.program.Statements)
+}
+
+// cycleMessage is the cycle of a use of m while it is loading, from the
+// modules loading now: "use cycle: a.liz uses b.liz, which uses a.liz".
+func cycleMessage(m *module, chain []*module) string {
 	for len(chain) > 0 && chain[0] != m {
 		chain = chain[1:]
 	}

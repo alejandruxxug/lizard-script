@@ -175,6 +175,7 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break, `\t` is a t
 | `str(x)` | `x` as a string, the way `puts` shows it. |
 | `int(x)` | A string with a whole number, a boolean, an integer or a float as an integer. A float loses its decimals towards zero: `int(-1.9)` is `-1`. `int("1.5")` is an error. |
 | `error(message)` | Stops the program with the runtime error `[line L, column C] runtime error: message`, positioned at the call. A string is used as it is; any other value is turned into text like `str` does. |
+| `error(message, options)` | The same, with a hash of options. `{"at": "caller"}` reports the error where the program called into this file instead (see [Errors at the caller](#errors-at-the-caller)); `{"at": "here"}` is the default. Any other key or value is an error of `error` itself. A second argument that is not a hash is still `wrong number of arguments: want 1, got 2`. |
 | `float(x)` | An integer, a float or a string with a number (`"2"`, `"-0.25"`) as a float. |
 | `range(end)`, `range(start, end)` | `[start, start + 1, ..., end - 1]`, with `start` 0 by default. Empty if `end <= start`. |
 
@@ -218,6 +219,7 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break, `\t` is a t
 | `text.upper(s)`, `text.lower(s)` | Case changed. |
 | `text.code(s, i)` | The character code of the character at index `i` (negative counts from the end), or `null` if there is none. |
 | `text.char(code)` | The one-character string with that code. An error for a code outside Unicode or a surrogate. |
+| `text.digest(s, algorithm = "sha256")` | The hash of the text's bytes (UTF-8) as lowercase hex: `"sha256"` (64 digits, for telling contents apart) or `"fnv"` (FNV-1a of 64 bits, 16 digits: fast, but easy to collide on purpose). The same text gives the same digest on every machine. `text.digest("abc", "fnv")` is `"e71fa2190541574b"`. Any other algorithm is an error. |
 | `text.number(s)` | The number written in `s` (optional white space, sign, digits, fraction, exponent): an INTEGER when it has no fraction or exponent and fits, else a FLOAT. `null` if `s` isn't a number (`"12px"`, `""`, `"Inf"`, `"0x10"`), never an error for a string. |
 
 ## The list library
@@ -252,11 +254,12 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break, `\t` is a t
 
 `use "draw/shapes"` loads a **module**: the file `draw/shapes.liz`, found next to the file that says the `use` (its source name, see below), then in each folder of the module path (`evaluator.ModulePath`; the `lizardscript` command takes it from `$LIZARD_PATH`, folders separated like `PATH`), then among the **standard modules** (`evaluator.StandardModules`, libraries built into `lizardscript`, like `flower/lily2d`; see [TERRARIUM.md](TERRARIUM.md#standard-modules)). A standard module's source name starts with `std:/` (`std:/flower/lily2d.liz`), so a `use` inside it finds the files next to it the same way, and a path can't climb out of them with `..`. The not-found message lists only the files on disk, as before. A path that starts with `/` (or a drive) is used as it is. ([LEP 0002](../proposals/0002-modules.md))
 
-- **Once per run.** The first use of a module in a run parses its file and runs it, on the same engine as the program, in a **top scope of its own**: it doesn't see the program's variables, or those of the files that use it. Around that scope there is what the host gives every module (`evaluator.ModulePrelude`: `lizardscript` gives the whole Terrarium, the same as the program has), and then the builtins and libraries. Every later use of the same file (however its path is written) in the same run reuses it: its code doesn't run again. `evaluator.ResetModules()` forgets them; the REPL and `Run` call it at the start.
+- **Once per run.** The first use of a module in a run runs its file on the same engine as the program, in a **top scope of its own**: it doesn't see the program's variables, or those of the files that use it. Around that scope there is what the host gives every module (`evaluator.ModulePrelude`: `lizardscript` gives the whole Terrarium, the same as the program has), and then the builtins and libraries. Every later use of the same file (however its path is written) in the same run reuses it: its code doesn't run again. `evaluator.ResetModules()` forgets them; the REPL and `Run` call it at the start. A file is parsed only when its text changed since it was last parsed (the parsed programs are kept by path and text across runs, and the VM keeps the code it compiled for each), so a host that runs programs one after another with the same libraries doesn't parse or compile them again; their code still runs once per run.
 - **`use "x"` lets the file see every name the module defined at its top level, alive.** Reading one reads the module's own variable, so a module's function that changes it is seen at once; `=` (and `+=` ...) on it changes the module's variable, for every file that uses the module. A file's own names come first: a `let` of the same name in the file, before or after the `use`, hides the module's. Between modules, the last one used comes first. Names that start with `_` are the module's own and are not seen (`identifier not found: _made`). A module's names are not passed on: what a module itself uses is not seen by the files that use it.
-- **`use "x" as m` defines `m`**, a hash from each of those names to its value, in alphabetical order (`keys(m)`). The hash is made once, when the module has just run, and every `use ... as` of the module gets that same hash: its functions work on the module's live variables, but a variable read through it (`m.count`) is the value it had then. Read state that changes through a function.
+- **`use "x" as m` defines `m`**, a hash from each of those names to its value, in alphabetical order (`keys(m)`). The hash is filled when the module has just run, and every `use ... as` of the module gets that same hash: its functions work on the module's live variables, but a variable read through it (`m.count`) is the value it had then. Read state that changes through a function.
 - A use's value is `null`. Both forms of the same module share the one run of its file.
-- **Errors.** A file that is not found is the runtime error `can't find the module "x": there is no a/x.liz or b/x.liz` at the use. A module whose file has syntax errors makes the use fail with all of them, one per line. A runtime error while the module runs stops the program like any error: it keeps the module's position and source name (so the `lizardscript` command shows `draw/shapes.liz: [line 3, column 5] runtime error: ...`, the module's path from the program's folder in front of each line), and the next use of that module tries again. A module that is used again while it is still loading is the error `use cycle: a.liz uses b.liz, which uses a.liz` (or `a.liz uses itself`).
+- **Errors.** A file that is not found is the runtime error `can't find the module "x": there is no a/x.liz or b/x.liz` at the use. A module whose file has syntax errors makes the use fail with all of them, one per line. A runtime error while the module runs stops the program like any error: it keeps the module's position and source name (so the `lizardscript` command shows `draw/shapes.liz: [line 3, column 5] runtime error: ...`, the module's path from the program's folder in front of each line), and the next use of that module tries again.
+- **Cycles.** Modules can use each other: `a.liz` uses `b.liz`, which uses `a.liz` (the way Python allows it). A use of a module that is still loading doesn't run it again: it gets the module **as it is so far**, its live scope, so the names it defined before the use that started the cycle are there, and the ones further down appear as it goes on. Functions that call each other across the files work, since they look the names up when they run. The pitfall is a name used *while the cycle loads* (at the top level, or in a function called then) before its module defines it: that is `identifier not found: late: a.liz defines it further down, but it is still loading (use cycle: a.liz uses b.liz, which uses a.liz)`. A `use "a" as m` during the cycle gets the module's hash with the names so far, filled with the rest when `a.liz` has run. A file that uses itself already sees its names: the use does nothing. ([LEP 0002, Amendment 2](../proposals/0002-modules.md#amendment-2-2026-11-03-use-cycles))
 - Hosts: `evaluator.Use(node, env, run)` runs a use statement in `env`, a file's top scope; `evaluator.FindModule(node)` finds the file without running it; `evaluator.ReadModule` reads files (`lizardscript` reads a built program's own files with it, see [TERRARIUM.md](TERRARIUM.md#building-a-program)). The live names are `object.Environment.Use(module)`: lookups and assignments go through the scope's own names, then its modules', then the scope around it, and a write in a module changes `Version()` of the scopes that use it.
 
 ## The Terrarium
@@ -293,6 +296,24 @@ A runtime error stops the program. Its message has the position of the operator,
 A `try` statement can catch it and read the message, line and column (see Control flow). `object.Error` also has `Line` and `Column` fields with the same position, so a host can tell where an error was raised (for example by `error(...)` inside a library function) and show it at another line, and an `Uncatchable` flag, true for the step limit and stack overflow errors, which a `try` lets through.
 
 Syntax errors are found before the program starts, so a program with one doesn't run at all. All of them are reported at once, one for each mistake (see [GRAMMAR.md](GRAMMAR.md#syntax-errors)).
+
+### Errors at the caller
+
+`error(message, {"at": "caller"})` is for a library's checks of its arguments: the mistake is in the program that called the library, so the error is reported at the program's call, not at the line of the library that found it.
+
+```
+-~> checks.liz
+function half(v) {
+  if (type(v) != "INTEGER") { error("half: want a number", {"at": "caller"}) }
+  return v / 2
+}
+
+-~> main.liz
+use "checks"
+half("four")       -~> [line 2, column 5] runtime error: half: want a number
+```
+
+The error keeps its own position while it goes out of calls made from the file that raised it (a helper of the library that does the checks), and takes the position and source name of the first call made from another file: the call into that file. The standard modules count as one file for this, since a standard library is often several files that call each other, so a check inside `flower/lily2d` is reported at the program's call of `lily2d`. A `try` inside the raising file sees the error where it was raised; one in the program sees it moved. In a program of one file it stays where it was raised. Both engines move it the same way (hosts: `object.Error.AtCaller`, `evaluator.AtCaller`).
 
 ## Known limitations
 

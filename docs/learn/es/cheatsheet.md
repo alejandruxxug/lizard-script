@@ -17,7 +17,7 @@
 | salir / saltar | `break`, `continue` (dentro de ciclos) |
 | función | `function f(a, b = 2) { a + b }` o `let f = function(a) { a }` |
 | devolver | el último valor, o `return x`; nada significa `null` |
-| errores | `error("mensaje")`, `try { } catch (e) { e.message }` (es una instrucción) |
+| errores | `error("mensaje")`, `error("mensaje", {"at": "caller"})` en una biblioteca, `try { } catch (e) { e.message }` (es una instrucción) |
 | capa | `layer nombre` solo en una línea, luego un cuerpo con sangría |
 | módulo | `use "ruta"` (sus nombres, vivos) o `use "ruta" as m` (un hash), en el nivel superior de un archivo; los `_nombres` son privados |
 
@@ -68,7 +68,7 @@ false true
 | arreglos, hashes | `push pop first last rest keys values delete same` |
 | colores, puntos | `rgb rgba hsl point` |
 | `math.` | `pi tau sqrt abs floor ceil round min max sin cos tan asin acos atan2 dist angle random seed` |
-| `text.` | `slice find split join replace trim lines starts ends upper lower code char number` |
+| `text.` | `slice find split join replace trim lines starts ends upper lower code char number digest` |
 | `list.` | `slice insert remove index reverse sort copy` |
 | `hash.` | `copy keys values merge has remove` |
 
@@ -76,15 +76,15 @@ false true
 
 | Módulo | Nombres |
 | --- | --- |
-| `fs.` | `read write append exists list mkdir remove home join` |
+| `fs.` | `read write append exists list mkdir remove home join digest` |
 | `os.` | `args env exit platform locale config_dir` |
-| `time.` | `ms now sleep` |
+| `time.` | `ms now utc sleep` (`now().epoch`, `.weekday`, `.utc_offset`) |
 | `json.` | `parse write(value, indent = 0)` |
 | `img.` | `new load save get set pixels from_pixels` + dibujo |
 | `clip.` | `get set` |
 | `window.` | `open(w, h, title, options) run(w, tick) title` + dibujo (no en el REPL) |
 | `pen.` | `available`; la presión es `e.pen.pressure` en los eventos de la ventana |
-| dibujo (`img.` y `window.`) | `size clear fill(t, [x, y, w, h], c) span(t, y, x0, x1, c) spans blit(t, source, pos)` |
+| dibujo (`img.` y `window.`) | `size clear fill(t, [x, y, w, h], c) span(t, y, x0, x1, c) spans blit(t, source, pos, {"scale": k, "filter": "linear"})` |
 
 Los errores dicen `fs.read: can't read x.txt: ...` y `try` los atrapa. Eventos: `e.type` es `down up move scroll key type resize close`; `e.pos`, `e.button`, `e.key`, `e.text`, `e.pen.pressure`.
 

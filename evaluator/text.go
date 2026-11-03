@@ -36,6 +36,7 @@ func textLibrary() *object.Hash {
 		"code":    textCode,
 		"char":    textChar,
 		"number":  textNumber,
+		"digest":  textDigest,
 	})
 	textHash = hash
 	return hash

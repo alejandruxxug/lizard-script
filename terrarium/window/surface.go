@@ -324,7 +324,13 @@ func disjoint(rs []image.Rectangle) []image.Rectangle {
 // composeInto makes the pixels of region r of the frame dst: the window's
 // buffer scaled up, then every surface over it, in order.
 func (w *Window) composeInto(dst *pixels.Image, r image.Rectangle) {
-	u, k := w.screen.unit, w.scale
+	w.composeAt(dst, r, w.screen.unit)
+}
+
+// composeAt is composeInto for a frame whose pixels are u screen pixels
+// each, u a divisor of the unit.
+func (w *Window) composeAt(dst *pixels.Image, r image.Rectangle, u int) {
+	k := w.scale
 	base := w.buf
 	for y := r.Min.Y; y < r.Max.Y; y++ {
 		by := min(y*u/k, base.H-1)
@@ -372,18 +378,70 @@ func (w *Window) shot() *pixels.Image {
 	return out
 }
 
-// window.screenshot(w) is an image of the window as it shows: its buffer
-// with the surfaces over it, at the finest scale they share (the buffer's
-// own size when it has no surfaces).
+// fullShot is the window as it shows on the screen in screen pixels: its
+// buffer at its scale with the surfaces over it, even when it has none.
+func (w *Window) fullShot() (*pixels.Image, error) {
+	fw, fh := w.screenSize()
+	out, err := pixels.New(fw, fh, black)
+	if err != nil {
+		return nil, err
+	}
+	w.composeAt(out, out.Bounds(), 1)
+	return out, nil
+}
+
+// window.screenshot(w, options = {}) is an image of the window as it
+// shows: its buffer with the surfaces over it, at the finest scale they
+// share (the buffer's own size when it has no surfaces). With {"full":
+// true} it is every pixel of the screen, the window's size times its
+// scale, surfaces or not.
 func screenshot(args ...object.Object) object.Object {
-	if err := arg.Count(args, 1, 1); err != nil {
+	if err := arg.Count(args, 1, 2); err != nil {
 		return err
 	}
 	w, err := windowArg(args, 0)
 	if err != nil {
 		return err
 	}
-	return terrarium.NewImage(w.shot())
+	full := false
+	if len(args) == 2 {
+		if full, err = screenshotOptions(args, 1); err != nil {
+			return err
+		}
+	}
+	if !full {
+		return terrarium.NewImage(w.shot())
+	}
+	m, ferr := w.fullShot()
+	if ferr != nil {
+		return arg.Errorf("%v", ferr)
+	}
+	return terrarium.NewImage(m)
+}
+
+// screenshotOptions reads the options of window.screenshot in argument i:
+// whether it is full.
+func screenshotOptions(args []object.Object, i int) (full bool, err *object.Error) {
+	h, err := arg.Hash(args, i, "options")
+	if err != nil {
+		return false, err
+	}
+	h.Each(func(pair object.HashPair) {
+		if err != nil {
+			return
+		}
+		if key := pair.Key.Inspect(); key != "full" {
+			err = arg.Errorf("unknown option %s, the only option is full", object.Quote(key))
+			return
+		}
+		b, ok := pair.Value.(*object.Boolean)
+		if !ok {
+			err = arg.Errorf("the option full must be true or false, got %s", arg.Show(pair.Value))
+			return
+		}
+		full = b.Value
+	})
+	return full, err
 }
 
 // describe is a surface for automation's Dump.

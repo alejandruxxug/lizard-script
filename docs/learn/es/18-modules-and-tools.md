@@ -204,16 +204,6 @@ waterwater
 plants/thirsty.liz: [line 2, column 15] runtime error: unknown operator: STRING * STRING
 ```
 
-Dos módulos que se usan entre sí nunca terminan de cargar, así que eso también es un error. Con `plants/a.liz` diciendo `use "b"` y `plants/b.liz` diciendo `use "a"`:
-
-**Salida:**
-
-```text
-plants/b.liz: [line 1, column 1] runtime error: use cycle: plants/a.liz uses plants/b.liz, which uses plants/a.liz
-```
-
-Mueve lo que ambos necesitan a un tercer módulo que los dos usen.
-
 Un `use` dentro de una función es un error de sintaxis:
 
 ```
@@ -227,6 +217,71 @@ function setup() {
 ```text
 [line 2, column 3] syntax error: use must be at the top level of a file, not inside a block or a layer
 ```
+
+### Módulos que se usan entre sí
+
+Dos módulos pueden usarse entre sí: un jardín que riega sus plantas, y una regadera que cuenta las plantas del jardín.
+
+```
+-~> plants/garden.liz
+let plants = ["fern"]
+use "water"
+function plant(name) {
+  plants = plants + [name]
+  return water(name)
+}
+```
+
+```
+-~> plants/water.liz
+use "garden"
+let first = plants[0]
+function water(name) {
+  return "watered " + name + ", " + str(len(plants)) + " plants now"
+}
+```
+
+```
+use "plants/garden"
+use "plants/water"
+puts(first)
+puts(plant("cactus"))
+```
+
+**Salida:**
+
+```text
+fern
+watered cactus, 2 plants now
+```
+
+Cuando `garden.liz` llega a `use "water"`, todavía está cargando. Entonces corre `water.liz`, y su `use "garden"` no vuelve a empezar el jardín: lo ve **como va hasta ahora**, vivo. `plants` ya está (se define arriba del `use`), así que `first` es `"fern"`; `plant` todavía no, y aparece cuando el jardín sigue. Las funciones se llaman entre sí después, cuando todo ya cargó, así que encuentran todos los nombres.
+
+Lo único que hay que cuidar: una línea que corre **mientras los archivos cargan** no puede usar un nombre que el otro archivo define más abajo.
+
+```
+-~> plants/early.liz
+use "late"
+let sun = 3
+```
+
+```
+-~> plants/late.liz
+use "early"
+let light = sun * 2
+```
+
+```
+use "plants/early"
+```
+
+**Salida:**
+
+```text
+plants/late.liz: [line 2, column 13] runtime error: identifier not found: sun: plants/early.liz defines it further down, but it is still loading (use cycle: plants/early.liz uses plants/late.liz, which uses plants/early.liz)
+```
+
+Sube `let sun = 3` arriba del `use "late"`, o lee `sun` dentro de una función, que corre después.
 
 ### Módulos estándar
 
@@ -531,6 +586,35 @@ the program ran too long (more than 1000 steps)
 - `steps` detiene el código que correría para siempre. Un error no detiene tu programa: vuelve en `error`.
 - `on_statement` se llama antes de cada instrucción, y `on_layer` cuando una capa empieza y termina: un editor los usa para saber qué línea hizo qué.
 - El Terrario no está a menos que lo pases: `{"globals": {"fs": fs}}` le da `fs` al código.
+
+Una biblioteca que el código debe usar viva va en `use`, no en `globals`. Un nombre dado en `globals` es una copia: cambiarlo cambia solo la copia del código. Un módulo en `use` es el módulo mismo, como si el código empezara con `use "plants/settings"`:
+
+```
+-~> plants/settings.liz
+let pot_size = 2
+function pot() { return "a pot of size " + str(pot_size) }
+```
+
+```
+let r = lizard.run("pot_size = 5\npot()", {"name": "sketch.liz", "use": ["plants/settings"]})
+puts(r.value)
+
+let lines = []
+lizard.run("use \"plants/settings\"\nlet p = pot()", {"name": "sketch.liz", "hook_source": "sketch.liz",
+  "on_statement": function(line, column, source) { lines = lines + [line] }})
+puts(lines)
+```
+
+**Salida:**
+
+```text
+a pot of size 5
+[1, 2]
+```
+
+- Los módulos se buscan desde el `name` del código, como sus propias líneas `use`.
+- `hook_source` llama a `on_statement` solo para las instrucciones de esa fuente: las dos líneas del código, no la línea de adentro de `pot`. Un editor que corre un dibujo en cada cambio se ahorra una llamada por cada instrucción de las bibliotecas.
+- Correr las mismas bibliotecas una y otra vez es barato: un archivo de módulo se analiza (y se compila, en la VM) una sola vez mientras no cambie.
 
 ### Revisar código
 

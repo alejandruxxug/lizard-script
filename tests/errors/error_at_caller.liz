@@ -1,0 +1,5 @@
+-~> error(message, {"at": "caller"}) in a module is reported at the line
+-~> of the program that called into it.
+use "modules/checks"
+puts(half(4))
+puts(half("four"))

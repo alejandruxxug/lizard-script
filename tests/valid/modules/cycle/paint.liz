@@ -1,0 +1,8 @@
+-~> The painting: it uses the input, which is still loading when this file
+-~> runs, so only what input.liz defined before its use of this file is
+-~> there yet: pressed, not press.
+use "input"
+use "input" as input
+let seen_at_load = pressed
+function repaint() { return "painted after " + str(pressed) + " presses" }
+function has_press() { return type(input.press) }

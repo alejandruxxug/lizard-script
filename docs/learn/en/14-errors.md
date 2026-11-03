@@ -134,6 +134,38 @@ puts(divide(1, 0))
 [line 3, column 10] runtime error: can't divide 1 by zero
 ```
 
+### Errors that point at the caller
+
+In a library, a wrong argument is the mistake of the program that called it, not of the library's line that noticed it. `error(message, {"at": "caller"})` reports the error at the program's call into the library's file:
+
+```
+-~> plants/pots.liz
+function _need_size(size) {
+  if (type(size) != "INTEGER") {
+    error("make: size must be a whole number, not " + type(size), {"at": "caller"})
+  }
+}
+function make(size) {
+  _need_size(size)
+  return "a pot of size " + str(size)
+}
+```
+
+```
+use "plants/pots"
+puts(make(3))
+let pot = make("big")
+```
+
+**Output:**
+
+```text
+a pot of size 3
+[line 3, column 15] runtime error: make: size must be a whole number, not STRING
+```
+
+Without `{"at": "caller"}` the same error points inside the library, at `plants/pots.liz: [line 3, column 10]`, where the person who wrote `make("big")` has nothing to fix. The error leaves the library's own helpers (`_need_size` is called from the same file) and moves to the first call from another file. `flower/lily2d` and `flower/lily3d` check their arguments this way.
+
 ## Recovering: `try` / `catch`
 
 `try { ... } catch (e) { ... }` runs the first block. If a runtime error happens inside it (also deep inside a function it called), the rest of the block is skipped and the `catch` block runs instead:

@@ -873,6 +873,10 @@ func TestErrorBuiltin(t *testing.T) {
 		{"let f = function() { error(\"in f\") }\nf()", "[line 1, column 27] runtime error: in f", 1, 27},
 		{"error()", "[line 1, column 6] runtime error: error: wrong number of arguments: want 1, got 0", 1, 6},
 		{"error(1, 2)", "[line 1, column 6] runtime error: error: wrong number of arguments: want 1, got 2", 1, 6},
+		{`error("here", {"at": "here"})`, "[line 1, column 6] runtime error: here", 1, 6},
+		{"let f = function() { error(\"one file\", {\"at\": \"caller\"}) }\nf()", "[line 1, column 27] runtime error: one file", 1, 27},
+		{`error("x", {"where": "caller"})`, `[line 1, column 6] runtime error: error: unknown option "where", the only option is at`, 1, 6},
+		{`error("x", {"at": "up"})`, `[line 1, column 6] runtime error: error: the option at must be "caller" or "here", got "up"`, 1, 6},
 	}
 	for _, tt := range tests {
 		result := run(t, tt.input)

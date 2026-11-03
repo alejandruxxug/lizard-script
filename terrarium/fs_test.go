@@ -24,9 +24,12 @@ func TestFS(t *testing.T) {
 		{"join tidies", `fs.join("a/", "./b", "../c")`, "a/c", false},
 		{"join one", `fs.join("a")`, "a", false},
 		{"home", `fs.home() == ""`, "false", false},
+		{"digest", `let p = fs.join(` + d + `, "d.txt"); fs.write(p, "abc"); [fs.digest(p) == text.digest("abc"), fs.digest(p, "fnv")]`, `[true, "e71fa2190541574b"]`, false},
 
 		{"read missing", `fs.read(fs.join(` + d + `, "missing.txt"))`, "can't read " + dir + "/missing.txt: no such file or directory", true},
 		{"read a number", `fs.read(5)`, "want a STRING path, got INTEGER", true},
+		{"digest missing", `fs.digest(fs.join(` + d + `, "missing.txt"))`, "can't read " + dir + "/missing.txt: no such file or directory", true},
+		{"digest unknown", `let p = fs.join(` + d + `, "d2.txt"); fs.write(p, ""); fs.digest(p, "crc")`, `unknown algorithm "crc"`, true},
 		{"write count", `fs.write("x")`, "wrong number of arguments: want 2, got 1", true},
 		{"write a number", `fs.write("x", 5)`, "want a STRING text, got INTEGER", true},
 		{"write into a missing folder", `fs.write(fs.join(` + d + `, "no/such/x"), "")`, "can't write", true},

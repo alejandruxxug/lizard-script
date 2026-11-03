@@ -133,6 +133,13 @@ Puts the parts of a path together with `/` and tidies it. Takes one or more stri
 fs.join("a/", "./b", "../c")   -~> "a/c"
 ```
 
+### fs.digest(path, algorithm = "sha256")
+The hash of the file's bytes as lowercase hex, like [`text.digest`](SEMANTICS.md#the-text-library) of its text: `"sha256"` (64 digits) or `"fnv"` (16 digits, fast, for caches). Two files with the same digest have the same contents, so it names a thumbnail or a cache entry after what is in the file. It reads a built program's own files (`bundle:`) too.
+```
+let name = fs.digest("drawing.lzdraw") + ".png"
+fs.digest("notes.txt", "fnv")   -~> "e71fa2190541574b" for a file that holds abc
+```
+
 ## os
 
 The program's arguments and environment, and the system it runs on.
@@ -200,10 +207,20 @@ puts("took", time.ms() - start, "ms")
 ```
 
 ### time.now()
-The local date and time as a hash of integers: `year`, `month` (1 to 12), `day`, `hour` (0 to 23), `minute`, `second`.
+The local date and time as a hash: the integers `year`, `month` (1 to 12), `day`, `hour` (0 to 23), `minute`, `second` and `weekday` (1 for Monday to 7 for Sunday), `epoch`, the seconds since 1970-01-01 UTC as a float with the fractions (the same instant on every machine, to store and subtract), and `utc_offset`, the seconds the local time is ahead of UTC (negative behind it: `-18000` in Bogotá).
 ```
 let now = time.now()
 puts(now.hour, ":", now.minute)
+let saved = now.epoch
+-~> later
+puts(int((time.now().epoch - saved) / 3600), " h ago")
+```
+
+### time.utc()
+`time.now()` in UTC: the same keys, the date and hour of Greenwich, and a `utc_offset` of 0. The `epoch` is the same as `time.now()`'s.
+```
+let u = time.utc()
+puts(u.year, "-", u.month, "-", u.day)
 ```
 
 ### time.sleep(ms)
@@ -392,13 +409,18 @@ The options:
 | `steps` | the most steps it may take (a loop round or a call is one), 0 for no limit. Past it, the error is `the program ran too long (more than N steps)` |
 | `name` | its source name, the `source` of its errors, and where its `use` statements look for modules |
 | `engine` | `"evaluator"` (the default) or `"vm"`; both give the same results |
+| `use` | a list of module paths, like `["draw/shapes", "draw/colors"]`: the code sees them alive before its first line, as if it started with `use "draw/shapes"` for each one, found from its `name`. Writing a module's variable (`cache_limit = 4`) changes the module itself, which a copy in `globals` can't. They load once per run, on the code's engine; a module that fails is the run's `error` |
 | `on_statement` | a function called with the line, the column and the source name before each statement runs |
+| `hook_source` | a source name: `on_statement` is called only for the statements of that source, usually the code's own `name`, not for the ones of its modules. Much cheaper than leaving the filter to the hook |
 | `on_layer` | a function called with the layer's name, `true` or `false` and its line when a layer starts and ends |
 
-The two hooks run as the calling program: their steps count in its limit, and what they print is its output. An error in a hook stops the run and is the error of `lizard.run` (`lizard.run: a hook failed: ...`). Modules the code uses see the same `globals` around them.
+The two hooks run as the calling program: their steps count in its limit, and what they print is its output. An error in a hook stops the run and is the error of `lizard.run` (`lizard.run: a hook failed: ...`). Modules the code uses see the same `globals` around them. A module's file is parsed (and, on the VM, compiled) once while its text stays the same, so many runs with the same libraries don't pay for them again; their code runs once in each run.
 ```
 let r = lizard.run("let area = w * h\nputs(area)", {"globals": {"w": 3, "h": 4}, "steps": 1000})
 puts(r.output, r.globals.area, r.error)   -~> 12\n 12 null
+
+let drawing = lizard.run(code, {"name": "drawing.liz", "use": ["draw/shapes"], "hook_source": "drawing.liz",
+  "on_statement": function(line, column, source) { rows = rows + [line] }})
 ```
 
 ### lizard.docs(code)
@@ -499,13 +521,19 @@ window.spans(w, [[10, 5, 20], [11, 4, 21], [12, 5, 20]], #2b3a55)
 window.spans(w, star, #f6c453, (100, 40))
 ```
 
-### blit(target, source, pos)
+### blit(target, source, pos, options = {})
 Paints the pixels of `source`, an image or a window, over `target` with its top left at `pos`. It is how a picture gets into a window, and how a window's pixels get into an image (to save a screenshot).
+
+The options paint it at another size: `"scale"`, a number above 0 (`2` is twice as big, `0.25` a quarter), and `"filter"`, `"nearest"` (the default: each pixel becomes a sharp square, the look of pixel art) or `"linear"` (smooth: it mixes the four nearest pixels when enlarging, and averages every pixel it covers when shrinking, so a thumbnail keeps its thin lines). The size is rounded to whole pixels, at least one; colors mix with their alpha.
 ```
 window.blit(w, img.load("lizard.png"), (10, 10))
 let shot = img.new(600, 400)
 img.blit(shot, w, (0, 0))
 img.save(shot, "shot.png")
+
+let thumb = img.new(150, 100)
+img.blit(thumb, shot, (0, 0), {"scale": 0.25, "filter": "linear"})
+window.blit(w, sprite, (0, 0), {"scale": 4})   -~> big, sharp pixels
 ```
 
 ### clip(target, rect)
@@ -708,10 +736,11 @@ window.spans(canvas, dab, ink)
 window.dirty(canvas, [x - r, y - r, 2 * r, 2 * r])
 ```
 
-#### window.screenshot(w)
-An image of the window as it shows: its buffer with the surfaces over it, at the finest scale they share (the buffer's own size when it has none, twice it for a window at scale 2 with a surface at scale 1).
+#### window.screenshot(w, options = {})
+An image of the window as it shows: its buffer with the surfaces over it, at the finest scale they share (the buffer's own size when it has none, twice it for a window at scale 2 with a surface at scale 1). With `{"full": true}` it is every pixel of the screen, the window's size times its scale, surfaces or not: what a user sees, to compare with a picture taken at another scale.
 ```
 img.save(window.screenshot(w), "shot.png")
+img.save(window.screenshot(w, {"full": true}), "screen.png")
 ```
 
 ### Headless windows

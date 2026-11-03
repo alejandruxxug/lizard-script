@@ -19,6 +19,7 @@ func timeModule() *object.Hash {
 	return arg.Module("time", map[string]object.BuiltinFunction{
 		"ms":    timeMs,
 		"now":   timeNow,
+		"utc":   timeUTC,
 		"sleep": timeSleep,
 	})
 }
@@ -34,7 +35,10 @@ func timeMs(args ...object.Object) object.Object {
 }
 
 // time.now() is the local date and time as a hash: year, month (1 to 12),
-// day, hour (0 to 23), minute and second.
+// day, hour (0 to 23), minute, second, weekday (1 for Monday to 7 for
+// Sunday), epoch (the seconds since 1970-01-01 UTC, a float with the
+// fractions) and utc_offset (the seconds the local time is ahead of UTC,
+// negative when behind).
 func timeNow(args ...object.Object) object.Object {
 	if err := arg.Count(args, 0, 0); err != nil {
 		return err
@@ -42,7 +46,15 @@ func timeNow(args ...object.Object) object.Object {
 	return dateHash(time.Now())
 }
 
-// dateHash is the hash of time.now for t.
+// time.utc() is time.now in UTC: the same hash, with a utc_offset of 0.
+func timeUTC(args ...object.Object) object.Object {
+	if err := arg.Count(args, 0, 0); err != nil {
+		return err
+	}
+	return dateHash(time.Now().UTC())
+}
+
+// dateHash is the hash of time.now for t, in t's own time zone.
 func dateHash(t time.Time) *object.Hash {
 	h := object.NewHash()
 	arg.Set(h, "year", arg.Int64(int64(t.Year())))
@@ -51,6 +63,14 @@ func dateHash(t time.Time) *object.Hash {
 	arg.Set(h, "hour", arg.Int64(int64(t.Hour())))
 	arg.Set(h, "minute", arg.Int64(int64(t.Minute())))
 	arg.Set(h, "second", arg.Int64(int64(t.Second())))
+	weekday := int64(t.Weekday())
+	if weekday == 0 {
+		weekday = 7 // Sunday ends the week
+	}
+	arg.Set(h, "weekday", arg.Int64(weekday))
+	arg.Set(h, "epoch", arg.Float(float64(t.UnixMicro())/1e6))
+	_, offset := t.Zone()
+	arg.Set(h, "utc_offset", arg.Int64(int64(offset)))
 	return h
 }
 
