@@ -1,0 +1,66 @@
+{
+  "function": {
+    "prefix": "function",
+    "description": "A function with a name",
+    "body": ["function ${1:name}(${2}) {", "\t$0", "}"]
+  },
+  "documented function": {
+    "prefix": "docfn",
+    "description": "A function with a doc comment, the way lizard.docs reads it",
+    "body": [
+      "-~> ${3:What it does.}",
+      "-~> ${2:param}: ${4:what it is}",
+      "-~> example: ${1:name}(${5})",
+      "function ${1:name}(${2:param}) {",
+      "\t$0",
+      "}"
+    ]
+  },
+  "if": {
+    "prefix": "if",
+    "body": ["if (${1:condition}) {", "\t$0", "}"]
+  },
+  "if else": {
+    "prefix": "ifelse",
+    "body": ["if (${1:condition}) {", "\t$2", "} else {", "\t$0", "}"]
+  },
+  "for": {
+    "prefix": "for",
+    "description": "A loop that counts",
+    "body": ["for (let ${1:i} = 0; ${1:i} < ${2:n}; ${1:i} += 1) {", "\t$0", "}"]
+  },
+  "for each": {
+    "prefix": "foreach",
+    "description": "A loop over the elements of an array",
+    "body": ["for (let ${1:i} = 0; ${1:i} < len(${2:list}); ${1:i} += 1) {", "\tlet ${3:item} = ${2:list}[${1:i}]", "\t$0", "}"]
+  },
+  "while": {
+    "prefix": "while",
+    "body": ["while (${1:condition}) {", "\t$0", "}"]
+  },
+  "layer": {
+    "prefix": "layer",
+    "description": "A named group of statements, by indentation",
+    "body": ["layer ${1:name}", "\t$0"]
+  },
+  "try": {
+    "prefix": "try",
+    "body": ["try {", "\t$1", "} catch (${2:e}) {", "\t${0:puts($2.message)}", "}"]
+  },
+  "use": {
+    "prefix": "use",
+    "description": "Use a module with a name",
+    "body": ["use \"${1:module}\" as ${2:name}"]
+  },
+  "window": {
+    "prefix": "window",
+    "description": "A window that draws every frame",
+    "body": [
+      "let w = window.open(${1:600}, ${2:400}, \"${3:lizard}\")",
+      "window.run(w, function(events) {",
+      "\twindow.clear(w, ${4:#f4efe6})",
+      "\t$0",
+      "})"
+    ]
+  }
+}

@@ -424,6 +424,26 @@ bugs.liz: [line 11, column 24] error: can't assign to total: it was never declar
 - It reads the modules a program uses, so it knows their names: `use "plants/flowers"` and then `flowr("rose")` is an unknown name with the hint `` did you mean `flower`? ``.
 - No error doesn't mean the program can't fail: check doesn't run it, so a wrong type or a missing file shows up only when it runs.
 
+## Editors: `lizardscript lsp`
+
+`lizardscript lsp` is a language server: an editor starts it and asks it about the code while you write. It shows what `lizardscript check` finds, underlined, as you type; formats the file with `lizardscript fmt` (on save, if you like); completes names, with what each one is (after `math.` the functions of `math`, after `lily2d.` the ones of the module, after `config.` the keys of your hash); shows a function's signature and its doc comment when the mouse is over its name, and what a literal is worth (`90deg` is `1.5708 rad`); jumps to where a name is declared, also in another file; renames a name everywhere it means the same thing; and puts a color picker on every color.
+
+```
+-~> The area of a rectangle.
+-~> w: its width
+-~> h: its height
+-~> example: area(3, 4)
+function area(w, h = 1) {
+  return w * h
+}
+```
+
+The comment above the function is what the editor shows for `area`, read the way `lizard.docs` reads it: the first lines are the summary, a `name: ...` line explains a parameter, and `example:` is an example. Writing them is how your functions explain themselves in every file that uses them.
+
+- **VS Code**: the extension is in `editors/vscode`. `npm install` and `npm run package` there make `lizard-script.vsix`; install it with `code --install-extension lizard-script.vsix`. Its commands run the file (the ▷ button), run it on the VM, format it and check the whole folder.
+- **Zed**: the extension is in `editors/zed`. In Zed, **zed: install dev extension** and pick that folder.
+- Both need the `lizardscript` command on your `PATH` (or its full path in their settings). Any other editor with an LSP client (Neovim, Helix, ...) can start `lizardscript lsp` too: [editors/README.md](../../../editors/README.md) has the settings.
+
 ## `lizard`: code as data
 
 The `lizard` module reads lizard-script code the way the language does, so an editor, a checker or a teaching tool can be written in lizard-script.
@@ -588,6 +608,7 @@ done
 - `lizardscript test dir` runs every program with a `.expected` file and compares; `--update`, `--vm`, `--bench`.
 - `lizardscript build dir -o file` makes one executable with the modules and the files of `bundle.txt`; find your files with `os.program_dir()`. `--os` and `--arch` build for other systems.
 - `lizardscript fmt` lays code out one way (`-w` writes it, `--check` lists what would change); `lizardscript check` finds errors and warnings without running the program (`--json` for editors).
+- `lizardscript lsp` is the language server: the VS Code and Zed extensions of `editors/` start it, for diagnostics, formatting, completion, hover, go to definition and a color picker.
 - `lizard.tokens`, `lizard.parse`, `lizard.check`, `lizard.run` and `lizard.docs` read, check and run code; `io` reads lines and writes to the output and the error output.
 
 [← Previous: The Terrarium](17-terrarium.md) · [Index](../README.md) · [Next: lily2d →](19-lily2d.md)

@@ -1,0 +1,30 @@
+use "shapes"
+use "flower/lily2d" as lily2d
+
+let size = 90deg
+let leaf = #3fa34d
+let spot = (10, 20.5)
+let config = {"width": 640, "grow": function(by) { by * 2 }}
+
+-~> Doubles x.
+-~> x: a number
+function double(x) {
+  let result = x * 2
+  return result
+}
+
+layer sky
+  let cloud = double(size)
+  puts(cloud, len("abc"), math.sin(1))
+
+function outer() {
+  let x = 1
+  function inner() {
+    return x + later
+  }
+  let later = 2
+  return inner()
+}
+
+puts(area(3, 4), config.width, config.grow(2), unit, outer())
+lily2d.circle(null, spot, 5, leaf)

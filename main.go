@@ -18,6 +18,8 @@
 //	                                       one way (see docs/STYLE.md)
 //	lizardscript check [--json] path...    finds mistakes in them without running
 //	                                       them (see package check)
+//	lizardscript lsp                       the language server, for an editor, on
+//	                                       the standard input and output (see package lsp)
 //
 // A program has the Terrarium, the standard library, installed, and
 // os.args() gives its args. Its use statements look for modules next to the
@@ -35,6 +37,7 @@ import (
 	"lizardscript/check"
 	"lizardscript/evaluator"
 	"lizardscript/format"
+	"lizardscript/lsp"
 	"lizardscript/repl"
 	"lizardscript/terrarium"
 	"lizardscript/terrarium/window" // adds window and pen to terrarium.Install
@@ -44,6 +47,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -73,6 +77,8 @@ func main() {
 		os.Exit(fmtCommand(args[1:]))
 	case "check":
 		os.Exit(checkCommand(args[1:]))
+	case "lsp":
+		os.Exit(lspCommand())
 	}
 
 	onVM, profile := false, false
@@ -105,7 +111,8 @@ func usage() {
        lizardscript build [--vm] [--os OS] [--arch ARCH] [--runtime FILE] dir -o FILE
        lizardscript drive [--pid N] Command [args...]
        lizardscript fmt [-w] [--check] path...
-       lizardscript check [--json] path...`)
+       lizardscript check [--json] path...
+       lizardscript lsp`)
 	os.Exit(2)
 }
 
@@ -308,6 +315,17 @@ func checkCommand(args []string) int {
 		}
 	}
 	return status
+}
+
+// lspCommand is lizardscript lsp: the language server on the standard
+// input and output, with the Terrarium's names.
+func lspCommand() int {
+	server := lsp.New(lsp.Options{Globals: terrarium.CheckGlobals(), Debounce: 150 * time.Millisecond})
+	if err := server.Serve(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, "lizardscript lsp:", err)
+		return 1
+	}
+	return 0
 }
 
 // lizFiles are the files of paths: each file as it is, and the .liz files

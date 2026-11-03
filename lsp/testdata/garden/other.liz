@@ -1,0 +1,3 @@
+use "shapes" as s
+
+puts(s.area(2), s.unit)

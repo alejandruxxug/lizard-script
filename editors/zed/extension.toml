@@ -1,0 +1,18 @@
+id = "lizard-script"
+name = "lizard-script"
+description = "lizard-script: highlighting from its Tree-sitter grammar, and diagnostics, formatting, completion, hover and go to definition from lizardscript lsp."
+version = "0.1.0"
+schema_version = 1
+authors = ["Alejandro Urrego Giraldo", "Maria José Sosa Fernández", "Samuel Buelvas Cabrales"]
+repository = "https://github.com/alejandruxxug/lizard-script"
+
+# The grammar is editors/tree-sitter-lizard of the repository, at a commit
+# that has it. Zed fetches and builds it when it installs the extension.
+[grammars.lizard]
+repository = "https://github.com/alejandruxxug/lizard-script"
+rev = "0c8f90ca103f6b4619eafd6cff42501931274c5c"
+path = "editors/tree-sitter-lizard"
+
+[language_servers.lizardscript]
+name = "lizardscript"
+languages = ["lizard-script"]

@@ -1,0 +1,29 @@
+-~> Draws the extension's icons with lily2d: a lizard-green tile with the
+-~> comment arrow -~> on it. Run it from this folder:
+-~>
+-~>   lizardscript icon.liz
+-~>
+-~> It writes icon.png (128 x 128, the Marketplace's size) and file.png
+-~> (32 x 32, the icon of .liz files in the explorer).
+
+use "flower/lily2d" as lily2d
+
+let green = #3fa34d
+let dark = #24602d
+let cream = #f6efd9
+
+-~> The tile and the arrow, scaled to size pixels.
+function draw(size) {
+  let picture = img.new(size, size)
+  let k = size / 128.0
+  lily2d.rect(picture, (4 * k, 4 * k), (120 * k, 120 * k), {"fill": lily2d.linear([green, dark], 90deg)}, 26 * k)
+  let stroke = {"stroke": cream, "width": 11 * k, "cap": "round", "join": "round"}
+  lily2d.line(picture, (24 * k, 64 * k), (44 * k, 64 * k), stroke)
+  lily2d.polyline(picture, [(54 * k, 64 * k), (64 * k, 54 * k), (74 * k, 74 * k), (84 * k, 64 * k)], stroke)
+  lily2d.polyline(picture, [(88 * k, 44 * k), (106 * k, 64 * k), (88 * k, 84 * k)], stroke)
+  picture
+}
+
+img.save(draw(128), "icon.png")
+img.save(draw(32), "file.png")
+puts("wrote icon.png and file.png")

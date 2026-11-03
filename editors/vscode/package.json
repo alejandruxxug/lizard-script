@@ -1,0 +1,217 @@
+{
+  "name": "lizard-script",
+  "displayName": "lizard-script",
+  "description": "lizard-script for VS Code: highlighting, diagnostics, formatting, completion, hover, go to definition and a color picker, from the lizardscript language server.",
+  "version": "0.1.0",
+  "publisher": "lizard-script",
+  "license": "MIT",
+  "private": true,
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alejandruxxug/lizard-script.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Linters",
+    "Snippets"
+  ],
+  "keywords": [
+    "lizard",
+    "lizard-script",
+    "liz"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/*.liz"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "lizard",
+        "aliases": [
+          "lizard-script",
+          "lizard"
+        ],
+        "extensions": [
+          ".liz",
+          ".lzdraw"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./images/file.png",
+          "dark": "./images/file.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "lizard",
+        "scopeName": "source.lizard",
+        "path": "./syntaxes/lizard.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "lizard",
+        "path": "./snippets/lizard.json"
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "id": "color",
+        "superType": "number",
+        "description": "A color literal, like #f2a65a."
+      },
+      {
+        "id": "point",
+        "superType": "operator",
+        "description": "The brackets of a point literal, like (10, 20)."
+      },
+      {
+        "id": "label",
+        "description": "The name of a layer."
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "lizard",
+        "scopes": {
+          "color": [
+            "constant.other.color.lizard"
+          ],
+          "point": [
+            "punctuation.definition.point.lizard",
+            "constant.numeric"
+          ],
+          "label": [
+            "entity.name.label.lizard",
+            "entity.name.section"
+          ]
+        }
+      }
+    ],
+    "configuration": {
+      "title": "lizard-script",
+      "properties": {
+        "lizard.path": {
+          "type": "string",
+          "default": "lizardscript",
+          "markdownDescription": "The `lizardscript` command: a name on the `PATH`, or the full path of the binary. It runs the files and starts the language server (`lizardscript lsp`)."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "[lizard]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false
+      }
+    },
+    "commands": [
+      {
+        "command": "lizard.run",
+        "title": "Run file",
+        "category": "lizard-script",
+        "icon": "$(play)"
+      },
+      {
+        "command": "lizard.runVM",
+        "title": "Run file on the VM",
+        "category": "lizard-script"
+      },
+      {
+        "command": "lizard.format",
+        "title": "Format",
+        "category": "lizard-script"
+      },
+      {
+        "command": "lizard.checkWorkspace",
+        "title": "Check workspace",
+        "category": "lizard-script"
+      },
+      {
+        "command": "lizard.restartServer",
+        "title": "Restart the language server",
+        "category": "lizard-script"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "lizard",
+        "required": [
+          "task"
+        ],
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "The lizardscript command: check."
+          }
+        }
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "lizard.run",
+          "when": "editorLangId == lizard"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "lizard.run",
+          "when": "editorLangId == lizard"
+        },
+        {
+          "command": "lizard.runVM",
+          "when": "editorLangId == lizard"
+        },
+        {
+          "command": "lizard.format",
+          "when": "editorLangId == lizard"
+        }
+      ]
+    },
+    "problemMatchers": [
+      {
+        "name": "lizard",
+        "label": "lizardscript check",
+        "owner": "lizard-check",
+        "source": "lizard",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.+): \\[line (\\d+), column (\\d+)\\] (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=out/extension.js --minify",
+    "check": "tsc --noEmit",
+    "package": "npm run check && npm run build && vsce package --out lizard-script.vsix",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "vscode-languageclient": "9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.15",
+    "@types/vscode": "1.85.0",
+    "@vscode/vsce": "3.2.1",
+    "esbuild": "0.25.12",
+    "typescript": "5.6.3"
+  }
+}

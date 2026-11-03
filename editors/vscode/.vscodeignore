@@ -1,0 +1,8 @@
+# Only the bundle, the grammar, the configuration and the images go in the .vsix.
+src/**
+node_modules/**
+out/**/*.map
+tsconfig.json
+images/icon.liz
+*.vsix
+.gitignore

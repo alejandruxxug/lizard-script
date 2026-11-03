@@ -424,6 +424,26 @@ bugs.liz: [line 11, column 24] error: can't assign to total: it was never declar
 - Lee los módulos que usa el programa, así que conoce sus nombres: `use "plants/flowers"` y luego `flowr("rose")` es un nombre desconocido con la pista `` did you mean `flower`? ``.
 - Que no haya errores no quiere decir que el programa no pueda fallar: check no lo ejecuta, así que un tipo equivocado o un archivo que falta solo aparecen al correr.
 
+## Editores: `lizardscript lsp`
+
+`lizardscript lsp` es un servidor de lenguaje: un editor lo inicia y le pregunta por el código mientras escribes. Muestra subrayado lo que encuentra `lizardscript check`, mientras escribes; formatea el archivo con `lizardscript fmt` (al guardar, si quieres); completa nombres, con lo que es cada uno (después de `math.` las funciones de `math`, después de `lily2d.` las del módulo, después de `config.` las llaves de tu hash); muestra la firma de una función y su comentario de documentación cuando el mouse está sobre su nombre, y cuánto vale un literal (`90deg` es `1.5708 rad`); salta a donde se declara un nombre, también en otro archivo; cambia el nombre de algo en todas partes donde significa lo mismo; y pone un selector de color en cada color.
+
+```
+-~> The area of a rectangle.
+-~> w: its width
+-~> h: its height
+-~> example: area(3, 4)
+function area(w, h = 1) {
+  return w * h
+}
+```
+
+El comentario encima de la función es lo que el editor muestra para `area`, leído como lo lee `lizard.docs`: las primeras líneas son el resumen, una línea `nombre: ...` explica un parámetro, y `example:` es un ejemplo. Escribirlos es como tus funciones se explican solas en cada archivo que las usa.
+
+- **VS Code**: la extensión está en `editors/vscode`. `npm install` y `npm run package` ahí hacen `lizard-script.vsix`; se instala con `code --install-extension lizard-script.vsix`. Sus comandos corren el archivo (el botón ▷), lo corren en la VM, lo formatean y revisan toda la carpeta.
+- **Zed**: la extensión está en `editors/zed`. En Zed, **zed: install dev extension** y elige esa carpeta.
+- Las dos necesitan el comando `lizardscript` en tu `PATH` (o su ruta completa en sus ajustes). Cualquier otro editor con un cliente LSP (Neovim, Helix, ...) también puede iniciar `lizardscript lsp`: [editors/README.md](../../../editors/README.md) tiene los ajustes.
+
 ## `lizard`: el código como datos
 
 El módulo `lizard` lee código de lizard-script como lo lee el lenguaje, así que un editor, un revisor o una herramienta para enseñar se pueden escribir en lizard-script.
@@ -588,6 +608,7 @@ done
 - `lizardscript test carpeta` ejecuta cada programa que tiene un archivo `.expected` y compara; `--update`, `--vm`, `--bench`.
 - `lizardscript build carpeta -o archivo` hace un ejecutable con los módulos y los archivos de `bundle.txt`; encuentra tus archivos con `os.program_dir()`. `--os` y `--arch` construyen para otros sistemas.
 - `lizardscript fmt` acomoda el código de una sola forma (`-w` lo escribe, `--check` lista lo que cambiaría); `lizardscript check` encuentra errores y advertencias sin ejecutar el programa (`--json` para editores).
+- `lizardscript lsp` es el servidor de lenguaje: lo inician las extensiones de VS Code y Zed de `editors/`, para diagnósticos, formato, completado, información al pasar el mouse, ir a la definición y un selector de color.
 - `lizard.tokens`, `lizard.parse`, `lizard.check`, `lizard.run` y `lizard.docs` leen, revisan y ejecutan código; `io` lee líneas y escribe en la salida y en la salida de errores.
 
 [← Anterior: El Terrario](17-terrarium.md) · [Índice](../README.md) · [Siguiente: lily2d →](19-lily2d.md)

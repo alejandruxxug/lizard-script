@@ -1,0 +1,15 @@
+-~> shapes: a few shapes to measure.
+
+-~> The area of a rectangle.
+-~> w: its width
+-~> h: its height
+-~> example: area(3, 4)
+function area(w, h = 1) {
+  return w * h
+}
+
+let unit = "cm"
+
+function _hidden() {
+  return 1
+}

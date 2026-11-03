@@ -52,6 +52,7 @@ let lizard = {"name": "Liz", "toes": [5, 5, 5, 5]};
 - [docs/GRAMMAR.md](docs/GRAMMAR.md): the full grammar, with precedence and associativity.
 - [docs/SEMANTICS.md](docs/SEMANTICS.md): what each construct does when it runs, such as truthiness, `==` vs `===`, `/` vs `//`, scopes and the builtins.
 - [docs/TERRARIUM.md](docs/TERRARIUM.md): the Terrarium, the standard library: files, the system, time, JSON, images, the clipboard, and a window to draw in with its input. Examples are in `examples/terrarium/`.
+- [editors/](editors/README.md): editor support: the language server (`lizardscript lsp`), the VS Code and Zed extensions, and the Tree-sitter and TextMate grammars.
 - [docs/learn/](docs/learn/README.md): a teaching guide to the language, in English and Spanish, with exercises, projects and a cheat sheet. / Guía para aprender y enseñar el lenguaje, en inglés y español.
 
 ## Tokens
@@ -96,6 +97,8 @@ lizard-script/
 ├── tests/     # valid and failing programs with their expected output
 ├── docs/      # design, grammar, semantics, the Terrarium, and the teaching guide (docs/learn)
 ├── proposals/ # Lizard Enhancement Proposals (LEPs)
+├── lsp/       # the language server, lizardscript lsp (+ tests)
+├── editors/   # the VS Code and Zed extensions and the syntax grammars
 ├── tools/     # checknewlines: lists lines whose meaning changed with LEP 0001
 └── main.go    # the lizardscript command
 ```
