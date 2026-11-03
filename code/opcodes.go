@@ -90,6 +90,7 @@ const (
 	OpLayerEnter    // node: a layer starts, Unit.Nodes[node] is the LayerStatement
 	OpLayerExit     // the innermost layer ends
 	OpFail          // fail: stop with the error Unit.Failures[fail]
+	OpUse           // node: run Unit.Nodes[node], a UseStatement, in the globals, and push null
 
 	// Functions
 	OpCall    // count, tok: call the value under count arguments
@@ -179,6 +180,7 @@ var definitions = map[Opcode]*Definition{
 	OpLayerEnter:    {"OpLayerEnter", []int{4}},
 	OpLayerExit:     {"OpLayerExit", []int{}},
 	OpFail:          {"OpFail", []int{4}},
+	OpUse:           {"OpUse", []int{4}},
 
 	OpCall:    {"OpCall", []int{4, 4}},
 	OpClosure: {"OpClosure", []int{4, 4}},

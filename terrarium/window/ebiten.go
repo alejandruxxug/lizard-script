@@ -1,6 +1,8 @@
 package window
 
 import (
+	"image"
+	"lizardscript/terrarium/internal/pixels"
 	"lizardscript/terrarium/pen"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -15,16 +17,12 @@ import (
 // program runs.
 func ebitenLoop(w *Window, frame func(events []Event) bool) error {
 	ebiten.SetWindowTitle(w.title)
-	ebiten.SetWindowSize(w.buf.W*w.scale, w.buf.H*w.scale)
-	ebiten.SetWindowDecorated(!w.frameless)
-	if w.resizable {
-		ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	}
 	ebiten.SetWindowClosingHandled(true)
 	ebiten.SetScreenClearedEveryFrame(false)
-	ebiten.SetTPS(w.fps)
 	g := &game{w: w, frame: frame, lastX: -1, lastY: -1}
-	if err := ebiten.RunGame(g); err != nil && err != ebiten.Termination {
+	g.applyChrome()
+	options := &ebiten.RunGameOptions{ScreenTransparent: w.transparent}
+	if err := ebiten.RunGameWithOptions(g, options); err != nil && err != ebiten.Termination {
 		return err
 	}
 	return nil
@@ -38,30 +36,72 @@ type game struct {
 	started        bool
 	layoutW        int // the buffer size the window has room for
 	layoutH        int
+	expect         int    // frames to wait for the system to take a new size
 	shownW, shownH int    // the size of the screen last written
 	premultiplied  []byte // the buffer as the screen takes it
 	lastX, lastY   int
+	presence       presence
 }
 
-// Layout makes the screen the size of the buffer. A resizable window's
+// applyChrome gives the system window the options the program chose: its
+// frame, size, scale, limits and speed.
+func (g *game) applyChrome() {
+	w := g.w
+	sw, sh := w.screenSize()
+	ebiten.SetWindowSize(sw, sh)
+	ebiten.SetWindowDecorated(!w.frameless)
+	ebiten.SetWindowFloating(w.floating)
+	if w.resizable {
+		ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	} else {
+		ebiten.SetWindowResizingMode(ebiten.WindowResizingModeDisabled)
+	}
+	minW, minH := -1, -1
+	if w.minW > 0 || w.minH > 0 {
+		minW, minH = max(1, w.minW)*w.scale, max(1, w.minH)*w.scale
+	}
+	ebiten.SetWindowSizeLimits(minW, minH, -1, -1)
+	ebiten.SetTPS(w.fps)
+	if w.center {
+		if m := ebiten.Monitor(); m != nil {
+			mw, mh := m.Size()
+			ebiten.SetWindowPosition(max(0, (mw-sw)/2), max(0, (mh-sh)/2))
+		}
+		w.center = false
+	}
+	w.chrome = false
+	g.expect = 30
+}
+
+// Layout makes the screen the size of the frame. A resizable window's
 // buffer follows the window: its size divided by the scale.
 func (g *game) Layout(outW, outH int) (int, int) {
-	if !g.w.resizable {
-		return g.w.buf.W, g.w.buf.H
+	w := g.w
+	if !w.resizable {
+		return w.frameSize()
 	}
-	g.layoutW, g.layoutH = max(1, outW/g.w.scale), max(1, outH/g.w.scale)
-	return g.layoutW, g.layoutH
+	g.layoutW, g.layoutH = max(1, outW/w.scale), max(1, outH/w.scale)
+	u := w.screen.unit
+	return g.layoutW * w.scale / u, g.layoutH * w.scale / u
 }
 
 // Update runs one frame of the program.
 func (g *game) Update() error {
+	w := g.w
 	if !g.started {
 		g.started = true
 		pen.Start()
 	}
 	events := g.poll()
-	if g.w.resizable && g.layoutW > 0 && (g.layoutW != g.w.buf.W || g.layoutH != g.w.buf.H) {
-		g.w.resize(g.layoutW, g.layoutH)
+	if g.expect > 0 {
+		// The system takes a few frames to give the window the size the
+		// program asked for; the old size meanwhile is not a resize.
+		g.expect--
+		if g.layoutW == w.buf.W && g.layoutH == w.buf.H {
+			g.expect = 0
+		}
+	} else if w.resizable && g.layoutW > 0 && (g.layoutW != w.buf.W || g.layoutH != w.buf.H) {
+		w.resize(g.layoutW, g.layoutH)
 		events = append(events, Event{Type: "resize", W: g.layoutW, H: g.layoutH})
 	}
 	closing := ebiten.IsWindowBeingClosed()
@@ -69,9 +109,12 @@ func (g *game) Update() error {
 		events = append(events, Event{Type: "close"})
 	}
 	keepGoing := g.frame(events)
-	if g.w.titleChanged {
-		ebiten.SetWindowTitle(g.w.title)
-		g.w.titleChanged = false
+	if w.titleChanged {
+		ebiten.SetWindowTitle(w.title)
+		w.titleChanged = false
+	}
+	if w.chrome {
+		g.applyChrome()
 	}
 	if !keepGoing || closing {
 		return ebiten.Termination
@@ -79,26 +122,53 @@ func (g *game) Update() error {
 	return nil
 }
 
-// Draw shows the buffer when it changed, or when the screen is new.
+// Draw shows what changed: the whole buffer when the window has no
+// surfaces, else the changed rectangles of the composed frame. A new
+// screen gets everything.
 func (g *game) Draw(screen *ebiten.Image) {
+	w := g.w
 	b := screen.Bounds()
-	buf := g.w.buf
-	if b.Dx() != buf.W || b.Dy() != buf.H {
+	fw, fh := w.frameSize()
+	if b.Dx() != fw || b.Dy() != fh {
 		return
 	}
-	if !g.w.changed && b.Dx() == g.shownW && b.Dy() == g.shownH {
-		return
-	}
-	if len(g.premultiplied) != len(buf.Pix) {
-		g.premultiplied = make([]byte, len(buf.Pix))
-	}
-	buf.Premultiplied(g.premultiplied)
-	screen.WritePixels(g.premultiplied)
-	g.w.changed = false
+	fresh := b.Dx() != g.shownW || b.Dy() != g.shownH
 	g.shownW, g.shownH = b.Dx(), b.Dy()
+	if w.screen.frame == nil {
+		if !w.changed && !fresh {
+			return
+		}
+		g.write(screen, w.buf, w.buf.Bounds())
+		w.changed = false
+		return
+	}
+	if fresh {
+		w.screen.all = true
+	}
+	for _, r := range w.compose() {
+		g.write(screen, w.screen.frame, r)
+	}
+	w.changed = false
 }
 
-// DrawFinalScreen scales the buffer to the window with sharp pixels, so a
+// write puts the rectangle r of src on the screen, premultiplied as the
+// screen takes it.
+func (g *game) write(screen *ebiten.Image, src *pixels.Image, r image.Rectangle) {
+	if r == src.Bounds() {
+		if len(g.premultiplied) != len(src.Pix) {
+			g.premultiplied = make([]byte, len(src.Pix))
+		}
+		src.Premultiplied(g.premultiplied)
+		screen.WritePixels(g.premultiplied)
+		return
+	}
+	part := src.Crop(r)
+	out := make([]byte, len(part.Pix))
+	part.Premultiplied(out)
+	screen.SubImage(r).(*ebiten.Image).WritePixels(out)
+}
+
+// DrawFinalScreen scales the frame to the window with sharp pixels, so a
 // scale of 2 shows each pixel as a clean 2x2 square.
 func (g *game) DrawFinalScreen(screen ebiten.FinalScreen, offscreen *ebiten.Image, geoM ebiten.GeoM) {
 	screen.DrawImage(offscreen, &ebiten.DrawImageOptions{GeoM: geoM, Filter: ebiten.FilterNearest})
@@ -115,17 +185,25 @@ var buttons = []struct {
 
 // poll reads the input of this frame as events.
 func (g *game) poll() []Event {
+	w := g.w
 	var events []Event
-	x, y := ebiten.CursorPosition()
+	cx, cy := ebiten.CursorPosition()
+	u := float64(w.screen.unit)
+	sx, sy := float64(cx)*u, float64(cy)*u // in screen pixels
 	mods := Mods{
 		Shift: ebiten.IsKeyPressed(ebiten.KeyShift),
 		Alt:   ebiten.IsKeyPressed(ebiten.KeyAlt),
 		Cmd:   ebiten.IsKeyPressed(ebiten.KeyMeta),
 		Ctrl:  ebiten.IsKeyPressed(ebiten.KeyControl),
 	}
+	now := pen.Now()
 	native := pen.Drain()
 	pointer := func(kind, button string, p Pen) {
-		events = append(events, Event{Type: kind, X: x, Y: y, Button: button, Mods: mods, Pen: p})
+		e := w.at(Event{Type: kind, Button: button, Mods: mods, Pen: p, T: now}, sx, sy)
+		if kind == "move" {
+			e.Samples = w.dragSamples(native, e)
+		}
+		events = append(events, e)
 	}
 
 	held := false
@@ -135,31 +213,34 @@ func (g *game) poll() []Event {
 		}
 		held = held || ebiten.IsMouseButtonPressed(b.button)
 	}
-	if x != g.lastX || y != g.lastY {
+	moved := cx != g.lastX || cy != g.lastY
+	dragged := held && hasPhase(native, pen.PhaseDrag)
+	if (moved || dragged) && (held || w.hover) {
 		pointer("move", "", penAt(native, pen.PhaseDrag, held))
 	}
-	g.lastX, g.lastY = x, y
+	g.lastX, g.lastY = cx, cy
 	for _, b := range buttons {
 		if inpututil.IsMouseButtonJustReleased(b.button) {
 			pointer("up", b.name, penAt(native, pen.PhaseUp, false))
 		}
 	}
 	if _, dy := ebiten.Wheel(); dy != 0 {
-		events = append(events, Event{Type: "scroll", X: x, Y: y, DY: dy, Mods: mods})
+		events = append(events, w.at(Event{Type: "scroll", DY: dy, Mods: mods, T: now}, sx, sy))
 	}
 
 	for _, k := range inpututil.AppendPressedKeys(nil) {
 		if g.repeats(k) {
-			events = append(events, Event{Type: "key", Key: k.String(), Mods: mods})
+			events = append(events, Event{Type: "key", Key: k.String(), Mods: mods, T: now})
 		}
 	}
 	// The text as the system composed it (dead keys, option combinations).
 	for _, r := range ebiten.AppendInputChars(nil) {
 		if r >= 32 && r != 127 {
-			events = append(events, Event{Type: "type", Text: string(r), Mods: mods})
+			events = append(events, Event{Type: "type", Text: string(r), Mods: mods, T: now})
 		}
 	}
-	return events
+	fw, fh := w.frameSize()
+	return append(events, g.presence.update(ebiten.IsFocused(), cx, cy, fw, fh)...)
 }
 
 // repeats reports whether a held key sends an event this frame: when it
@@ -168,6 +249,16 @@ func (g *game) repeats(k ebiten.Key) bool {
 	d := inpututil.KeyPressDuration(k)
 	delay, every := max(1, g.w.fps/2), max(1, g.w.fps/15)
 	return d == 1 || (d >= delay && (d-delay)%every == 0)
+}
+
+// hasPhase reports whether one of the native samples is of the phase.
+func hasPhase(native []pen.Sample, phase string) bool {
+	for _, s := range native {
+		if s.Phase == phase {
+			return true
+		}
+	}
+	return false
 }
 
 // penAt is the pen of a pointer event: the newest native sample of the

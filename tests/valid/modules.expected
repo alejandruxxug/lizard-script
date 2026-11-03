@@ -1,0 +1,9 @@
+9 4
+1
+2
+identifier not found: _made
+counter loads once
+11 11
+0 ["bump", "count"]
+12 12
+8 ["cube"]

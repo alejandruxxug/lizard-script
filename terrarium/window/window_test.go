@@ -101,7 +101,7 @@ func TestWindowErrors(t *testing.T) {
 		{"too small", `window.open(0, 10, "")`, "the width must be from 1 to 8192, got 0"},
 		{"title a number", `window.open(1, 1, 5)`, "want a STRING title, got INTEGER"},
 		{"options not a hash", `window.open(1, 1, "", 2)`, "want a HASH options, got INTEGER"},
-		{"unknown option", `window.open(1, 1, "", {"size": 2})`, `unknown option "size" (the options are fps, frameless, resizable, scale)`},
+		{"unknown option", `window.open(1, 1, "", {"size": 2})`, `unknown option "size" (the options are automation, floating, fps, frameless, headless, hover, min_size, on_demand, resizable, scale, transparent)`},
 		{"bad scale", `window.open(1, 1, "", {"scale": 9})`, "the scale must be from 1 to 8, got 9"},
 		{"bad resizable", `window.open(1, 1, "", {"resizable": 1})`, "want a BOOLEAN resizable, got INTEGER"},
 		{"run a non window", `window.run(img.new(1, 1), function(e) {})`, "window.run: want a window, got an image"},

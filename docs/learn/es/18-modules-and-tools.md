@@ -1,0 +1,444 @@
+# 18. Módulos y herramientas
+
+[← Anterior: El Terrario](17-terrarium.md) · [Índice](../README.md) · [Hoja de referencia →](cheatsheet.md) · [English](../en/18-modules-and-tools.md)
+
+Un programa pronto deja de caber en un archivo. Este capítulo lo divide en **módulos** con `use` y luego muestra las herramientas para un programa de varios archivos: `lizardscript run`, `lizardscript test` y `lizardscript build`, que hace de él un solo ejecutable. Termina con dos módulos del Terrario para programas que trabajan con código y con otros programas: `lizard` (el lenguaje mismo, como datos) e `io`.
+
+Los ejemplos viven en una carpeta llamada `garden`:
+
+```text
+garden/
+  main.liz
+  plants/
+    flowers.liz
+    watering.liz
+```
+
+## `use`: nombres de otro archivo
+
+`plants/flowers.liz` es un archivo de lizard-script como cualquier otro:
+
+```
+-~> plants/flowers.liz
+let petals = 5
+
+function flower(name) {
+  return name + " with " + str(petals) + " petals"
+}
+```
+
+`main.liz` lo usa:
+
+```
+use "plants/flowers"
+
+puts(flower("daisy"))
+puts(petals)
+```
+
+Ejecuta la carpeta con `lizardscript run garden` (ejecuta `garden/main.liz`), o el archivo mismo con `lizardscript garden/main.liz`.
+
+**Salida:**
+
+```text
+daisy with 5 petals
+5
+```
+
+- `use "plants/flowers"` ejecuta el archivo `plants/flowers.liz` y deja que este archivo vea cada nombre que define en su nivel superior: `flower` y `petals`. La ruta usa `/` en todos los sistemas, y el `.liz` se agrega solo.
+- La ruta es **relativa al archivo que dice el `use`**, no a la carpeta desde donde ejecutas el programa. Un módulo puede usar otro que está a su lado: dentro de `plants/`, `use "watering"` es `plants/watering.liz`, y `use "../main_helpers"` sube una carpeta.
+- Cuando el archivo no está a su lado, lizardscript busca en las carpetas de la variable de entorno `LIZARD_PATH` (separadas por `:`, o `;` en Windows), así una biblioteca puede vivir en un solo lugar para todos tus programas.
+- Un `use` va en el **nivel superior** de un archivo: no dentro de una función, un `if`, un ciclo o una capa.
+
+### Los nombres están vivos
+
+`plants/watering.liz` guarda una variable:
+
+```
+-~> plants/watering.liz
+let water = 0
+let _log = []
+
+function pour(litres) {
+  water += litres
+  _log = _log + [litres]
+  return water
+}
+
+function history() { return _log }
+```
+
+```
+use "plants/watering"
+
+pour(2)
+pour(3)
+puts(water)
+water = 100
+puts(pour(1))
+puts(history())
+let water = 7
+puts(water, pour(1))
+```
+
+**Salida:**
+
+```text
+5
+101
+[2, 3, 1]
+7 102
+```
+
+- `water` no es una copia: leerla lee la variable del propio módulo, así que después de dos `pour` vale `5`.
+- `water = 100` también cambia la variable del módulo (por eso el siguiente `pour(1)` da `101`). Todos los archivos que usan el módulo ven el mismo `water`.
+- Un `let` en tu archivo crea un nombre tuyo, que **oculta** el del módulo: después de `let water = 7`, `water` es tuyo, mientras `pour` sigue trabajando con el del módulo (`102`).
+- Un módulo corre en un **alcance propio**: no ve las variables de los archivos que lo usan, así que una biblioteca no se puede romper porque tu programa tenga una variable con el mismo nombre que una de sus funciones auxiliares.
+
+### Nombres privados
+
+Un nombre que empieza con `_` se queda dentro de su módulo:
+
+```
+use "plants/watering"
+puts(_log)
+```
+
+**Salida:**
+
+```text
+[line 2, column 6] runtime error: identifier not found: _log
+```
+
+Las funciones del propio módulo usan `_log` sin problema (`history()` lo devuelve). Empieza con `_` las funciones auxiliares de una biblioteca y solo se verán los nombres que quieres compartir.
+
+### `as`: un módulo en un hash
+
+Dos módulos pueden tener nombres que choquen, o puedes querer ver de dónde viene un nombre. `use "..." as nombre` pone los nombres del módulo en un hash:
+
+```
+use "plants/flowers" as flowers
+use "plants/watering" as w
+
+puts(keys(flowers))
+puts(flowers.flower("rose"))
+w.pour(4)
+puts(w.water, w.pour(1))
+```
+
+**Salida:**
+
+```text
+["flower", "petals"]
+rose with 5 petals
+0 5
+```
+
+El hash se hace **una vez, justo cuando el módulo terminó de correr**. Sus funciones trabajan con las variables vivas del módulo (`w.pour(1)` da `5`), pero una variable leída a través del hash tiene el valor que tenía entonces: `w.water` sigue en `0`. Lee el estado que cambia a través de una función, o usa el módulo sin `as`.
+
+### Una vez por programa
+
+No importa cuántos archivos usen un módulo: su archivo corre una sola vez.
+
+```
+-~> plants/loud.liz
+puts("loading loud.liz")
+let loud = true
+```
+
+```
+-~> plants/garden_bed.liz
+use "loud"
+let bed = "ready"
+```
+
+```
+use "plants/loud"
+use "plants/garden_bed"
+use "plants/loud" as again
+puts(bed, loud, again.loud)
+```
+
+**Salida:**
+
+```text
+loading loud.liz
+ready true true
+```
+
+`garden_bed.liz` también usa `loud.liz`, y `again` es un tercer uso, pero la línea se imprime una vez. Los nombres no se pasan de mano en mano: `main.liz` ve `loud` porque él mismo usa `plants/loud`, no porque `garden_bed` lo use.
+
+### Cuando algo sale mal
+
+Un módulo que no existe:
+
+```
+use "plants/cactus"
+```
+
+**Salida:**
+
+```text
+[line 1, column 1] runtime error: can't find the module "plants/cactus": there is no plants/cactus.liz
+```
+
+Un error dentro de un módulo muestra el archivo del módulo adelante, para que sepas dónde buscar:
+
+```
+-~> plants/thirsty.liz
+function drink(cups) {
+  return cups * "water"
+}
+```
+
+```
+use "plants/thirsty"
+puts(drink(2))
+puts(drink("two"))
+```
+
+**Salida:**
+
+```text
+waterwater
+plants/thirsty.liz: [line 2, column 15] runtime error: unknown operator: STRING * STRING
+```
+
+Dos módulos que se usan entre sí nunca terminan de cargar, así que eso también es un error. Con `plants/a.liz` diciendo `use "b"` y `plants/b.liz` diciendo `use "a"`:
+
+**Salida:**
+
+```text
+plants/b.liz: [line 1, column 1] runtime error: use cycle: plants/a.liz uses plants/b.liz, which uses plants/a.liz
+```
+
+Mueve lo que ambos necesitan a un tercer módulo que los dos usen.
+
+Un `use` dentro de una función es un error de sintaxis:
+
+```
+function setup() {
+  use "plants/flowers"
+}
+```
+
+**Salida:**
+
+```text
+[line 2, column 3] syntax error: use must be at the top level of a file, not inside a block or a layer
+```
+
+## `lizardscript test`: programas que se revisan solos
+
+Una prueba es un programa con un archivo `.expected` a su lado que contiene exactamente lo que debe imprimir (errores incluidos). Ponlas en una carpeta:
+
+```text
+garden/tests/
+  flowers.liz        use "../plants/flowers"
+                     puts(flower("tulip"))
+  flowers.expected   tulip with 5 petals
+  watering.liz       use "../plants/watering"
+                     puts(pour(2), pour(2))
+  watering.expected  2 4
+```
+
+```text
+$ lizardscript test garden/tests
+ok    garden/tests/flowers.liz (1.3 ms)
+ok    garden/tests/watering.liz (0.8 ms)
+2 passed, 0 failed
+```
+
+- Ejecuta cada `.liz` de la carpeta (y de las carpetas dentro de ella) que tenga un archivo `.expected`; un `.liz` sin él, como un módulo que comparten las pruebas, no es una prueba.
+- Cuando la salida es distinta, muestra las dos y el comando termina con código 1, para que un script o un CI lo note. Con `watering.expected` diciendo `2 5`:
+
+```text
+FAIL  garden/tests/watering.liz
+--- expected:
+2 5
+--- got:
+2 4
+1 passed, 1 failed
+```
+
+- `--update` escribe lo que imprime cada programa en su `.expected`. Úsalo para una prueba nueva, y lee el archivo antes de quedarte con él.
+- `--vm` corre las pruebas en la máquina virtual de bytecode, que debe dar la misma salida.
+- Un archivo que termina en `_bench.liz` es una medición: con `--bench` también corre y se muestra su tiempo (`bench garden/tests/count_bench.liz 27.0 ms`). Cada corrida tarda lo suyo, así que el tuyo será otro.
+
+## `lizardscript build`: un solo archivo para compartir
+
+`lizardscript build garden -o garden-app` hace **un solo archivo ejecutable** del programa: una copia de `lizardscript` con `main.liz`, cada módulo que usa y los archivos de datos que listes, adentro. Quien reciba el archivo lo ejecuta, sin instalar nada.
+
+Los archivos de datos van en `garden/bundle.txt`, una ruta o patrón por línea (una carpeta incluye todo lo que tiene):
+
+```text
+-~> los archivos que lee el programa
+notes
+```
+
+Un programa encuentra sus propios archivos desde `os.program_dir()`, la carpeta de su archivo principal:
+
+```
+use "plants/flowers"
+
+puts(flower("daisy"))
+puts(fs.read(fs.join(os.program_dir(), "notes/care.txt")))
+```
+
+```text
+$ lizardscript build garden -o garden-app
+built garden-app with main.liz, notes/care.txt, plants/flowers.liz
+$ ./garden-app
+daisy with 5 petals
+Water on Mondays.
+
+```
+
+- Dentro del archivo construido, `os.program_dir()` es `"bundle:"` y sus archivos están en `bundle:/notes/care.txt` y así: `fs.read`, `fs.list`, `fs.exists` y `fs.info` los leen, pero nada los puede cambiar. El mismo programa funciona construido o no, siempre que encuentre sus archivos a través de `os.program_dir()`.
+- `--os` y `--arch` construyen para otro sistema: `lizardscript build garden -o garden.exe --os windows --arch amd64`, o `--os linux --arch arm64`. Para eso lizardscript se construye a sí mismo para ese sistema con Go, así que necesita Go y su propio código fuente (ejecútalo dentro de la carpeta de lizard-script, o define `LIZARD_SRC`); `--runtime archivo` le da en cambio un lizardscript ya construido para ese sistema.
+- `--vm` hace que el programa corra en la máquina virtual de bytecode.
+- Cada módulo que usa el programa debe estar dentro de su carpeta.
+
+## `lizard`: el código como datos
+
+El módulo `lizard` lee código de lizard-script como lo lee el lenguaje, así que un editor, un revisor o una herramienta para enseñar se pueden escribir en lizard-script.
+
+### Tokens
+
+```
+let code = "let size = 10 * 2 -~> big"
+for (let i = 0; i < len(lizard.tokens(code)); i += 1) {
+  let t = lizard.tokens(code)[i]
+  puts(t.kind, t.text, t.column)
+}
+```
+
+**Salida:**
+
+```text
+keyword let 1
+name size 5
+operator = 10
+number 10 12
+operator * 15
+number 2 17
+comment -~> big 19
+```
+
+Cada token también tiene su `type` (como `"IDENT"`), su `value` y dónde termina (`end_line`, `end_column`). El `kind` es lo que usa un resaltador de sintaxis para colorear.
+
+### El árbol de sintaxis
+
+```
+let tree = lizard.parse("let size = 10 * 2")
+let let_node = tree.program.statements[0]
+puts(let_node.kind, let_node.name.value)
+let product = let_node.value
+puts(product.kind, product.operator, product.left.value, product.right.value)
+puts(product.column, product.end_column)
+puts(lizard.parse("let = 1").errors)
+```
+
+**Salida:**
+
+```text
+let size
+infix * 10 2
+12 18
+[{"kind": "syntax", "message": "expected identifier, got \"=\"", "line": 1, "column": 5}]
+```
+
+Cada nodo es un hash con su `kind`, sus campos y sus posiciones: `10 * 2` va de la columna 12 hasta justo antes de la 18. [TERRARIUM.md](../../TERRARIUM.md#lizard) (en inglés) lista cada tipo de nodo.
+
+### Ejecutar código en una caja de arena
+
+`lizard.run(code, options)` ejecuta código en un alcance nuevo y vacío: solo ve las funciones integradas y lo que le das en `globals`, y haga lo que haga, tu programa sigue como antes.
+
+```
+let user_code = "let area = w * h\nputs(\"area:\", area)"
+let r = lizard.run(user_code, {"globals": {"w": 3, "h": 4}})
+puts(r.output)
+puts(r.globals.area, r.error)
+
+let forever = lizard.run("while (true) {}", {"steps": 1000})
+puts(forever.error.message)
+
+let broken = lizard.run("let x = 1\nx + \"a\"", {"name": "sketch"})
+puts(broken.error)
+
+let lines = []
+lizard.run("let a = 1\nlet b = a + 1", {"on_statement": function(line, column, source) { lines = lines + [line] }})
+puts(lines)
+```
+
+**Salida:**
+
+```text
+area: 12
+
+12 null
+the program ran too long (more than 1000 steps)
+{"kind": "runtime", "message": "type mismatch: INTEGER + STRING", "line": 2, "column": 3, "source": "sketch"}
+[1, 2]
+```
+
+- Lo que imprime el código queda en `output` en vez de imprimirse, y sus nombres del nivel superior quedan en `globals` después de correr.
+- `steps` detiene el código que correría para siempre. Un error no detiene tu programa: vuelve en `error`.
+- `on_statement` se llama antes de cada instrucción, y `on_layer` cuando una capa empieza y termina: un editor los usa para saber qué línea hizo qué.
+- El Terrario no está a menos que lo pases: `{"globals": {"fs": fs}}` le da `fs` al código.
+
+### Comentarios de documentación
+
+`lizard.docs(code)` lee las líneas `-~>` justo encima de cada función:
+
+```
+let library = "-~> A flower with its petals.
+-~> name: what it is called
+-~> example: flower(\"daisy\")
+function flower(name, petals = 5) { name }"
+let docs = lizard.docs(library)
+puts(docs.flower.summary)
+puts(docs.flower.params)
+puts(docs.flower.example)
+```
+
+**Salida:**
+
+```text
+A flower with its petals.
+[{"name": "name", "default": null, "doc": "what it is called"}, {"name": "petals", "default": "5", "doc": null}]
+flower("daisy")
+```
+
+## `io`: hablar con otro programa
+
+`io.read_line()` lee una línea de la entrada del programa (`null` cuando se acaba), `io.write(text)` imprime sin agregar un salto de línea, e `io.error(text)` escribe en la salida de errores, que queda aparte de la salida que lee otro programa:
+
+```
+let line = io.read_line()
+while (line != null) {
+  io.write(text.upper(line) + "!\n")
+  line = io.read_line()
+}
+io.error("done\n")
+```
+
+```text
+$ printf 'hello\nlizards\n' | lizardscript shout.liz
+HELLO!
+LIZARDS!
+done
+```
+
+`done` fue a la salida de errores: con `2>/dev/null` al final del comando, solo quedan las dos líneas.
+
+## Resumen
+
+- `use "ruta"` ejecuta un módulo una vez por programa, en su propio alcance, y deja que el archivo vea sus nombres, vivos: `=` cambia la variable del módulo, un `let` la oculta. Los nombres que empiezan con `_` son privados.
+- `use "ruta" as nombre` da un hash con los nombres del módulo, hecho cuando terminó de correr.
+- Las rutas son relativas al archivo que dice el `use`, y luego a las carpetas de `LIZARD_PATH`. Un `use` va en el nivel superior de un archivo.
+- `lizardscript test carpeta` ejecuta cada programa que tiene un archivo `.expected` y compara; `--update`, `--vm`, `--bench`.
+- `lizardscript build carpeta -o archivo` hace un ejecutable con los módulos y los archivos de `bundle.txt`; encuentra tus archivos con `os.program_dir()`. `--os` y `--arch` construyen para otros sistemas.
+- `lizard.tokens`, `lizard.parse`, `lizard.run` y `lizard.docs` leen, revisan y ejecutan código; `io` lee líneas y escribe en la salida y en la salida de errores.
+
+[← Anterior: El Terrario](17-terrarium.md) · [Índice](../README.md) · [Hoja de referencia →](cheatsheet.md)

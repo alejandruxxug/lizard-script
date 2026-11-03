@@ -19,6 +19,7 @@
 | devolver | el último valor, o `return x`; nada significa `null` |
 | errores | `error("mensaje")`, `try { } catch (e) { e.message }` (es una instrucción) |
 | capa | `layer nombre` solo en una línea, luego un cuerpo con sangría |
+| módulo | `use "ruta"` (sus nombres, vivos) o `use "ruta" as m` (un hash), en el nivel superior de un archivo; los `_nombres` son privados |
 
 ## Valores
 

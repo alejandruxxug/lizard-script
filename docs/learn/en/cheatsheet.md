@@ -19,6 +19,7 @@
 | return | the last value, or `return x`; nothing means `null` |
 | errors | `error("message")`, `try { } catch (e) { e.message }` (a statement) |
 | layer | `layer name` alone on a line, then an indented body |
+| module | `use "path"` (its names, alive) or `use "path" as m` (a hash), at the top of a file; `_names` are private |
 
 ## Values
 

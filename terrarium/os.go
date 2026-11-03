@@ -1,6 +1,7 @@
 package terrarium
 
 import (
+	"lizardscript/bundle"
 	"lizardscript/object"
 	"lizardscript/terrarium/internal/arg"
 	"os"
@@ -14,14 +15,24 @@ import (
 // own things first.
 var Exit = os.Exit
 
+// ProgramFile is the path of the program's main file, for
+// os.program_dir(): a path on disk, a path in a built program
+// ("bundle:/main.liz"), or "" when there is no file, like in the REPL. A
+// host sets it before the program runs.
+var ProgramFile string
+
 func osModule() *object.Hash {
 	return arg.Module("os", map[string]object.BuiltinFunction{
-		"args":       osArgs,
-		"env":        osEnv,
-		"exit":       osExit,
-		"platform":   osPlatform,
-		"locale":     osLocale,
-		"config_dir": osConfigDir,
+		"args":        osArgs,
+		"env":         osEnv,
+		"exit":        osExit,
+		"platform":    osPlatform,
+		"locale":      osLocale,
+		"config_dir":  osConfigDir,
+		"program_dir": osProgramDir,
+		"reveal":      osReveal,
+		"open_url":    osOpenURL,
+		"memory":      osMemory,
 	})
 }
 
@@ -139,4 +150,67 @@ func twoLetters(s string) string {
 		return ""
 	}
 	return string([]byte{a, b})
+}
+
+// os.program_dir() is the folder of the program's main file, so a program
+// finds the files that come with it: an absolute path, or "bundle:" in a
+// program built with lizardscript build, whose files fs reads there. With
+// no file (the REPL) it is the current folder.
+func osProgramDir(args ...object.Object) object.Object {
+	if err := arg.Count(args, 0, 0); err != nil {
+		return err
+	}
+	if bundle.IsPath(ProgramFile) {
+		return arg.Str(bundle.Root)
+	}
+	dir, err := filepath.Abs(filepath.Dir(ProgramFile))
+	if err != nil {
+		return arg.Errorf("can't find the program's folder: %v", err)
+	}
+	return arg.Str(filepath.ToSlash(dir))
+}
+
+// os.reveal(path) shows the file or folder in the file manager: selected
+// in Finder or Explorer, its folder on Linux.
+func osReveal(args ...object.Object) object.Object {
+	s, err := pathArgs(args, "path")
+	if err != nil {
+		return err
+	}
+	if rerr := Reveal(s[0]); rerr != nil {
+		return systemError("show", s[0], rerr)
+	}
+	return arg.Null
+}
+
+// os.open_url(url) opens an http, https or mailto address in the user's
+// browser or mail program.
+func osOpenURL(args ...object.Object) object.Object {
+	if err := arg.Count(args, 1, 1); err != nil {
+		return err
+	}
+	url, err := arg.String(args, 0, "url")
+	if err != nil {
+		return err
+	}
+	if oerr := OpenURL(url); oerr != nil {
+		return arg.Errorf("can't open %s: %v", url, oerr)
+	}
+	return arg.Null
+}
+
+// os.memory() is the machine's memory in bytes: {"total": all of it,
+// "free": what can be used now}.
+func osMemory(args ...object.Object) object.Object {
+	if err := arg.Count(args, 0, 0); err != nil {
+		return err
+	}
+	total, free, merr := Memory()
+	if merr != nil {
+		return arg.Errorf("can't read the memory: %v", merr)
+	}
+	h := object.NewHash()
+	arg.Set(h, "total", arg.Int64(int64(total)))
+	arg.Set(h, "free", arg.Int64(int64(free)))
+	return h
 }

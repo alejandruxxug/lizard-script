@@ -19,9 +19,16 @@ const MaxPixels = 1 << 26
 // Image is a buffer of W by H pixels, row by row from the top left. Each
 // pixel is four bytes, red, green, blue and alpha, not premultiplied, so a
 // color set is the color read back.
+//
+// An image can have a clip, a rectangle drawing is cut to, and open layers
+// (PushLayer): while one is open, drawing goes to the newest (Top).
 type Image struct {
 	W, H int
 	Pix  []byte
+
+	clip    image.Rectangle // drawing is cut to it while clipped
+	clipped bool
+	layers  []*Image // open layers, the newest last
 }
 
 // New makes an image filled with c. It fails when the size is negative or
@@ -55,10 +62,37 @@ func (m *Image) Set(x, y int, c color.NRGBA) {
 	p[0], p[1], p[2], p[3] = c.R, c.G, c.B, c.A
 }
 
-// Clear replaces every pixel with c.
-func (m *Image) Clear(c color.NRGBA) {
-	for i := 0; i < len(m.Pix); i += 4 {
-		m.Pix[i], m.Pix[i+1], m.Pix[i+2], m.Pix[i+3] = c.R, c.G, c.B, c.A
+// Bounds is the rectangle of the whole image.
+func (m *Image) Bounds() image.Rectangle { return image.Rect(0, 0, m.W, m.H) }
+
+// Clip is the rectangle drawing is cut to: the whole image unless SetClip
+// made it smaller.
+func (m *Image) Clip() image.Rectangle {
+	if m.clipped {
+		return m.clip
+	}
+	return m.Bounds()
+}
+
+// SetClip cuts drawing to r (and to the image).
+func (m *Image) SetClip(r image.Rectangle) {
+	m.clip, m.clipped = r.Intersect(m.Bounds()), true
+}
+
+// Unclip lets drawing reach the whole image again.
+func (m *Image) Unclip() { m.clip, m.clipped = image.Rectangle{}, false }
+
+// Clear replaces every pixel in the clip with c.
+func (m *Image) Clear(c color.NRGBA) { m.ClearRect(m.Bounds(), c) }
+
+// ClearRect replaces the pixels of r that are in the clip with c.
+func (m *Image) ClearRect(r image.Rectangle, c color.NRGBA) {
+	r = r.Intersect(m.Clip())
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		row := m.Pix[(y*m.W+r.Min.X)*4 : (y*m.W+r.Max.X)*4]
+		for i := 0; i < len(row); i += 4 {
+			row[i], row[i+1], row[i+2], row[i+3] = c.R, c.G, c.B, c.A
+		}
 	}
 }
 
@@ -82,19 +116,29 @@ func blend(p []byte, c color.NRGBA, cover float64) {
 	p[3] = byte(math.Round(out * 255))
 }
 
+// Over paints the pixel s over the pixel d, four bytes each, like a span
+// paints a color.
+func Over(d, s []byte) {
+	switch s[3] {
+	case 0:
+	case 255:
+		d[0], d[1], d[2], d[3] = s[0], s[1], s[2], 255
+	default:
+		blend(d, color.NRGBA{R: s[0], G: s[1], B: s[2], A: s[3]}, 1)
+	}
+}
+
 // Span paints c over the pixels from x0 up to x1 of row y. A fractional end
-// covers its pixel partly, so the edge is soft. What is outside is cut.
+// covers its pixel partly, so the edge is soft. What is outside the clip is
+// cut.
 func (m *Image) Span(y int, x0, x1 float64, c color.NRGBA) {
-	if y < 0 || y >= m.H || c.A == 0 {
+	if c.A == 0 {
 		return
 	}
-	x0 = math.Max(x0, 0)
-	x1 = math.Min(x1, float64(m.W))
-	if !(x1 > x0) {
+	first, last, ok := m.cut(y, &x0, &x1)
+	if !ok {
 		return
 	}
-	first := int(math.Floor(x0))
-	last := int(math.Ceil(x1)) - 1
 	row := m.Pix[y*m.W*4:]
 	cover := func(x int) float64 {
 		return math.Min(float64(x+1), x1) - math.Max(float64(x), x0)
@@ -109,6 +153,21 @@ func (m *Image) Span(y int, x0, x1 float64, c color.NRGBA) {
 	blend(row[last*4:], c, cover(last))
 }
 
+// cut fits the span from x0 to x1 of row y into the clip, and gives the
+// first and last pixels it touches; ok is false when nothing is left.
+func (m *Image) cut(y int, x0, x1 *float64) (first, last int, ok bool) {
+	clip := m.Clip()
+	if y < clip.Min.Y || y >= clip.Max.Y {
+		return 0, 0, false
+	}
+	*x0 = math.Max(*x0, float64(clip.Min.X))
+	*x1 = math.Min(*x1, float64(clip.Max.X))
+	if !(*x1 > *x0) {
+		return 0, 0, false
+	}
+	return int(math.Floor(*x0)), int(math.Ceil(*x1)) - 1, true
+}
+
 // Fill paints c over the rectangle at (x, y) of w by h pixels. Its rows are
 // rounded to whole pixels; its sides can cover a pixel partly.
 func (m *Image) Fill(x, y, w, h float64, c color.NRGBA) {
@@ -117,13 +176,15 @@ func (m *Image) Fill(x, y, w, h float64, c color.NRGBA) {
 	}
 }
 
-// Blit paints src over m with its top left at (x, y). src can be m itself.
+// Blit paints src over m with its top left at (x, y), cut to the clip. src
+// can be m itself.
 func (m *Image) Blit(src *Image, x, y int) {
 	if src == m {
 		src = &Image{W: m.W, H: m.H, Pix: append([]byte(nil), m.Pix...)}
 	}
-	for sy := max(0, -y); sy < src.H && sy+y < m.H; sy++ {
-		for sx := max(0, -x); sx < src.W && sx+x < m.W; sx++ {
+	area := src.Bounds().Add(image.Pt(x, y)).Intersect(m.Clip())
+	for sy := area.Min.Y - y; sy < area.Max.Y-y; sy++ {
+		for sx := area.Min.X - x; sx < area.Max.X-x; sx++ {
 			s := src.Pix[(sy*src.W+sx)*4:]
 			if s[3] == 0 {
 				continue
@@ -144,6 +205,16 @@ func (m *Image) Resized(w, h int) (*Image, error) {
 		copy(out.Pix[y*w*4:y*w*4+min(w, m.W)*4], m.Pix[y*m.W*4:])
 	}
 	return out, nil
+}
+
+// Crop is a new image with the pixels of m in r (cut to m).
+func (m *Image) Crop(r image.Rectangle) *Image {
+	r = r.Intersect(m.Bounds())
+	out := &Image{W: r.Dx(), H: r.Dy(), Pix: make([]byte, r.Dx()*r.Dy()*4)}
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		copy(out.Pix[(y-r.Min.Y)*out.W*4:], m.Pix[(y*m.W+r.Min.X)*4:(y*m.W+r.Max.X)*4])
+	}
+	return out
 }
 
 // Premultiplied writes the pixels into dst (len W*H*4) with each color
@@ -221,16 +292,22 @@ func unpremultiply(r, g, b, a uint64) color.NRGBA {
 	return color.NRGBA{R: channel(r), G: channel(g), B: channel(b), A: uint8((a*255 + 32767) / 65535)}
 }
 
-// Target is something a program draws on: an image, or the buffer of a
-// window. Drawing functions get its pixels and then say they touched them,
-// so a window knows to show them again.
+// Target is something a program draws on: an image, a window or a
+// surface. Drawing functions get its pixels and then say they touched
+// them, so a window knows to show them again. Base is the target's own
+// image; Pixels is where drawing goes, Base's newest open layer.
 type Target interface {
+	Base() *Image
 	Pixels() *Image
 	Touched()
 }
 
-// Pixels makes an Image a Target of its own.
-func (m *Image) Pixels() *Image { return m }
+// Base makes an Image a Target of its own.
+func (m *Image) Base() *Image { return m }
+
+// Pixels makes an Image a Target of its own: the image, or its newest open
+// layer.
+func (m *Image) Pixels() *Image { return m.Top() }
 
 // Touched does nothing for an image: nothing shows it.
 func (m *Image) Touched() {}

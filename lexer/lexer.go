@@ -22,6 +22,7 @@ type Lexer struct {
 	column       int    // 1-based column of ch
 	endLine      int    // line where the last token ended, 0 before the first one
 	source       string // name stamped on every token, "" when unnamed
+	keepComments bool   // return comments as COMMENT tokens instead of skipping them
 }
 
 // New creates a Lexer for input and loads its first character.
@@ -39,6 +40,14 @@ func NewNamed(input, name string) *Lexer {
 	l := New(input)
 	l.source = name
 	return l
+}
+
+// KeepComments makes the lexer return each -~> comment as a COMMENT token,
+// whose literal is the whole comment, instead of skipping it. It is for
+// tools that show the source, like a syntax highlighter; the parser must not
+// be given such a lexer.
+func (l *Lexer) KeepComments() {
+	l.keepComments = true
 }
 
 // readChar advances one character. At the end of input ch becomes 0 (NUL)
@@ -79,13 +88,20 @@ func (l *Lexer) peekChar() byte {
 }
 
 // NextToken reads and returns the next token from the input, stamped with
-// the line and column where it starts and whether it starts its line.
+// the line and column where it starts and ends and whether it starts its
+// line.
 func (l *Lexer) NextToken() token.Token {
 	l.skipWhitespace()
 
 	line, column := l.line, l.column
-	tok := l.readToken()
+	var tok token.Token
+	if l.keepComments && l.atComment() {
+		tok = l.readComment()
+	} else {
+		tok = l.readToken()
+	}
 	tok.Line, tok.Column = line, column
+	tok.EndLine, tok.EndColumn = l.line, l.column
 	tok.LineStart = line > l.endLine
 	tok.Source = l.source
 	l.endLine = l.line
@@ -234,12 +250,27 @@ func (l *Lexer) skipWhitespace() {
 		switch {
 		case l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r':
 			l.readChar()
-		case strings.HasPrefix(l.input[l.position:], commentStart):
+		case !l.keepComments && l.atComment():
 			l.skipComment()
 		default:
 			return
 		}
 	}
+}
+
+// atComment reports whether a comment starts at the current character.
+func (l *Lexer) atComment() bool {
+	return strings.HasPrefix(l.input[l.position:], commentStart)
+}
+
+// readComment reads a comment up to the end of its line, leaving the
+// newline (or the "\r" of a "\r\n") in ch, so it is not part of the comment.
+func (l *Lexer) readComment() token.Token {
+	start := l.position
+	for l.ch != '\n' && !l.atEnd() && !(l.ch == '\r' && l.peekChar() == '\n') {
+		l.readChar()
+	}
+	return token.Token{Type: token.COMMENT, Literal: l.input[start:l.position]}
 }
 
 // skipComment skips up to the end of the line, leaving the newline in ch.

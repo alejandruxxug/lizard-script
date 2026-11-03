@@ -2,6 +2,7 @@ package terrarium
 
 import (
 	"bytes"
+	"encoding/base64"
 	"image"
 	"image/color"
 	_ "image/gif"  // registers the GIF decoder for image.Decode
@@ -18,8 +19,10 @@ import (
 // pixels; the program reads and changes them one by one, or all at once as
 // a flat list of colors. Colors are kept as they are set, alpha included.
 //
-// An image is a drawing target, like a window: img.size, clear, fill, span,
-// spans and blit are the shared functions of package canvas.
+// An image is a drawing target, like a window or a surface: img.size,
+// clear, fill, span, spans, blit, clip, the gradient spans and the blend
+// layers are the shared functions of package canvas. While a layer is open
+// on an image, every function that takes it uses the layer.
 
 // ImageKind is the kind of the natives that are images.
 const ImageKind = "image"
@@ -36,6 +39,7 @@ func imgModule() *object.Hash {
 		"set":         imgSet,
 		"pixels":      imgPixels,
 		"from_pixels": imgFromPixels,
+		"png_base64":  imgPNGBase64,
 	}))
 }
 
@@ -96,28 +100,63 @@ func imgLoad(args ...object.Object) object.Object {
 	return NewImage(m)
 }
 
-// img.save(image, path) writes the image as a PNG file, the whole file at
+// img.save(target, path, rect = all) writes an image, a window or a
+// surface, or the rectangle rect of it, as a PNG file, the whole file at
 // once like fs.write.
 func imgSave(args ...object.Object) object.Object {
-	if err := arg.Count(args, 2, 2); err != nil {
-		return err
-	}
-	m, err := imageArg(args, 0)
-	if err != nil {
+	if err := arg.Count(args, 2, 3); err != nil {
 		return err
 	}
 	path, err := arg.String(args, 1, "path")
 	if err != nil {
 		return err
 	}
-	var data bytes.Buffer
-	if eerr := m.EncodePNG(&data); eerr != nil {
-		return arg.Errorf("can't save %s: %v", path, eerr)
+	data, err := encodePNG(args, 2)
+	if err != nil {
+		return err
 	}
-	if werr := WriteFileAtomic(path, data.Bytes()); werr != nil {
+	if werr := WriteFileAtomic(path, data); werr != nil {
 		return systemError("save", path, werr)
 	}
 	return arg.Null
+}
+
+// img.png_base64(target, rect = all) is the PNG of a target, or of the
+// rectangle rect of it, as base64 text: a picture another program can take
+// in JSON.
+func imgPNGBase64(args ...object.Object) object.Object {
+	if err := arg.Count(args, 1, 2); err != nil {
+		return err
+	}
+	data, err := encodePNG(args, 1)
+	if err != nil {
+		return err
+	}
+	return arg.Str(base64.StdEncoding.EncodeToString(data))
+}
+
+// encodePNG is the PNG of the target in argument 0, cut to the rectangle in
+// argument rectAt when there is one.
+func encodePNG(args []object.Object, rectAt int) ([]byte, *object.Error) {
+	t, err := canvas.TargetArg(args, 0, "target")
+	if err != nil {
+		return nil, err
+	}
+	m := t.Pixels()
+	if len(args) > rectAt {
+		r, err := canvas.RectArg(args, rectAt)
+		if err != nil {
+			return nil, err
+		}
+		if m = m.Crop(r); m.W == 0 || m.H == 0 {
+			return nil, arg.Errorf("the rect %s is outside the %dx%d target", args[rectAt].Inspect(), t.Pixels().W, t.Pixels().H)
+		}
+	}
+	var data bytes.Buffer
+	if eerr := m.EncodePNG(&data); eerr != nil {
+		return nil, arg.Errorf("can't make the PNG: %v", eerr)
+	}
+	return data.Bytes(), nil
 }
 
 // img.new(w, h, color = #00000000) is a new image filled with color.
@@ -148,10 +187,11 @@ func imgNew(args ...object.Object) object.Object {
 
 // pixelArgs reads (image, x, y) and checks that the pixel is in the image.
 func pixelArgs(args []object.Object) (*pixels.Image, int, int, *object.Error) {
-	m, err := imageArg(args, 0)
+	base, err := imageArg(args, 0)
 	if err != nil {
 		return nil, 0, 0, err
 	}
+	m := base.Pixels()
 	x, err := arg.Int(args, 1, "x")
 	if err != nil {
 		return nil, 0, 0, err
@@ -202,10 +242,11 @@ func imgPixels(args ...object.Object) object.Object {
 	if err := arg.Count(args, 1, 1); err != nil {
 		return err
 	}
-	m, err := imageArg(args, 0)
+	base, err := imageArg(args, 0)
 	if err != nil {
 		return err
 	}
+	m := base.Pixels()
 	out := &object.Array{Elements: make([]object.Object, m.W*m.H)}
 	for i := range out.Elements {
 		p := m.Pix[i*4:]

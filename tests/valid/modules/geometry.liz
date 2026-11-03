@@ -1,0 +1,10 @@
+-~> A module: its top-level names are what it gives.
+let sides = 4
+let _made = 0
+
+function square(side) {
+  _made += 1
+  return side * side
+}
+
+function made() { return _made }

@@ -53,7 +53,7 @@ func runPrograms(t *testing.T, dir string, shouldSucceed bool) {
 			// One buffer for both, so the output and the error stay in
 			// the order they happened.
 			var output bytes.Buffer
-			succeeded := repl.Run(normalize(string(source)), &output, &output)
+			succeeded := repl.RunFile(filepath.ToSlash(file), normalize(string(source)), &output, &output, false)
 
 			expectedFile := strings.TrimSuffix(file, ".liz") + ".expected"
 			if *update {

@@ -1,0 +1,2 @@
+4
+modules/fails.liz: [line 3, column 15] runtime error: type mismatch: INTEGER + STRING

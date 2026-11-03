@@ -1,0 +1,28 @@
+-~> use: every name of a module.
+use "modules/geometry"
+puts(square(3), sides)
+
+-~> The names are alive: a function that changes the module's variable.
+puts(made())
+square(1)
+puts(made())
+
+-~> A private name (it starts with _) isn't seen.
+try { _made } catch (e) { puts(e.message) }
+
+-~> = changes the module's own variable; a let hides it instead.
+use "modules/counter"
+bump()
+count = 10
+puts(bump(), count)
+
+-~> A module runs once per program, however many files use it. The hash
+-~> of use ... as is made when the module has run: its count is still 0,
+-~> but its functions work on the module's own variables.
+use "modules/counter" as counter
+puts(counter.count, keys(counter))
+puts(counter.bump(), count)
+
+-~> A module that uses another one: its own names only.
+use "modules/shapes/all" as shapes
+puts(shapes.cube(2), keys(shapes))

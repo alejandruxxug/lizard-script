@@ -1,0 +1,134 @@
+-~> A splash screen that becomes the app: a frameless, transparent window
+-~> with round corners and a loading bar, which after two seconds (or a
+-~> click) turns into a normal window with a title bar, centered on the
+-~> screen. The app has big pixels (scale 2) around a canvas surface at
+-~> the screen's full resolution: drag on it to paint, with pen pressure.
+-~> Esc quits.
+-~> Run it with: lizardscript examples/terrarium/splash.liz
+-~> or, to save the splash and the app with no window:
+-~>   lizardscript examples/terrarium/splash.liz splash.png app.png
+
+let shots = os.args()
+let headless = len(shots) == 2
+let w = window.open(160, 72, "splash", {"scale": 3, "frameless": true, "transparent": true, "floating": true, "headless": headless})
+let started = time.ms()
+let canvas = null
+let last = null
+
+-~> A rectangle with round corners as spans: each row is shortened at its
+-~> ends by how far the corner circle is from the edge there.
+function rounded(r, radius) {
+  let rows = []
+  for (let y = 0; y < r[3]; y += 1) {
+    let inset = 0
+    let dy = math.max(radius - y - 0.5, y + 0.5 - (r[3] - radius), 0)
+    if (dy > 0) {
+      inset = radius - math.sqrt(math.max(0, radius * radius - dy * dy))
+    }
+    push(rows, [r[1] + y, r[0] + inset, r[0] + r[2] - inset])
+  }
+  rows
+}
+
+-~> The splash: a card with a gradient, a sun and a bar that fills up.
+function paint_splash(progress) {
+  window.clear(w, #00000000)
+  let card = rounded([0, 0, 160, 72], 12)
+  window.spans_gradient(w, card, {"kind": "linear", "origin": (0, 0), "axis": (0, 1 / 72.0),
+    "stops": [[0, #2b3a55], [1, #10182a]]})
+  window.spans_gradient(w, rounded([64, 14, 32, 32], 16), {"kind": "radial", "origin": (80, 30), "scale": 1 / 16.0,
+    "stops": [[0, #ffe9a8], [0.6, #f6c453], [1, #e2557b]]})
+  window.fill(w, [24, 56, 112, 4], #ffffff30)
+  window.fill(w, [24, 56, 112 * progress, 4], #f6c453)
+}
+
+-~> The app's frame: a toolbar and the canvas. When the window grows, the
+-~> canvas keeps what was painted and the new part gets paper.
+function paint_app() {
+  let size = window.size(w)
+  window.clear(w, #24262d)
+  window.fill(w, [0, 0, size.x, 16], #31343d)
+  for (let i = 0; i < 4; i += 1) {
+    window.spans(w, rounded([6 + i * 14, 3, 10, 10], 3), [#e2557b, #f6c453, #30d050, #3070ff][i])
+  }
+  let painted = null
+  if (canvas != null) {
+    painted = img.new(window.size(canvas).x, window.size(canvas).y)
+    img.blit(painted, canvas, (0, 0))
+  }
+  canvas = window.surface(w, "canvas", [12, 24, size.x - 24, size.y - 36], 1)
+  window.clear(canvas, #f4efe6)
+  if (painted != null) {
+    window.blit(canvas, painted, (0, 0))
+  }
+}
+
+-~> Turns the splash into the app window.
+function become_app() {
+  window.set(w, {"frameless": false, "floating": false, "scale": 2, "size": (320, 200),
+    "min_size": (200, 120), "resizable": true, "center": true, "title": "splash 🦎 app"})
+  paint_app()
+}
+
+-~> A dab of ink on the canvas, and the part of it that changed.
+function dab(p, pressure) {
+  let r = 1.5 + pressure * 5
+  let rows = []
+  for (let dy = -math.ceil(r); dy <= math.ceil(r); dy += 1) {
+    let half = math.sqrt(math.max(0, r * r - dy * dy))
+    push(rows, [p.y + dy, p.x - half, p.x + half])
+  }
+  window.spans(canvas, rows, #2b3a55)
+  window.dirty(canvas, [p.x - r - 1, p.y - r - 1, r * 2 + 2, r * 2 + 2])
+}
+
+-~> Every point the pen went through since the last frame, joined.
+function paint_samples(samples) {
+  for (let i = 0; i < len(samples); i += 1) {
+    let s = samples[i]
+    if (s.surface == "canvas") {
+      if (last != null) {
+        let steps = math.max(1, math.ceil(math.dist(last, s.surface_pos) / 2.0))
+        for (let k = 1; k <= steps; k += 1) {
+          dab(last + (s.surface_pos - last) * (k / float(steps)), s.pressure)
+        }
+      }
+      last = s.surface_pos
+    }
+  }
+}
+
+paint_splash(0)
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "key" && e.key == "Escape") {
+      return false
+    } elif (canvas == null && e.type == "down") {
+      started = -100000
+    } elif (canvas != null && e.type == "down" && e.surface == "canvas") {
+      last = e.surface_pos
+      dab(last, e.pen.pressure)
+    } elif (canvas != null && e.type == "move" && last != null) {
+      paint_samples(e.samples)
+    } elif (e.type == "up") {
+      last = null
+    } elif (e.type == "resize") {
+      paint_app()
+    }
+  }
+  if (canvas == null) {
+    let progress = math.min(1, (time.ms() - started) / 2000.0)
+    paint_splash(progress)
+    if (headless) {
+      img.save(window.screenshot(w), shots[0])
+      progress = 1
+    }
+    if (progress >= 1) {
+      become_app()
+    }
+  } elif (headless) {
+    img.save(window.screenshot(w), shots[1])
+    return false
+  }
+})

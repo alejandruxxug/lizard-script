@@ -99,6 +99,7 @@ type Parser struct {
 	parenDepth int    // how many '(' are open
 	brackets   []bool // the open '(', '[' and '{', innermost last: true where a line break is just a space
 	loopDepth  int    // how many loops are open in the current function
+	layerDepth int    // how many layer bodies are open, for the top level of use
 	depth      int    // how many expressions and blocks are being parsed inside each other
 	abandoned  bool   // the program nests too deeply and the rest of it was skipped
 }
@@ -389,7 +390,25 @@ func (p *Parser) curPrecedence() int {
 // ParseProgram parses the whole input and returns the root of the tree. It
 // always returns a Program: check Errors to know whether it is complete.
 func (p *Parser) ParseProgram() *ast.Program {
-	return &ast.Program{Statements: p.parseStatementList(token.EOF)}
+	program := &ast.Program{Statements: p.parseStatementList(token.EOF)}
+	if n := len(program.Statements); n > 0 {
+		first, last := program.Statements[0].Range(), program.Statements[n-1].Range()
+		*program.Range() = ast.Span{StartLine: first.StartLine, StartColumn: first.StartColumn,
+			EndLine: last.EndLine, EndColumn: last.EndColumn}
+	}
+	return program
+}
+
+// finish sets the span of node: from the start of first to the end of
+// curToken, the last token of node by the rule every parse function keeps.
+func (p *Parser) finish(node ast.Node, first token.Token) {
+	p.finishAt(node, first.Line, first.Column)
+}
+
+// finishAt is finish with the start given as a line and a column.
+func (p *Parser) finishAt(node ast.Node, line, column int) {
+	*node.Range() = ast.Span{StartLine: line, StartColumn: column,
+		EndLine: p.curToken.EndLine, EndColumn: p.curToken.EndColumn}
 }
 
 // parseStatementList parses statements until curToken is end or EOF. After a
@@ -411,9 +430,19 @@ func (p *Parser) parseStatementList(end token.TokenType) []ast.Statement {
 	return statements
 }
 
-// parseStatement picks the kind of statement from curToken. It returns nil
-// for an empty statement (";") and for a broken one.
+// parseStatement parses the statement that starts at curToken and sets its
+// span. It returns nil for an empty statement (";") and for a broken one.
 func (p *Parser) parseStatement() ast.Statement {
+	first := p.curToken
+	stmt := p.parseStatementKind()
+	if stmt != nil {
+		p.finish(stmt, first)
+	}
+	return stmt
+}
+
+// parseStatementKind picks the kind of statement from curToken.
+func (p *Parser) parseStatementKind() ast.Statement {
 	switch p.curToken.Type {
 	case token.SEMICOLON:
 		return nil
@@ -437,6 +466,8 @@ func (p *Parser) parseStatement() ast.Statement {
 			return p.parseTryStatement()
 		case p.startsContinue():
 			return p.parseContinueStatement()
+		case p.startsUse():
+			return p.parseUseStatement()
 		}
 	}
 	return p.parseExpressionStatement()
@@ -552,6 +583,7 @@ func (p *Parser) parseControlStatement() ast.Statement {
 	if stmt.Expression == nil {
 		return nil
 	}
+	p.finish(stmt.Expression, stmt.Token)
 
 	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
@@ -636,6 +668,47 @@ func (p *Parser) parseTryStatement() ast.Statement {
 	return stmt
 }
 
+// startsUse reports whether the statement that begins at curToken is a use:
+// the name "use" followed on the same line by a string. A name and a string
+// side by side were never valid, so nothing that worked before reads
+// differently, and "use" anywhere else is an ordinary identifier.
+func (p *Parser) startsUse() bool {
+	return p.curToken.Literal == "use" && p.peekTokenIs(token.STRING) &&
+		p.peekToken.Line == p.curToken.Line
+}
+
+// parseUseStatement parses: use "path" ;   use "path" as name ;
+// A module's names go into the file's own scope, so a use is only allowed at
+// the top level of a file: not in a block, a function or a layer.
+func (p *Parser) parseUseStatement() ast.Statement {
+	stmt := &ast.UseStatement{Token: p.curToken}
+
+	if p.blockBrace > 0 || p.layerDepth > 0 {
+		p.errorAt(p.curToken, "use must be at the top level of a file, not inside a block or a layer")
+		return nil
+	}
+	p.nextToken()
+	stmt.Path = &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+	p.finish(stmt.Path, p.curToken)
+	if stmt.Path.Value == "" {
+		p.errorAt(p.curToken, "use needs the path of a module, like use \"shapes\"")
+		return nil
+	}
+
+	if p.peekTokenIs(token.IDENT) && p.peekToken.Literal == "as" && !p.peekToken.LineStart {
+		p.nextToken()
+		if !p.peekTokenIs(token.IDENT) || p.peekToken.LineStart {
+			p.errorAt(p.peekToken, "expected a name after \"as\", got %s", describeToken(p.peekToken))
+			return nil
+		}
+		p.nextToken()
+		stmt.Name = p.currentIdentifier()
+	}
+
+	p.endStatement()
+	return stmt
+}
+
 // startsLayer reports whether the statement that begins at curToken is a
 // layer: the name "layer" followed on the same line by a name or a string.
 // Two names side by side were never valid, so nothing that worked before
@@ -671,6 +744,9 @@ func (p *Parser) parseLayerStatement() ast.Statement {
 		return stmt
 	}
 
+	p.layerDepth++
+	defer func() { p.layerDepth-- }()
+	defer p.spanLayerBody(stmt.Body)
 	for !p.peekTokenIs(token.EOF) && !p.peekTokenIs(token.RBRACE) &&
 		p.peekToken.Line > layer.Line && p.peekToken.Column > layer.Column {
 		p.nextToken()
@@ -685,6 +761,20 @@ func (p *Parser) parseLayerStatement() ast.Statement {
 		}
 	}
 	return stmt
+}
+
+// spanLayerBody sets the span of a layer's body, which has no braces: from
+// its first statement to its last, or empty right after the layer's name.
+func (p *Parser) spanLayerBody(body *ast.BlockStatement) {
+	statements := body.Statements
+	if len(statements) == 0 {
+		*body.Range() = ast.Span{StartLine: p.curToken.EndLine, StartColumn: p.curToken.EndColumn,
+			EndLine: p.curToken.EndLine, EndColumn: p.curToken.EndColumn}
+		return
+	}
+	first, last := statements[0].Range(), statements[len(statements)-1].Range()
+	*body.Range() = ast.Span{StartLine: first.StartLine, StartColumn: first.StartColumn,
+		EndLine: last.EndLine, EndColumn: last.EndColumn}
 }
 
 // parseFunctionDeclaration parses: function <name>(<parameters>) { ... }
@@ -746,6 +836,7 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 		p.errorAt(block.Token, "block is never closed: expected \"}\"")
 	}
 
+	p.finish(block, block.Token)
 	return block
 }
 
@@ -771,7 +862,11 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		p.errorAt(p.curToken, "expected an expression, got %s", describeToken(p.curToken))
 		return nil
 	}
+	first := p.curToken
 	left := prefix()
+	if left != nil {
+		p.finish(left, first)
+	}
 
 	for left != nil && precedence < p.peekPrecedence() {
 		if p.lineEnds() && !p.joinNextLine() {
@@ -781,8 +876,12 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		if infix == nil {
 			return left
 		}
+		start := left.Range()
 		p.nextToken()
 		left = infix(left)
+		if left != nil {
+			p.finishAt(left, start.StartLine, start.StartColumn)
+		}
 	}
 
 	return left
@@ -817,7 +916,9 @@ func (p *Parser) joinNextLine() bool {
 // Prefix functions
 
 func (p *Parser) currentIdentifier() *ast.Identifier {
-	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	identifier := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	p.finish(identifier, p.curToken)
+	return identifier
 }
 
 func (p *Parser) parseIdentifier() ast.Expression {
@@ -1008,12 +1109,11 @@ func (p *Parser) parseElseIf(expression *ast.IfExpression) ast.Expression {
 	if nested == nil {
 		return nil
 	}
-	expression.Alternative = &ast.BlockStatement{
-		Token: keyword,
-		Statements: []ast.Statement{
-			&ast.ExpressionStatement{Token: keyword, Expression: nested},
-		},
-	}
+	p.finish(nested, keyword)
+	statement := &ast.ExpressionStatement{Token: keyword, Expression: nested}
+	p.finish(statement, keyword)
+	expression.Alternative = &ast.BlockStatement{Token: keyword, Statements: []ast.Statement{statement}}
+	p.finish(expression.Alternative, keyword)
 	return expression
 }
 
@@ -1071,6 +1171,7 @@ func (p *Parser) parseForHeader(expression *ast.ForExpression) bool {
 	p.nextToken()
 
 	if !p.curTokenIs(token.SEMICOLON) {
+		first := p.curToken
 		if p.curTokenIs(token.LET) {
 			expression.Init = p.parseLetStatement()
 		} else {
@@ -1079,6 +1180,7 @@ func (p *Parser) parseForHeader(expression *ast.ForExpression) bool {
 		if expression.Init == nil {
 			return false
 		}
+		p.finish(expression.Init, first)
 		if !p.curTokenIs(token.SEMICOLON) {
 			p.errorAt(p.peekToken, "expected %s, got %s",
 				describeType(token.SEMICOLON), describeToken(p.peekToken))
@@ -1143,6 +1245,7 @@ func (p *Parser) parseFunction(function token.Token) ast.Expression {
 	literal.Body = p.parseBlockStatement()
 	p.loopDepth = outerLoopDepth
 
+	p.finish(literal, function)
 	return literal
 }
 
@@ -1340,7 +1443,9 @@ func (p *Parser) parseDotExpression(left ast.Expression) ast.Expression {
 	}
 	p.nextToken()
 
-	expression.Index = &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+	name := &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+	p.finish(name, p.curToken)
+	expression.Index = name
 	return expression
 }
 

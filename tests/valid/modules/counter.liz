@@ -1,0 +1,6 @@
+puts("counter loads once")
+let count = 0
+function bump() {
+  count += 1
+  return count
+}

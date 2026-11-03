@@ -149,6 +149,9 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.TryStatement:
 		return evalTryStatement(node, env)
 
+	case *ast.UseStatement:
+		return Use(node, env, evalProgramRunner)
+
 	// Leaf expressions
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
@@ -234,6 +237,11 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	}
 
 	return nil
+}
+
+// evalProgramRunner runs a module's program on this engine.
+func evalProgramRunner(program *ast.Program, env *object.Environment) object.Object {
+	return Eval(program, env)
 }
 
 // Errors

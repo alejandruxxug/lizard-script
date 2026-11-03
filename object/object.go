@@ -10,6 +10,7 @@ import (
 	"maps"
 	"math"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -530,16 +531,28 @@ func (e *Error) Inspect() string  { return e.Message }
 // Environment stores variables. Each function call and each block gets its
 // own, enclosed by the one around it, so a name is looked up from the
 // innermost scope outwards.
+//
+// The top scope of a file can also use modules (use "shapes"): each module
+// is the environment its file ran in, and the names it defines are seen
+// from the file as if they were there, alive: reading one reads the
+// module's variable, and = changes it. A file's own names come first, then
+// the modules it uses, the last used first, then the scopes around it.
+// Names that start with "_" are the module's own and are not seen.
 type Environment struct {
 	store map[string]Object
 	outer *Environment
 	// version counts the writes to store, for Version.
 	version uint64
+	// uses are the modules this scope sees, in the order they were used;
+	// users are the scopes that use this one, whose version a write here
+	// changes too.
+	uses, users []*Environment
 }
 
-// Version changes whenever a variable of this environment or the ones
-// around it is defined or assigned. An engine that remembers what a name
-// read (the VM's global reads) can trust it while the version stays.
+// Version changes whenever a variable of this environment, of the ones
+// around it or of the modules they use is defined or assigned. An engine
+// that remembers what a name read (the VM's global reads) can trust it while
+// the version stays.
 func (e *Environment) Version() uint64 {
 	var version uint64
 	for env := e; env != nil; env = env.outer {
@@ -560,33 +573,97 @@ func NewEnclosedEnvironment(outer *Environment) *Environment {
 	return env
 }
 
-// Get looks up name in this environment and the ones around it.
+// Get looks up name in this environment, the modules it uses and the ones
+// around it.
 func (e *Environment) Get(name string) (Object, bool) {
 	for env := e; env != nil; env = env.outer {
 		if obj, ok := env.store[name]; ok {
 			return obj, true
+		}
+		if module := env.moduleWith(name); module != nil {
+			return module.store[name], true
 		}
 	}
 	return nil, false
 }
 
 // Define creates name in this environment, hiding any variable with the
-// same name in the ones around it. This is what let does.
+// same name in the ones around it or in a module it uses. This is what let
+// does.
 func (e *Environment) Define(name string, value Object) Object {
 	e.store[name] = value
-	e.version++
+	e.changed()
 	return value
 }
 
-// Assign changes the variable name in the innermost environment that has it,
-// and reports whether there was one. This is what = does.
+// Assign changes the variable name in the innermost environment that has it
+// (or a module it uses), and reports whether there was one. This is what =
+// does.
 func (e *Environment) Assign(name string, value Object) bool {
 	for env := e; env != nil; env = env.outer {
 		if _, ok := env.store[name]; ok {
 			env.store[name] = value
-			env.version++
+			env.changed()
+			return true
+		}
+		if module := env.moduleWith(name); module != nil {
+			module.store[name] = value
+			module.changed()
 			return true
 		}
 	}
 	return false
+}
+
+// Use makes the names of module, the top scope of a module's file, seen
+// from this scope (see Environment). Using the same module twice changes
+// nothing.
+func (e *Environment) Use(module *Environment) {
+	for _, used := range e.uses {
+		if used == module {
+			return
+		}
+	}
+	e.uses = append(e.uses, module)
+	module.users = append(module.users, e)
+	e.changed()
+}
+
+// Names lists the names defined in this environment itself, not the ones
+// around it or in its modules, in alphabetical order.
+func (e *Environment) Names() []string {
+	names := make([]string, 0, len(e.store))
+	for name := range e.store {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// Exported reports whether a module's name is seen by the files that use
+// it: every name but the ones that start with "_".
+func Exported(name string) bool {
+	return name != "" && name[0] != '_'
+}
+
+// moduleWith returns the module, of the ones this scope uses, that defines
+// name (the last used first), or nil.
+func (e *Environment) moduleWith(name string) *Environment {
+	if len(e.uses) == 0 || !Exported(name) {
+		return nil
+	}
+	for i := len(e.uses) - 1; i >= 0; i-- {
+		if _, ok := e.uses[i].store[name]; ok {
+			return e.uses[i]
+		}
+	}
+	return nil
+}
+
+// changed counts a write, here and in the scopes that use this one.
+func (e *Environment) changed() {
+	e.version++
+	for _, user := range e.users {
+		user.version++
+	}
 }

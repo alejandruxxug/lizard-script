@@ -87,3 +87,42 @@ func TestCanvas(t *testing.T) {
 		{"blit bad pos", `img.blit(img.new(1, 1), img.new(1, 1), 0)`, "want a POINT pos, got INTEGER", true},
 	})
 }
+
+// The pixel-by-pixel functions: clip, gradients, layers, composite, and
+// the PNG of a target.
+func TestPaint(t *testing.T) {
+	dir := filepath.ToSlash(t.TempDir())
+	d := quote(dir)
+	grad := `{"kind": "linear", "origin": (0, 0), "axis": (0.25, 0), "stops": [[0, #000000], [1, #ffffff]]}`
+	check(t, []testCase{
+		{"clip", `let m = img.new(4, 1); img.clip(m, [1, 0, 2, 1]); img.fill(m, [0, 0, 4, 1], #ffffff); img.pixels(m)`,
+			"[#00000000, #ffffff, #ffffff, #00000000]", false},
+		{"unclip", `let m = img.new(2, 1); img.clip(m, [0, 0, 1, 1]); img.unclip(m); img.clear(m, #ff0000); img.pixels(m)`, "[#ff0000, #ff0000]", false},
+		{"clear a rect", `let m = img.new(3, 1, #ffffff); img.clear(m, #00000000, [1, 0, 1, 1]); img.pixels(m)`, "[#ffffff, #00000000, #ffffff]", false},
+		{"spans offset", `let m = img.new(3, 2); img.spans(m, [[0, 0, 1]], #ffffff, (2, 1)); img.get(m, 2, 1)`, "#ffffff", false},
+		{"span gradient", `let m = img.new(4, 1); img.span_gradient(m, 0, 0, 4, ` + grad + `); img.pixels(m)`,
+			"[#202020, #606060, #9f9f9f, #dfdfdf]", false},
+		{"spans gradient keeps its place", `let m = img.new(4, 2); img.spans_gradient(m, [[0, 0, 2]], ` + grad + `, (2, 1)); [img.get(m, 2, 1), img.get(m, 3, 1)]`,
+			"[#202020, #606060]", false},
+		{"steps", `let m = img.new(4, 1); img.span_gradient(m, 0, 0, 4, {"kind": "linear", "origin": (0, 0), "axis": (0.25, 0), "stops": [[0, #000000], [1, #ffffff]], "steps": 2}); img.pixels(m)`,
+			"[#000000, #000000, #ffffff, #ffffff]", false},
+		{"radial", `let m = img.new(3, 1); img.span_gradient(m, 0, 0, 3, {"kind": "radial", "origin": (1.5, 0.5), "scale": 1, "stops": [[0, #ff0000], [1, #0000ff]]}); img.pixels(m)`,
+			"[#0000ff, #ff0000, #0000ff]", false},
+		{"layer", `let m = img.new(1, 1, #808080); img.push_layer(m); img.clear(m, #ffffff); let inside = img.get(m, 0, 0); img.pop_layer(m, "multiply", 1); [inside, img.get(m, 0, 0)]`,
+			"[#ffffff, #808080]", false},
+		{"layer opacity", `let m = img.new(1, 1, #000000); img.push_layer(m); img.clear(m, #ffffff); img.pop_layer(m, "normal", 0.5); img.get(m, 0, 0)`, "#808080", false},
+		{"layers nest", `let m = img.new(1, 1, #000000); img.push_layer(m); img.push_layer(m); img.clear(m, #ff0000); img.pop_layer(m); img.pop_layer(m, "screen"); img.get(m, 0, 0)`, "#ff0000", false},
+		{"composite", `let m = img.new(2, 1, #808080); img.composite(m, img.new(1, 1, #ffffff), "add", 1, (1, 0)); img.pixels(m)`, "[#808080, #ffffff]", false},
+		{"png base64", `let s = img.png_base64(img.new(1, 1, #ff0000)); [type(s), s[0] + s[1] + s[2] + s[3]]`, `["STRING", "iVBO"]`, false},
+		{"save a rect", `let p = fs.join(` + d + `, "part.png"); let m = img.new(4, 4); img.set(m, 2, 1, #00ff00); img.save(m, p, [2, 1, 2, 2]); let b = img.load(p); [img.size(b), img.get(b, 0, 0)]`,
+			"[(2, 2), #00ff00]", false},
+
+		{"bad gradient kind", `img.span_gradient(img.new(1, 1), 0, 0, 1, {"kind": "conic"})`, `bad gradient: "kind" must be "linear" or "radial"`, true},
+		{"gradient no axis", `img.span_gradient(img.new(1, 1), 0, 0, 1, {"kind": "linear", "origin": (0, 0)})`, `a linear gradient needs a point "axis"`, true},
+		{"gradient bad stop", `img.span_gradient(img.new(1, 1), 0, 0, 1, {"kind": "radial", "origin": (0, 0), "scale": 1, "stops": [[0, 1]]})`, "stop 0 must be [t, color], got [0, 1]", true},
+		{"pop with no layer", `img.pop_layer(img.new(1, 1))`, "no layer to pop: call push_layer first", true},
+		{"unknown mode", `let m = img.new(1, 1); img.push_layer(m); img.pop_layer(m, "burn")`, `unknown blend mode "burn" (the modes are add, darken, lighten, multiply, normal, overlay, screen)`, true},
+		{"bad opacity", `img.composite(img.new(1, 1), img.new(1, 1), "normal", 2)`, "the opacity must be from 0 to 1, got 2", true},
+		{"rect outside", `img.png_base64(img.new(1, 1), [5, 5, 1, 1])`, "the rect [5, 5, 1, 1] is outside the 1x1 target", true},
+	})
+}

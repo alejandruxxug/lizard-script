@@ -93,8 +93,8 @@ func quote(s string) string {
 
 func TestInstall(t *testing.T) {
 	check(t, []testCase{
-		{"core modules", `[type(fs), type(os), type(time), type(json), type(img), type(clip)]`,
-			`["HASH", "HASH", "HASH", "HASH", "HASH", "HASH"]`, false},
+		{"core modules", `[type(fs), type(os), type(time), type(json), type(img), type(clip), type(io), type(lizard)]`,
+			`["HASH", "HASH", "HASH", "HASH", "HASH", "HASH", "HASH", "HASH"]`, false},
 		{"functions are builtins", `fs.read`, "builtin fs.read", false},
 		{"json helpers stay hidden", `keys(json)`, `["parse", "write"]`, false},
 		{"a let hides a module", `let fs = 5; fs`, "5", false},
@@ -132,8 +132,9 @@ func TestRegister(t *testing.T) {
 
 func TestModulesAreSorted(t *testing.T) {
 	check(t, []testCase{
-		{"fs", `keys(fs)`, `["append", "exists", "home", "join", "list", "mkdir", "read", "remove", "write"]`, false},
-		{"img", `keys(img)`, `["blit", "clear", "fill", "from_pixels", "get", "load", "new", "pixels", "save", "set", "size", "span", "spans"]`, false},
+		{"fs", `keys(fs)`, `["append", "copy", "exists", "home", "info", "join", "list", "mkdir", "read", "remove", "rename", "trash", "write"]`, false},
+		{"os", `keys(os)`, `["args", "config_dir", "env", "exit", "locale", "memory", "open_url", "platform", "program_dir", "reveal"]`, false},
+		{"img", `keys(img)`, `["blit", "clear", "clip", "composite", "fill", "from_pixels", "get", "load", "new", "pixels", "png_base64", "pop_layer", "push_layer", "save", "set", "size", "span", "span_gradient", "spans", "spans_gradient", "unclip"]`, false},
 	})
 }
 

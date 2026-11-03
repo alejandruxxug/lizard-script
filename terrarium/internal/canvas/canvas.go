@@ -3,18 +3,23 @@
 // library can take either one.
 //
 //	size(target)                  (width, height) in pixels
-//	clear(target, color)          every pixel becomes color
+//	clear(target, color, rect)    every pixel (of rect) becomes color
 //	fill(target, rect, color)     paints the rectangle [x, y, w, h]
 //	span(target, y, x0, x1, color) paints row y from x0 up to x1
-//	spans(target, list, color)    paints every [y, x0, x1] of list
+//	spans(target, list, color, offset) paints every [y, x0, x1] of list
 //	blit(target, source, pos)     paints the target source with its top left at pos
+//
+// and, in paint.go, clip and unclip, the gradient spans, the blend layers
+// and composite.
 //
 // Painting mixes the color over what is there (alpha counts); clear
 // replaces. Ends of spans and sides of rectangles can be fractional: the
-// pixel they cut is covered in part, so edges are soft.
+// pixel they cut is covered in part, so edges are soft. Nothing reaches
+// outside the target's clip.
 package canvas
 
 import (
+	"image"
 	"lizardscript/object"
 	"lizardscript/terrarium/internal/arg"
 	"lizardscript/terrarium/internal/pixels"
@@ -31,6 +36,14 @@ func Add(functions map[string]object.BuiltinFunction) map[string]object.BuiltinF
 		"span":  span,
 		"spans": spans,
 		"blit":  blit,
+
+		"clip":           clip,
+		"unclip":         unclip,
+		"span_gradient":  spanGradient,
+		"spans_gradient": spansGradient,
+		"push_layer":     pushLayer,
+		"pop_layer":      popLayer,
+		"composite":      composite,
 	} {
 		functions[name] = fn
 	}
@@ -49,7 +62,13 @@ func TargetArg(args []object.Object, i int, what string) (pixels.Target, *object
 
 // start checks the count and reads the target, which is always first.
 func start(args []object.Object, count int) (pixels.Target, *object.Error) {
-	if err := arg.Count(args, count, count); err != nil {
+	return startOr(args, count, count)
+}
+
+// startOr is start for a function with optional arguments: from least to
+// most of them.
+func startOr(args []object.Object, least, most int) (pixels.Target, *object.Error) {
+	if err := arg.Count(args, least, most); err != nil {
 		return nil, err
 	}
 	return TargetArg(args, 0, "target")
@@ -65,9 +84,10 @@ func size(args ...object.Object) object.Object {
 	return arg.PointOf(m.W, m.H)
 }
 
-// clear(target, color) replaces every pixel with color.
+// clear(target, color, rect = all) replaces every pixel, or every pixel of
+// the rectangle rect, with color. A transparent color erases.
 func clear(args ...object.Object) object.Object {
-	t, err := start(args, 2)
+	t, err := startOr(args, 2, 3)
 	if err != nil {
 		return err
 	}
@@ -75,9 +95,28 @@ func clear(args ...object.Object) object.Object {
 	if err != nil {
 		return err
 	}
-	t.Pixels().Clear(c)
+	m := t.Pixels()
+	area := m.Bounds()
+	if len(args) == 3 {
+		if area, err = RectArg(args, 2); err != nil {
+			return err
+		}
+	}
+	m.ClearRect(area, c)
 	t.Touched()
 	return arg.Null
+}
+
+// RectArg reads argument i as a rectangle [x, y, w, h] of whole pixels:
+// the sides are rounded out, so the rectangle covers every pixel it
+// touches.
+func RectArg(args []object.Object, i int) (image.Rectangle, *object.Error) {
+	r, err := rectArg(args, i)
+	if err != nil {
+		return image.Rectangle{}, err
+	}
+	return image.Rect(int(math.Floor(r[0])), int(math.Floor(r[1])),
+		int(math.Ceil(r[0]+r[2])), int(math.Ceil(r[1]+r[3]))), nil
 }
 
 // rectArg reads argument i as a rectangle [x, y, w, h] of numbers.
@@ -138,10 +177,11 @@ func span(args ...object.Object) object.Object {
 	return arg.Null
 }
 
-// spans(target, list, color) paints every [y, x0, x1] of list in one color,
-// the fast way to fill a shape a program has worked out row by row.
+// spans(target, list, color, offset = (0, 0)) paints every [y, x0, x1] of
+// list in one color, moved by offset: the fast way to fill a shape a
+// program has worked out row by row.
 func spans(args ...object.Object) object.Object {
-	t, err := start(args, 3)
+	t, err := startOr(args, 3, 4)
 	if err != nil {
 		return err
 	}
@@ -153,6 +193,10 @@ func spans(args ...object.Object) object.Object {
 	if err != nil {
 		return err
 	}
+	dx, dy, err := offsetArg(args, 3)
+	if err != nil {
+		return err
+	}
 	m := t.Pixels()
 	defer t.Touched()
 	for i, item := range list.Elements {
@@ -160,9 +204,18 @@ func spans(args ...object.Object) object.Object {
 		if !ok {
 			return arg.Errorf("span %d must be [y, x0, x1] of numbers, got %s", i, item.Inspect())
 		}
-		m.Span(int(math.Floor(y)), x0, x1, c)
+		m.Span(int(math.Floor(y+dy)), x0+dx, x1+dx, c)
 	}
 	return arg.Null
+}
+
+// offsetArg reads the optional point argument i, (0, 0) when it isn't
+// there.
+func offsetArg(args []object.Object, i int) (x, y float64, err *object.Error) {
+	if len(args) <= i {
+		return 0, 0, nil
+	}
+	return arg.Point(args, i, "offset")
 }
 
 // spanOf reads one [y, x0, x1].

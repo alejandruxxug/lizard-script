@@ -35,7 +35,7 @@ func runProgramsVM(t *testing.T, dir string, shouldSucceed bool) {
 			}
 
 			var output bytes.Buffer
-			succeeded := repl.RunVM(normalize(string(source)), &output, &output)
+			succeeded := repl.RunFile(filepath.ToSlash(file), normalize(string(source)), &output, &output, true)
 			if succeeded != shouldSucceed {
 				t.Errorf("expected success to be %t, got %t. Output:\n%s", shouldSucceed, succeeded, output.String())
 			}

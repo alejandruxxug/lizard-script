@@ -1,6 +1,9 @@
 package object
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestQuote(t *testing.T) {
 	tests := []struct{ input, expected string }{
@@ -96,5 +99,61 @@ func TestHashCopy(t *testing.T) {
 	}
 	if _, ok := copied.Get(key("b")); ok {
 		t.Errorf("a deleted key must be gone from the copy")
+	}
+}
+
+func TestEnvironmentUse(t *testing.T) {
+	module := NewEnvironment()
+	module.Define("shared", &Integer{Value: 1})
+	module.Define("_private", &Integer{Value: 2})
+	other := NewEnvironment()
+	other.Define("shared", &Integer{Value: 3})
+	file := NewEnvironment()
+	file.Use(module)
+	file.Use(other)
+	file.Use(module) // twice changes nothing
+	inner := NewEnclosedEnvironment(file)
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"shared", "3"}, // the last module used first
+		{"_private", "missing"},
+	}
+	for _, tt := range tests {
+		got := "missing"
+		if v, ok := inner.Get(tt.name); ok {
+			got = v.Inspect()
+		}
+		if got != tt.want {
+			t.Errorf("Get(%s) = %s, want %s", tt.name, got, tt.want)
+		}
+	}
+
+	before := inner.Version()
+	if !inner.Assign("shared", &Integer{Value: 9}) {
+		t.Fatal("Assign didn't reach the module")
+	}
+	if v, _ := other.Get("shared"); v.Inspect() != "9" {
+		t.Errorf("the module has %s", v.Inspect())
+	}
+	if inner.Version() == before {
+		t.Error("a write in a module didn't change the version of its user")
+	}
+	before = inner.Version()
+	module.Define("late", &Boolean{Value: true})
+	if inner.Version() == before {
+		t.Error("a let in a module didn't change the version of its user")
+	}
+	file.Define("shared", &Integer{Value: 5})
+	if v, _ := inner.Get("shared"); v.Inspect() != "5" {
+		t.Errorf("a file's own name doesn't come first: %s", v.Inspect())
+	}
+	if names := fmt.Sprint(module.Names()); names != "[_private late shared]" {
+		t.Errorf("Names() = %v", names)
+	}
+	if inner.Assign("_private", &Integer{Value: 1}) {
+		t.Error("a private name was assigned from outside")
 	}
 }

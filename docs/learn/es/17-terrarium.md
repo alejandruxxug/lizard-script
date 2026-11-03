@@ -1,6 +1,6 @@
 # 17. El Terrario
 
-[← Anterior: Proyectos](16-projects.md) · [Índice](../README.md) · [Hoja de referencia →](cheatsheet.md) · [English](../en/17-terrarium.md)
+[← Anterior: Proyectos](16-projects.md) · [Índice](../README.md) · [Siguiente: Módulos y herramientas →](18-modules-and-tools.md) · [English](../en/17-terrarium.md)
 
 Hasta ahora cada programa vivía dentro del intérprete: calculaba cosas y las imprimía. El **Terrario** (*Terrarium*, donde viven los lagartos) es la biblioteca estándar de lizard-script, y le permite a un programa llegar al mundo que lo rodea: leer y escribir archivos, recibir sus argumentos, saber la hora, leer y escribir JSON, crear imágenes, e incluso abrir una ventana y dibujar en ella con el mouse o con un lápiz.
 
@@ -120,6 +120,30 @@ puts(fs.exists("notes"))
 false
 ```
 
+Mover y copiar nunca reemplazan un archivo que ya existe, así un error de tipeo no te hace perder tu trabajo:
+
+```
+fs.write("draft.txt", "Liz likes sun\n")
+fs.copy("draft.txt", "backup.txt")
+fs.rename("draft.txt", "final.txt")
+puts(fs.list("."))
+let info = fs.info("final.txt")
+puts(info.size, info.dir)
+puts(fs.list(".", {"info": true})[0].name)
+try { fs.rename("backup.txt", "final.txt") } catch (e) { puts(e.message) }
+```
+
+**Salida** (en una carpeta que solo tiene este programa, `fsx.liz`):
+
+```text
+["backup.txt", "final.txt", "fsx.liz"]
+14 false
+backup.txt
+fs.rename: can't move backup.txt to final.txt: there is already something there
+```
+
+`fs.info(path)` da el tamaño (`size`) en bytes, el `mtime` (cuándo cambió por última vez, en segundos desde 1970) y si es una carpeta (`dir`); `fs.list(dir, {"info": true})` da eso para cada entrada, con su `name`. `fs.trash(path)` mueve un archivo o carpeta a la Papelera, de donde el usuario lo puede recuperar, lo cual es más amable que `fs.remove` para algo que el usuario borró.
+
 > **Pruébalo.** Escribe un programa que guarde un contador en `count.txt`: que lea el número (o empiece en 0 si el archivo no existe), le sume 1, lo vuelva a escribir y lo imprima. Ejecútalo tres veces. (`int(text)` convierte `"3"` en `3`; `fs.exists` te dice si ya hay un archivo.)
 
 ## `os`: argumentos y sistema
@@ -165,6 +189,8 @@ null
 ```
 
 `os.env(name)` lee una variable de entorno, y da `null` cuando no está definida. Ejecútalo como `LIZARD_COLOR=green ./lizardscript archivo.liz` (macOS y Linux) y la segunda línea será `green`. `os.config_dir()` es la carpeta donde los programas guardan su configuración.
+
+Otras más le preguntan al escritorio: `os.program_dir()` es la carpeta del archivo principal de tu programa (el capítulo 18 la usa para encontrar los archivos que vienen con un programa), `os.reveal(path)` muestra un archivo en Finder o el Explorador, `os.open_url("https://...")` abre una página web en el navegador, y `os.memory()` es la memoria de la máquina, `{"total": ..., "free": ...}` en bytes.
 
 ## `time`: relojes y esperas
 
@@ -621,8 +647,12 @@ Mientras dibujas, el título de la ventana muestra `pressure 0.42 (raw 0.91) · 
 | `"scroll"` | `pos`, `dy`, `mods` | la rueda o un desplazamiento con dos dedos |
 | `"key"` | `key`, `mods` | se presionó una tecla |
 | `"type"` | `text` | se escribió un carácter |
-| `"resize"` | `size` | una ventana redimensionable cambió de tamaño |
+| `"resize"` | `size` | la ventana cambió de tamaño |
+| `"focus"` | `focused` | la ventana ganó o perdió el foco del teclado |
+| `"leave"`, `"enter"` | | el puntero salió de la ventana, o volvió |
 | `"close"` | | la ventana se está cerrando: el último evento |
+
+Un `"move"` también trae `samples`, todos los puntos por los que pasó el puntero desde el cuadro anterior (más abajo).
 
 `mods` dice cuáles de `shift`, `alt`, `cmd` y `ctrl` estaban presionadas. Las opciones van en un hash después del título: `window.open(160, 100, "game", {"scale": 3, "fps": 30})` muestra cada píxel como un cuadrado de 3x3, ideal para pixel art. Un programa muestra una sola ventana. El REPL tiene todos los módulos menos `window` y `pen`; ahí, `window` da `identifier not found`.
 
@@ -632,9 +662,104 @@ Mientras dibujas, el título de la ventana muestra `pressure 0.42 (raw 0.91) · 
 
 > **Pruébalo.** Haz que el botón derecho borre, dibujando con `paper` cuando `e.button == "right"` (guarda el color en una variable junto a `last`). Luego haz que la rueda cambie la tinta: en un evento `"scroll"`, toma el siguiente color de una lista.
 
+## Más de un búfer: degradados, capas y superficies
+
+El programa de pintura dibuja con colores planos en un solo búfer. Una aplicación de dibujo de verdad quiere más: un cielo degradado, formas que oscurecen lo de abajo como tinta, una interfaz de píxeles grandes alrededor de un lienzo nítido. Cada una de estas cosas es una función de dibujo más, y funcionan igual en imágenes, ventanas y superficies.
+
+### Degradados
+
+`span_gradient` y `spans_gradient` son `span` y `spans` con un degradado en vez de un color. Un degradado es un hash: su tipo (`kind`), dónde empieza (`origin`), hacia dónde va, y sus paradas (`stops`), colores en lugares de 0 a 1:
+
+```
+let w = window.open(400, 200, "sky")
+let rows = []
+for (let y = 0; y < 200; y += 1) { push(rows, [y, 0, 400]) }
+window.spans_gradient(w, rows, {"kind": "linear", "origin": (0, 0), "axis": (0, 1 / 200.0),
+  "stops": [[0, #3b4cc0], [0.6, #e2557b], [1, #f6c453]]})
+```
+
+El `axis` es la dirección del inicio al final dividida por su longitud al cuadrado: de `(0, 0)` a `(0, 200)` es `(0, 200) / 200²`, o sea `(0, 1 / 200.0)`. Un degradado `"radial"` lleva en cambio una `scale`, 1 dividido entre su radio. Agrega `"steps": 5` y el degradado se vuelve cinco franjas planas, ideal para pixel art.
+
+### Capas y modos de mezcla
+
+`push_layer(w)` abre una capa nueva y transparente: todo lo que se dibuja en `w` va a ella, hasta que `pop_layer(w, mode, opacity)` la mezcla con lo de abajo. Dos formas dibujadas en una capa a media opacidad no muestran dónde se cruzan, y en `"multiply"` oscurecen el cielo como tinta:
+
+```
+window.push_layer(w)
+window.spans(w, hill(100), #2b3a55)
+window.spans(w, hill(260), #2b3a55)
+window.pop_layer(w, "multiply", 0.7)
+```
+
+Los modos son `normal`, `multiply`, `screen`, `overlay`, `darken`, `lighten` y `add`. `examples/terrarium/layers.liz` los muestra uno al lado del otro.
+
+### Superficies
+
+Una ventana con escala 2 tiene píxeles grandes y nítidos: buenos para una interfaz, demasiado gruesos para un dibujo. Una superficie es un segundo búfer que se muestra en un rectángulo de la ventana con una escala propia:
+
+```
+let w = window.open(320, 200, "app", {"scale": 2})
+let canvas = window.surface(w, "canvas", [10, 20, 300, 170], 1)
+window.clear(canvas, #f4efe6)
+```
+
+La superficie cubre `[10, 20, 300, 170]` en píxeles de la ventana, pero con escala 1 tiene el doble de píxeles en cada sentido: `window.size(canvas)` da `(600, 340)`. Se dibuja en ella como en la ventana. Un evento del puntero sobre ella lo dice: `e.surface` es `"canvas"` y `e.surface_pos` es el punto en los píxeles del lienzo.
+
+Un trazo rápido puede cruzar muchos píxeles entre dos cuadros. Cada `"move"` trae `e.samples`, todos los puntos por los que pasó el puntero desde el cuadro anterior, cada uno con su `surface_pos` y su `pressure`, así el dibujo conserva la forma de la mano que lo hizo:
+
+```
+for (let i = 0; i < len(e.samples); i += 1) {
+  let s = e.samples[i]
+  if (s.surface == "canvas") { dab(s.surface_pos, s.pressure) }
+}
+```
+
+### Una pantalla de inicio que se vuelve la ventana
+
+`window.open` acepta `"frameless": true` (sin barra de título), `"transparent": true` (los píxeles que dejes transparentes muestran el escritorio) y `"floating": true` (encima de todas las ventanas): una pantalla de inicio con esquinas redondas. `window.set` cambia la ventana mientras corre, así la misma ventana se vuelve la aplicación:
+
+```
+window.set(w, {"frameless": false, "floating": false, "scale": 2, "size": (320, 200),
+  "resizable": true, "center": true, "title": "my app"})
+```
+
+`examples/terrarium/splash.liz` hace exactamente esto, y luego pinta en una superficie lienzo con la presión del lápiz.
+
+### Probar una ventana sin pantalla
+
+Con `"headless": true` una ventana no tiene pantalla: `window.run` corre sus cuadros tan rápido como puede, el programa le da eventos con `window.inject`, y `window.screenshot` da la imagen. Así se prueba una aplicación, en cualquier computador:
+
+```
+let w = window.open(200, 100, "", {"headless": true})
+window.inject(w, {"type": "down", "pos": (10, 10)})
+window.inject(w, {"type": "up", "pos": (10, 10)})
+window.run(w, function(events) {
+  handle(events)
+  false
+})
+img.save(window.screenshot(w), "after-a-click.png")
+```
+
+Devolver `false` en el primer `tick` termina la ejecución después de un cuadro.
+
+### Dejar que otro programa la maneje
+
+`window.automation(w)` deja que otro programa use la ventana como lo haría una persona. Mientras corre, una terminal le puede mandar comandos:
+
+```
+lizardscript drive Click 40 30
+lizardscript drive Drag 10 10 200 80 --pressure 0.2,1
+lizardscript drive Screenshot shot.png
+lizardscript drive Quit
+```
+
+Cada respuesta llega después del cuadro que atendió el comando, así el siguiente comando ve lo que hizo el programa. El programa puede agregar sus propios comandos, y su propio estado para `Dump`; la lista completa está en [TERRARIUM.md](../../TERRARIUM.md#automation) (en inglés).
+
+> **Pruébalo.** Ejecuta `examples/terrarium/layers.liz`, apunta a las columnas y lee el modo en el título. Luego cambia `0.9` en `pop_layer` por `0.4` y mira qué modos cambian más.
+
 ## Los ejemplos
 
-Los cuatro programas del Terrario en la carpeta `examples/terrarium/` del repositorio se ejecutan como cualquier otro:
+Los programas del Terrario en la carpeta `examples/terrarium/` del repositorio se ejecutan como cualquier otro:
 
 | Programa | Ejecútalo con | Qué hace |
 | --- | --- | --- |
@@ -642,6 +767,8 @@ Los cuatro programas del Terrario en la carpeta `examples/terrarium/` del reposi
 | `image.liz` | `./lizardscript examples/terrarium/image.liz out.png` | dibuja un degradado píxel por píxel y lo guarda como PNG (`gradient.png` si no le das argumento) |
 | `paint.liz` | `./lizardscript examples/terrarium/paint.liz` | el programa de pintura de este capítulo |
 | `clock.liz` | `./lizardscript examples/terrarium/clock.liz` | una ventana con un reloj de manecillas dibujado con tramos; Esc sale |
+| `layers.liz` | `./lizardscript examples/terrarium/layers.liz` | los siete modos de mezcla sobre un degradado (agrega un nombre de archivo para guardar una imagen sin abrir ventana) |
+| `splash.liz` | `./lizardscript examples/terrarium/splash.liz` | una pantalla de inicio sin marco y transparente que se vuelve una ventana normal con una superficie lienzo para pintar |
 
 Agrega `--vm` antes del archivo para ejecutarlos en el motor más rápido: `./lizardscript --vm examples/terrarium/clock.liz`.
 
@@ -655,5 +782,7 @@ Agrega `--vm` antes del archivo para ejecutarlos en el motor más rápido: `./li
 - `json.write(value, indent)` y `json.parse(text)`; los colores vuelven como cadenas.
 - `img.new`, `img.get`, `img.set`, `img.save`, `img.load`; `fill`, `span`, `clear` y `blit` dibujan igual en imágenes y ventanas.
 - `window.run(w, tick)` llama a `tick(events)` en cada cuadro hasta que devuelva `false`; un programa de pintura es un círculo, un arrastre, un trazo que rellena los huecos y `e.pen.pressure`.
+- `spans_gradient` pinta con un degradado, `push_layer`/`pop_layer` mezclan un grupo de formas con un modo de mezcla, y `window.surface` le agrega a una ventana un búfer nítido propio.
+- `window.set` cambia una ventana que corre; una ventana `"headless"` corre sin pantalla, para pruebas; `window.automation` deja que `lizardscript drive` la use.
 
-[← Anterior: Proyectos](16-projects.md) · [Índice](../README.md) · [Hoja de referencia →](cheatsheet.md)
+[← Anterior: Proyectos](16-projects.md) · [Índice](../README.md) · [Siguiente: Módulos y herramientas →](18-modules-and-tools.md)

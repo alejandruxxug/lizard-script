@@ -1,0 +1,4 @@
+-~> An error inside a module shows the module's file.
+use "modules/fails"
+puts(grow(1))
+puts(grow("two"))

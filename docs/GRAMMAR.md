@@ -15,6 +15,7 @@ statement      = letStatement
                | tryStatement
                | controlStatement
                | layerStatement
+               | useStatement
                | expressionStatement
                | ";" ;
 
@@ -26,6 +27,7 @@ continueStatement   = "continue" end ;
 tryStatement        = "try" block "catch" [ "(" IDENT ")" ] block [ ";" ] ;
 controlStatement    = ( ifExpression | whileExpression | forExpression ) [ ";" ] ;
 layerStatement      = "layer" ( IDENT | STRING ) [ ";" ] { statement } ;
+useStatement        = "use" STRING [ "as" IDENT ] end ;   (* only at the top level of a file *)
 expressionStatement = expression end ;
 
 block      = "{" { statement } "}" ;
@@ -155,6 +157,20 @@ The `{ statement }` in the rule is the body, and it is measured by columns, not 
 - Columns are the ones the lexer reports, 1-based, where a tab counts as one column like any other character. A file that mixes tabs and spaces is measured as it is read, and getting it to line up is up to the author. The editor writes 2 spaces.
 - Inside a `{ }` block (a function body or a loop), a layer works the same way, measured from the column of its own `layer` word and not from the brace.
 - After the name, anything else on the line is the syntax error `a layer is "layer name" alone on its line, got ... after the name`.
+
+## use
+
+`use` and `as` are not reserved words. A statement is a use statement when it starts with the identifier `use` followed, on the same line, by a string: `use "draw/shapes"` or `use "draw/shapes" as shapes`. A name and a string side by side were never valid, so every program that worked before reads the same: `let use = 1`, `use + 1`, `use("x")` and `f(use)` use `use` as the ordinary identifier it is, and `as` is read as a word only right after the string, on the same line. ([LEP 0002](../proposals/0002-modules.md))
+
+- A use is only allowed at the **top level** of a file: inside a block (a function, an `if`, a loop) or a layer it is the syntax error `use must be at the top level of a file, not inside a block or a layer`. It may come anywhere among the file's top-level statements, not only at the start.
+- The string is the module's path, written with `/` on every system; `".liz"` is added when it doesn't end with it. An empty string is the syntax error `use needs the path of a module, like use "shapes"`.
+- After `as` a name is required (`expected a name after "as", got ...`), and nothing else may follow on the line.
+
+What a use does when it runs is in [SEMANTICS.md](SEMANTICS.md#modules).
+
+## Positions of the tree
+
+Every node of the tree has a span (`ast.Span`, read with `node.Range()`): the line and column of the first character of its first token and the line and column just after the last character of its last token, counted like the lexer counts them (from 1, in characters, a tab is one). A node in parentheses includes them: in `(1 + 2) * 3` the sum spans `(1 + 2)`. A statement includes its `;`. Every token also has its end (`token.Token.EndLine` and `EndColumn`), and a lexer can return comments as `COMMENT` tokens when asked (`Lexer.KeepComments`), for tools like a syntax highlighter; the parser never gets them.
 
 ## Parameter defaults
 

@@ -1,6 +1,6 @@
 # 17. The Terrarium
 
-[← Previous: Projects](16-projects.md) · [Index](../README.md) · [Cheat sheet →](cheatsheet.md) · [Español](../es/17-terrarium.md)
+[← Previous: Projects](16-projects.md) · [Index](../README.md) · [Next: Modules and tools →](18-modules-and-tools.md) · [Español](../es/17-terrarium.md)
 
 Until now every program lived inside the interpreter: it computed things and printed them. The **Terrarium** (where lizards live) is lizard-script's standard library, and it lets a program reach the world around it: read and write files, get its arguments, tell the time, read and write JSON, make images, and even open a window and draw in it with the mouse or a pen.
 
@@ -120,6 +120,30 @@ puts(fs.exists("notes"))
 false
 ```
 
+Moving and copying never replace a file that is already there, so a typo can't lose your work:
+
+```
+fs.write("draft.txt", "Liz likes sun\n")
+fs.copy("draft.txt", "backup.txt")
+fs.rename("draft.txt", "final.txt")
+puts(fs.list("."))
+let info = fs.info("final.txt")
+puts(info.size, info.dir)
+puts(fs.list(".", {"info": true})[0].name)
+try { fs.rename("backup.txt", "final.txt") } catch (e) { puts(e.message) }
+```
+
+**Output** (in a folder with only this program, `fsx.liz`):
+
+```text
+["backup.txt", "final.txt", "fsx.liz"]
+14 false
+backup.txt
+fs.rename: can't move backup.txt to final.txt: there is already something there
+```
+
+`fs.info(path)` gives the `size` in bytes, the `mtime` (when it last changed, in seconds since 1970) and whether it is a folder (`dir`); `fs.list(dir, {"info": true})` gives that for every entry, with its `name`. `fs.trash(path)` moves a file or folder to the Trash (the Recycle Bin on Windows), where the user can get it back, which is kinder than `fs.remove` for something the user deleted.
+
 > **Try it.** Write a program that keeps a counter in `count.txt`: it reads the number (or starts at 0 when the file doesn't exist), adds 1, writes it back and prints it. Run it three times. (`int(text)` turns `"3"` into `3`; `fs.exists` tells you whether there is a file yet.)
 
 ## `os`: arguments and the system
@@ -165,6 +189,8 @@ null
 ```
 
 `os.env(name)` reads an environment variable, and is `null` when it isn't set. Run it as `LIZARD_COLOR=green ./lizardscript file.liz` (macOS and Linux) and the second line is `green`. `os.config_dir()` is the folder where programs keep their settings.
+
+A few more ask the desktop: `os.program_dir()` is the folder of your program's main file (chapter 18 uses it to find the files that come with a program), `os.reveal(path)` shows a file in Finder or Explorer, `os.open_url("https://...")` opens a web page in the browser, and `os.memory()` is the machine's memory, `{"total": ..., "free": ...}` in bytes.
 
 ## `time`: clocks and waiting
 
@@ -621,8 +647,12 @@ While you draw, the window title shows `pressure 0.42 (raw 0.91) · trackpad`: `
 | `"scroll"` | `pos`, `dy`, `mods` | the wheel or a two-finger scroll |
 | `"key"` | `key`, `mods` | a key went down |
 | `"type"` | `text` | a character was typed |
-| `"resize"` | `size` | a resizable window changed size |
+| `"resize"` | `size` | the window changed size |
+| `"focus"` | `focused` | the window got or lost the keyboard focus |
+| `"leave"`, `"enter"` | | the pointer left the window, or came back |
 | `"close"` | | the window is being closed: the last event |
+
+A `"move"` also has `samples`, every point the pointer went through since the last frame (see below).
 
 `mods` says which of `shift`, `alt`, `cmd` and `ctrl` were held. Options go in a hash after the title: `window.open(160, 100, "game", {"scale": 3, "fps": 30})` shows each pixel as a 3x3 square, nice for pixel art. A program shows one window. The REPL has every module but `window` and `pen`; there, `window` is `identifier not found`.
 
@@ -632,9 +662,104 @@ While you draw, the window title shows `pressure 0.42 (raw 0.91) · trackpad`: `
 
 > **Try it.** Make the right button erase, by drawing with `paper` when `e.button == "right"` (remember the color in a variable next to `last`). Then make the scroll wheel change the ink: on a `"scroll"` event, pick the next color of a list.
 
+## More than one buffer: gradients, layers and surfaces
+
+The paint program draws with flat colors on one buffer. A real drawing app wants more: a gradient sky, shapes that darken what is below like ink, an interface with big pixels around a sharp canvas. Each of these is one more drawing function, and they work on images, windows and surfaces alike.
+
+### Gradients
+
+`span_gradient` and `spans_gradient` are `span` and `spans` with a gradient instead of a color. A gradient is a hash: its `kind`, where it starts (`origin`), which way it runs, and its `stops`, colors at places from 0 to 1:
+
+```
+let w = window.open(400, 200, "sky")
+let rows = []
+for (let y = 0; y < 200; y += 1) { push(rows, [y, 0, 400]) }
+window.spans_gradient(w, rows, {"kind": "linear", "origin": (0, 0), "axis": (0, 1 / 200.0),
+  "stops": [[0, #3b4cc0], [0.6, #e2557b], [1, #f6c453]]})
+```
+
+The `axis` is the direction from the start to the end divided by its squared length: from `(0, 0)` to `(0, 200)` it is `(0, 200) / 200²`, which is `(0, 1 / 200.0)`. A `"radial"` gradient has a `scale` instead, 1 divided by its radius. Add `"steps": 5` and the gradient becomes five flat bands, nice for pixel art.
+
+### Layers and blend modes
+
+`push_layer(w)` opens a new transparent layer: everything drawn on `w` goes to it, until `pop_layer(w, mode, opacity)` mixes it onto what is below. Two shapes drawn on one layer at half opacity don't show where they overlap, and in `"multiply"` they darken the sky like ink:
+
+```
+window.push_layer(w)
+window.spans(w, hill(100), #2b3a55)
+window.spans(w, hill(260), #2b3a55)
+window.pop_layer(w, "multiply", 0.7)
+```
+
+The modes are `normal`, `multiply`, `screen`, `overlay`, `darken`, `lighten` and `add`. `examples/terrarium/layers.liz` shows them side by side.
+
+### Surfaces
+
+A window at scale 2 has big, crisp pixels: good for an interface, too coarse for a drawing. A surface is a second buffer shown in a rectangle of the window at a scale of its own:
+
+```
+let w = window.open(320, 200, "app", {"scale": 2})
+let canvas = window.surface(w, "canvas", [10, 20, 300, 170], 1)
+window.clear(canvas, #f4efe6)
+```
+
+The surface covers `[10, 20, 300, 170]` of the window's pixels, but at scale 1 it has twice as many pixels each way: `window.size(canvas)` is `(600, 340)`. It is drawn on like the window. A pointer event over it says so: `e.surface` is `"canvas"` and `e.surface_pos` is the point in the canvas's own pixels.
+
+A fast stroke can cross many pixels between two frames. Every `"move"` has `e.samples`, all the points the pointer went through since the last frame, each with its `surface_pos` and `pressure`, so a drawing keeps the shape of the hand that drew it:
+
+```
+for (let i = 0; i < len(e.samples); i += 1) {
+  let s = e.samples[i]
+  if (s.surface == "canvas") { dab(s.surface_pos, s.pressure) }
+}
+```
+
+### A splash screen that becomes the window
+
+`window.open` takes `"frameless": true` (no title bar), `"transparent": true` (the pixels you leave transparent show the desktop) and `"floating": true` (above every window): a splash screen with round corners. `window.set` changes the window while it runs, so the same window becomes the app:
+
+```
+window.set(w, {"frameless": false, "floating": false, "scale": 2, "size": (320, 200),
+  "resizable": true, "center": true, "title": "my app"})
+```
+
+`examples/terrarium/splash.liz` does exactly this, and then paints on a canvas surface with pen pressure.
+
+### Testing a window with no screen
+
+With `"headless": true` a window has no screen at all: `window.run` runs its frames as fast as it can, the program feeds it events with `window.inject`, and `window.screenshot` gives the picture. That is how an app is tested, on any computer:
+
+```
+let w = window.open(200, 100, "", {"headless": true})
+window.inject(w, {"type": "down", "pos": (10, 10)})
+window.inject(w, {"type": "up", "pos": (10, 10)})
+window.run(w, function(events) {
+  handle(events)
+  false
+})
+img.save(window.screenshot(w), "after-a-click.png")
+```
+
+Returning `false` from the first `tick` ends the run after one frame.
+
+### Letting another program drive it
+
+`window.automation(w)` lets another program use the window the way a person would. While it runs, a terminal can send it commands:
+
+```
+lizardscript drive Click 40 30
+lizardscript drive Drag 10 10 200 80 --pressure 0.2,1
+lizardscript drive Screenshot shot.png
+lizardscript drive Quit
+```
+
+Each reply comes after the frame that handled the command, so the next command sees what the program did. The program can add its own commands, and its own state for `Dump`; the whole list is in [TERRARIUM.md](../../TERRARIUM.md#automation).
+
+> **Try it.** Run `examples/terrarium/layers.liz`, point at the columns and read the mode in the title. Then change `0.9` in `pop_layer` to `0.4` and see which modes change the most.
+
 ## The examples
 
-The four Terrarium programs in the repository's `examples/terrarium/` folder run like any other:
+The Terrarium programs in the repository's `examples/terrarium/` folder run like any other:
 
 | Program | Run it with | What it does |
 | --- | --- | --- |
@@ -642,6 +767,8 @@ The four Terrarium programs in the repository's `examples/terrarium/` folder run
 | `image.liz` | `./lizardscript examples/terrarium/image.liz out.png` | draws a gradient pixel by pixel and saves it as a PNG (`gradient.png` without an argument) |
 | `paint.liz` | `./lizardscript examples/terrarium/paint.liz` | the paint program of this chapter |
 | `clock.liz` | `./lizardscript examples/terrarium/clock.liz` | a window with an analog clock drawn with spans; Esc quits |
+| `layers.liz` | `./lizardscript examples/terrarium/layers.liz` | the seven blend modes over a gradient (add a file name to save a picture of it with no window) |
+| `splash.liz` | `./lizardscript examples/terrarium/splash.liz` | a frameless, transparent splash screen that becomes a normal window with a canvas surface to paint on |
 
 Add `--vm` before the file to run them on the faster engine: `./lizardscript --vm examples/terrarium/clock.liz`.
 
@@ -655,5 +782,7 @@ Add `--vm` before the file to run them on the faster engine: `./lizardscript --v
 - `json.write(value, indent)` and `json.parse(text)`; colors come back as strings.
 - `img.new`, `img.get`, `img.set`, `img.save`, `img.load`; `fill`, `span`, `clear` and `blit` draw on images and windows alike.
 - `window.run(w, tick)` calls `tick(events)` every frame until it returns `false`; a paint program is a circle, a drag, a stroke that fills the gaps, and `e.pen.pressure`.
+- `spans_gradient` paints with a gradient, `push_layer`/`pop_layer` mix a group of shapes with a blend mode, and `window.surface` adds a sharp buffer of its own to a window.
+- `window.set` changes a running window; a `"headless"` window runs with no screen, for tests; `window.automation` lets `lizardscript drive` use it.
 
-[← Previous: Projects](16-projects.md) · [Index](../README.md) · [Cheat sheet →](cheatsheet.md)
+[← Previous: Projects](16-projects.md) · [Index](../README.md) · [Next: Modules and tools →](18-modules-and-tools.md)

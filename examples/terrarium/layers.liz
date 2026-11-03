@@ -1,0 +1,81 @@
+-~> The seven blend modes, side by side: in each column three discs are
+-~> drawn on a layer of their own, which is then mixed onto the gradient
+-~> below with that column's mode. Point at a column to see its name in
+-~> the title. Esc quits.
+-~> Run it with: lizardscript examples/terrarium/layers.liz
+-~> or, to save a picture of it with no window: ... layers.liz shot.png
+
+let modes = ["normal", "multiply", "screen", "overlay", "darken", "lighten", "add"]
+let cell = 80
+let size = (cell * len(modes), 200)
+let shot = null
+if (len(os.args()) > 0) {
+  shot = os.args()[0]
+}
+let w = window.open(size.x, size.y, "layers 🦎", {"headless": shot != null, "on_demand": true})
+
+-~> A filled disc as a list of spans, one [y, x0, x1] per row.
+function disc(c, r) {
+  let rows = []
+  for (let dy = -r; dy <= r; dy += 1) {
+    let half = math.sqrt(r * r - dy * dy)
+    push(rows, [c.y + dy, c.x - half, c.x + half])
+  }
+  rows
+}
+
+-~> A linear gradient from a to b: the axis is the direction divided by
+-~> its squared length, so t goes from 0 at a to 1 at b.
+function linear(a, b, stops) {
+  let d = b - a
+  let length2 = float(d.x * d.x + d.y * d.y)
+  {"kind": "linear", "origin": a, "axis": (d.x / length2, d.y / length2), "stops": stops}
+}
+
+-~> The backdrop: a sunset from left to right, and below it a gray ramp
+-~> in eight flat steps, so each mode shows what it does to light and dark.
+function backdrop() {
+  let all = [[0, 0, size.x]]
+  let sky = []
+  for (let y = 0; y < 140; y += 1) { push(sky, [y, 0, size.x]) }
+  window.spans_gradient(w, sky, linear((0, 0), (size.x, 0), [[0, #f6c453], [0.5, #e2557b], [1, #3b4cc0]]))
+  let ground = []
+  for (let y = 140; y < size.y; y += 1) { push(ground, [y, 0, size.x]) }
+  let ramp = linear((0, 0), (size.x, 0), [[0, #000000], [1, #ffffff]])
+  ramp.steps = 8
+  window.spans_gradient(w, ground, ramp)
+}
+
+-~> One column: three discs on a layer, mixed with mode.
+function column(i, mode) {
+  let c = (i * cell + cell / 2, 136)
+  window.push_layer(w)
+  window.spans(w, disc(c + (0, -22), 26), #ff3030)
+  window.spans(w, disc(c + (-18, 10), 26), #30d050)
+  window.spans(w, disc(c + (18, 10), 26), #3070ff)
+  window.pop_layer(w, mode, 0.9)
+}
+
+function paint() {
+  backdrop()
+  for (let i = 0; i < len(modes); i += 1) {
+    column(i, modes[i])
+  }
+}
+
+paint()
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "move") {
+      let i = math.min(len(modes) - 1, math.max(0, math.floor(e.pos.x / cell)))
+      window.title(w, "layers 🦎 " + modes[i])
+    } elif (e.type == "key" && e.key == "Escape") {
+      return false
+    }
+  }
+  if (shot != null) {
+    img.save(window.screenshot(w), shot)
+    return false
+  }
+})

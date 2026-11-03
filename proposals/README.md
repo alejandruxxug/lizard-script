@@ -22,4 +22,5 @@ A **LEP** is how anyone proposes a change to the lizard-script language: new syn
 | LEP | Title | Status |
 |---|---|---|
 | [0001](0001-statement-ends-at-newline.md) | A statement ends at the end of its line | Final (accepted 2026-11-03, option 4) |
+| [0002](0002-modules.md) | Modules with `use` | Final (accepted 2026-11-03) |
 | — | *Ideas waiting for a LEP: named arguments (`f(angle: 90deg)`), classes for game objects, the parser's error recovery.* | |

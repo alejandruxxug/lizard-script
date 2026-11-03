@@ -1251,3 +1251,59 @@ func TestLineChanges(t *testing.T) {
 		}
 	}
 }
+
+func TestUseTrees(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{`use "shapes"`, `use "shapes";`},
+		{`use "draw/shapes";`, `use "draw/shapes";`},
+		{`use "draw/shapes" as shapes`, `use "draw/shapes" as shapes;`},
+		{"use \"a\"\nuse \"b\" as b\nx", "use \"a\";\nuse \"b\" as b;\nx"},
+		{"use \"a\"\nas", "use \"a\";\nas"},
+		{`use "a"; f()`, "use \"a\";\nf()"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+}
+
+// use and as are only special in the shapes above: everywhere else they
+// are ordinary names.
+func TestUseAsAnIdentifier(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"let use = 1", "let use = 1;"},
+		{"use + 1", "(use + 1)"},
+		{"use(\"a\")", "use(\"a\")"},
+		{"use\n\"a\"", "use\n\"a\""},
+		{"let as = use", "let as = use;"},
+		{"function use(as) { as }", "let use = function(as) { as };"},
+		{"f(use)", "f(use)"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+}
+
+func TestUseErrors(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{`use ""`, `[line 1, column 5] syntax error: use needs the path of a module, like use "shapes"`},
+		{`use "a" as`, `[line 1, column 11] syntax error: expected a name after "as", got end of input`},
+		{`use "a" as 5`, `[line 1, column 12] syntax error: expected a name after "as", got "5"`},
+		{"use \"a\" as\nb", `[line 2, column 1] syntax error: expected a name after "as", got identifier "b"`},
+		{`use "a" b`, `[line 1, column 9] syntax error: expected end of statement, got identifier "b"`},
+		{`use "a" as b c`, `[line 1, column 14] syntax error: expected end of statement, got identifier "c"`},
+		{`if (x) { use "a" }`, `[line 1, column 10] syntax error: use must be at the top level of a file, not inside a block or a layer`},
+		{`function f() { use "a" }`, `[line 1, column 16] syntax error: use must be at the top level of a file, not inside a block or a layer`},
+		{"layer sun\n  use \"a\"", `[line 2, column 3] syntax error: use must be at the top level of a file, not inside a block or a layer`},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if len(p.Errors()) == 0 || p.Errors()[0] != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}

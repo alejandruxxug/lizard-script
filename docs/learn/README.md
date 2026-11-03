@@ -23,6 +23,7 @@ Una guía para aprender y enseñar lizard-script, un pequeño lenguaje interpret
 | 15 | [Builtins reference](en/15-builtins-reference.md) | [Referencia de funciones integradas](es/15-builtins-reference.md) |
 | 16 | [Projects](en/16-projects.md) | [Proyectos](es/16-projects.md) |
 | 17 | [The Terrarium: files, JSON, images, windows](en/17-terrarium.md) | [El Terrario: archivos, JSON, imágenes, ventanas](es/17-terrarium.md) |
+| 18 | [Modules and tools: `use`, tests, builds, `lizard`](en/18-modules-and-tools.md) | [Módulos y herramientas: `use`, pruebas, ejecutables, `lizard`](es/18-modules-and-tools.md) |
 | | [Cheat sheet](en/cheatsheet.md) | [Hoja de referencia](es/cheatsheet.md) |
 | | [Exercises](en/exercises.md) | [Ejercicios](es/exercises.md) |
 

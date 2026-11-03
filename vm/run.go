@@ -315,6 +315,16 @@ func (vm *VM) run() object.Object {
 			vm.closeLayers(len(vm.layers) - 1)
 			ip++
 
+		case code.OpUse:
+			result := evaluator.Use(unit.Nodes[operand(ins, ip+1)].(*ast.UseStatement), cl.Globals, Run)
+			if e, ok := result.(*object.Error); ok {
+				err = e
+				break
+			}
+			stack[sp] = result
+			sp++
+			ip += 5
+
 		case code.OpFail:
 			failure := unit.Failures[operand(ins, ip+1)]
 			err = evaluator.NewError(failure.Token, "%s", failure.Message)

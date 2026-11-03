@@ -1,0 +1,3 @@
+-~> A module that uses another one, next to itself.
+use "../geometry"
+function cube(side) { return square(side) * side }

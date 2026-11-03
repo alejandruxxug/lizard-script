@@ -1,10 +1,12 @@
 // Package window is the window module of the Terrarium: a window with a
-// pixel buffer the program draws on, and the input it gets.
+// pixel buffer the program draws on, the surfaces shown over it, and the
+// input it gets.
 //
 // Ebitengine is used only to open the window, read its input and show the
-// finished buffer; every pixel is drawn by the program, with the drawing
-// functions every target shares (package canvas). Importing this package
-// adds window and pen to terrarium.Install:
+// finished frame; every pixel is drawn by the program, with the drawing
+// functions every target shares (package canvas). A headless window runs
+// the same ticks with no screen at all, for tests and benchmarks. Importing
+// this package adds window and pen to terrarium.Install:
 //
 //	import _ "lizardscript/terrarium/window"
 package window
@@ -19,7 +21,9 @@ import (
 	"lizardscript/terrarium/internal/pixels"
 	"lizardscript/terrarium/pen"
 	"lizardscript/token"
+	"os"
 	"strings"
+	"time"
 )
 
 func init() {
@@ -41,20 +45,45 @@ var black = color.NRGBA{A: 255}
 // Window is a window and the buffer it shows. Its size is the buffer's, in
 // pixels; with a scale of 2 each one is shown as 2x2 on the screen.
 type Window struct {
-	buf       *pixels.Image
-	title     string
-	scale     int
-	fps       int
-	resizable bool
-	frameless bool
+	buf         *pixels.Image
+	title       string
+	scale       int
+	fps         int
+	resizable   bool
+	frameless   bool
+	transparent bool // chosen at open: the system can't change it later
+	floating    bool // above every other window
+	minW, minH  int  // the smallest buffer the user can resize it to
+	hover       bool // move events with no button down
+	onDemand    bool // tick runs only when there is something to do
+	headless    bool // no screen: ticks, events and screenshots only
 
 	changed      bool // drawn on since it was last shown
+	drew         bool // it or a surface was drawn on this frame
 	titleChanged bool // title changed while it runs
+	chrome       bool // an option changed while it runs (window.set)
+	center       bool // move it to the middle of the screen
+	wake         bool // window.needs_paint: run tick next frame
+	started      bool // tick ran once
+	idle         bool // the last frame had nothing to do, so tick didn't run
+	running      bool
+
+	screen screen  // the surfaces and the composed frame (surface.go)
+	queued []Event // events for the next frame: injected, or made by window.set
+	auto   *automation
+	stats  stats
 }
 
-// Pixels and Touched make a window a drawing target.
-func (w *Window) Pixels() *pixels.Image { return w.buf }
-func (w *Window) Touched()              { w.changed = true }
+// stats are the numbers automation's Stats reports.
+type stats struct {
+	ticks, frames, events int
+	tickMS, composeMS     float64
+}
+
+// Base, Pixels and Touched make a window a drawing target.
+func (w *Window) Base() *pixels.Image   { return w.buf }
+func (w *Window) Pixels() *pixels.Image { return w.buf.Top() }
+func (w *Window) Touched()              { w.changed, w.drew, w.screen.base.touched = true, true, true }
 
 // Describe is the size, for Inspect: <window 600x400>.
 func (w *Window) Describe() string { return w.buf.Describe() }
@@ -65,16 +94,24 @@ func (w *Window) resize(width, height int) {
 	if bigger, err := w.buf.Resized(width, height); err == nil {
 		w.buf = bigger
 		w.changed = true
+		w.layout()
 	}
 }
 
-// Module is the window module: open, run and title, and the shared drawing
-// functions size, clear, fill, span, spans and blit.
+// Module is the window module: open, run, title, set and the rest of this
+// package, and the shared drawing functions of package canvas.
 func Module() *object.Hash {
 	return arg.Module("window", canvas.Add(map[string]object.BuiltinFunction{
-		"open":  open,
-		"run":   run,
-		"title": title,
+		"open":        open,
+		"run":         run,
+		"title":       title,
+		"set":         set,
+		"needs_paint": needsPaint,
+		"inject":      inject,
+		"surface":     surfaceFunc,
+		"dirty":       dirty,
+		"screenshot":  screenshot,
+		"automation":  automationFunc,
 	}))
 }
 
@@ -89,9 +126,7 @@ func windowArg(args []object.Object, i int) (*Window, *object.Error) {
 
 // window.open(w, h, title, options = {}) makes a window of w by h pixels.
 // It shows on the screen when window.run starts, so the program can draw
-// its first picture before. The options are scale (1 to 8, default 1),
-// resizable and frameless (default false) and fps, the frames a second
-// (1 to 240, default 60).
+// its first picture before. The options are in openOptions.
 func open(args ...object.Object) object.Object {
 	if err := arg.Count(args, 3, 4); err != nil {
 		return err
@@ -112,44 +147,127 @@ func open(args ...object.Object) object.Object {
 	if berr != nil {
 		return arg.Errorf("%v", berr)
 	}
-	w := &Window{buf: buf, title: name, scale: 1, fps: 60, changed: true}
+	w := &Window{buf: buf, title: name, scale: 1, fps: 60, hover: true, changed: true}
+	w.layout()
 	if len(args) == 4 {
 		options, err := arg.Hash(args, 3, "options")
 		if err != nil {
 			return err
 		}
-		if err := w.setOptions(options); err != nil {
+		if err := w.setOptions(options, openOptions); err != nil {
 			return err
 		}
+	}
+	if os.Getenv(AutomationEnv) == "1" && w.auto == nil {
+		w.auto = newAutomation()
 	}
 	return &object.Native{Kind: Kind, Value: w}
 }
 
-// optionNames are the keys window.open takes in its options.
-var optionNames = []string{"fps", "frameless", "resizable", "scale"}
+// openOptions are the keys window.open takes in its options, and
+// setOptions the ones window.set takes.
+var (
+	openOptions = []string{"automation", "floating", "fps", "frameless", "headless", "hover", "min_size", "on_demand", "resizable", "scale", "transparent"}
+	setOptions  = []string{"center", "floating", "fps", "frameless", "hover", "min_size", "on_demand", "resizable", "scale", "size", "title"}
+)
 
-// setOptions reads the options of window.open.
-func (w *Window) setOptions(options *object.Hash) *object.Error {
+// setOptions reads the options of window.open or window.set; allowed are
+// the ones it takes.
+func (w *Window) setOptions(options *object.Hash, allowed []string) *object.Error {
 	var err *object.Error
 	options.Each(func(pair object.HashPair) {
 		if err != nil {
 			return
 		}
-		value := []object.Object{pair.Value}
-		switch name := pair.Key.Inspect(); name {
-		case "scale":
-			w.scale, err = arg.IntIn(value, 0, "scale", 1, 8)
-		case "fps":
-			w.fps, err = arg.IntIn(value, 0, "fps", 1, 240)
-		case "resizable":
-			w.resizable, err = boolOption(value, name)
-		case "frameless":
-			w.frameless, err = boolOption(value, name)
-		default:
-			err = arg.Errorf("unknown option %q (the options are %s)", name, strings.Join(optionNames, ", "))
+		name := pair.Key.Inspect()
+		if s, ok := pair.Key.(*object.String); ok {
+			name = s.Value
 		}
+		if !contains(allowed, name) {
+			err = unknownOption(name, allowed)
+			return
+		}
+		err = w.setOption(name, []object.Object{pair.Value})
 	})
 	return err
+}
+
+// unknownOption is the error of an option a function doesn't take.
+func unknownOption(name string, allowed []string) *object.Error {
+	if name == "transparent" || name == "headless" {
+		return arg.Errorf("%s can only be chosen in window.open", name)
+	}
+	return arg.Errorf("unknown option %q (the options are %s)", name, strings.Join(allowed, ", "))
+}
+
+// setOption sets one option to value[0].
+func (w *Window) setOption(name string, value []object.Object) *object.Error {
+	var err *object.Error
+	switch name {
+	case "scale":
+		var scale int
+		if scale, err = arg.IntIn(value, 0, "scale", 1, 8); err == nil && scale != w.scale {
+			w.scale = scale
+			w.layout()
+		}
+	case "fps":
+		w.fps, err = arg.IntIn(value, 0, "fps", 1, 240)
+	case "resizable":
+		w.resizable, err = boolOption(value, name)
+	case "frameless":
+		w.frameless, err = boolOption(value, name)
+	case "transparent":
+		w.transparent, err = boolOption(value, name)
+	case "floating":
+		w.floating, err = boolOption(value, name)
+	case "hover":
+		w.hover, err = boolOption(value, name)
+	case "on_demand":
+		w.onDemand, err = boolOption(value, name)
+	case "headless":
+		w.headless, err = boolOption(value, name)
+	case "center":
+		w.center, err = boolOption(value, name)
+	case "automation":
+		var on bool
+		if on, err = boolOption(value, name); err == nil && on && w.auto == nil {
+			w.auto = newAutomation()
+		}
+	case "min_size":
+		w.minW, w.minH, err = sizeOption(value, name, 0)
+	case "size":
+		var width, height int
+		if width, height, err = sizeOption(value, name, 1); err == nil {
+			w.setSize(width, height)
+		}
+	case "title":
+		if w.title, err = arg.String(value, 0, "title"); err == nil {
+			w.titleChanged = true
+		}
+	}
+	w.chrome = true
+	return err
+}
+
+// setSize resizes the buffer to at least the smallest size, and tells the
+// program with a resize event on the next frame.
+func (w *Window) setSize(width, height int) {
+	width, height = max(width, w.minW), max(height, w.minH)
+	if width == w.buf.W && height == w.buf.H {
+		return
+	}
+	w.resize(width, height)
+	w.queued = append(w.queued, Event{Type: "resize", W: width, H: height})
+}
+
+// contains reports whether list has s.
+func contains(list []string, s string) bool {
+	for _, item := range list {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
 
 // boolOption reads an option that is true or false.
@@ -159,6 +277,16 @@ func boolOption(value []object.Object, name string) (bool, *object.Error) {
 		return false, arg.Errorf("want a BOOLEAN %s, got %s", name, arg.Name(value[0]))
 	}
 	return b.Value, nil
+}
+
+// sizeOption reads an option that is a point (w, h) of whole numbers from
+// least to maxSide.
+func sizeOption(value []object.Object, name string, least int) (int, int, *object.Error) {
+	x, y, ok := arg.XY(value[0])
+	if !ok || x != float64(int(x)) || y != float64(int(y)) || x < float64(least) || y < float64(least) || x > maxSide || y > maxSide {
+		return 0, 0, arg.Errorf("the %s must be a point (w, h) of whole numbers from %d to %d, got %s", name, least, maxSide, value[0].Inspect())
+	}
+	return int(x), int(y), nil
 }
 
 // window.title(w, text) changes the window's title.
@@ -177,13 +305,48 @@ func title(args ...object.Object) object.Object {
 	return arg.Null
 }
 
+// window.set(w, options) changes options of the window, while it runs or
+// before: the frame, the size, the scale, centering it on the screen. The
+// options are in setOptions; the window changes after the frame.
+func set(args ...object.Object) object.Object {
+	if err := arg.Count(args, 2, 2); err != nil {
+		return err
+	}
+	w, err := windowArg(args, 0)
+	if err != nil {
+		return err
+	}
+	options, err := arg.Hash(args, 1, "options")
+	if err != nil {
+		return err
+	}
+	if err := w.setOptions(options, setOptions); err != nil {
+		return err
+	}
+	return arg.Null
+}
+
+// window.needs_paint(w) asks for one more frame: with on_demand, tick runs
+// next frame even when nothing happens.
+func needsPaint(args ...object.Object) object.Object {
+	if err := arg.Count(args, 1, 1); err != nil {
+		return err
+	}
+	w, err := windowArg(args, 0)
+	if err != nil {
+		return err
+	}
+	w.wake = true
+	return arg.Null
+}
+
 // loop shows w and calls frame once a frame with the events since the
 // last one, until frame returns false or the window closes. Tests replace
 // it with one that opens no window.
 var loop = ebitenLoop
 
 // ran is set once a window has run: Ebitengine can open only one window in
-// the life of a program.
+// the life of a program. Headless windows don't count.
 var ran bool
 
 // window.run(w, tick) shows the window and calls tick(events) every frame,
@@ -202,19 +365,30 @@ func run(args ...object.Object) object.Object {
 	if tick.Type() != object.FUNCTION_OBJ && tick.Type() != object.BUILTIN_OBJ {
 		return arg.Errorf("want a FUNCTION tick, got %s", arg.Name(tick))
 	}
-	if ran {
-		return arg.Errorf("a program can show only one window")
+	if w.running {
+		return arg.Errorf("the window is already running")
 	}
-	ran = true
+	show := headlessLoop
+	if !w.headless {
+		if ran {
+			return arg.Errorf("a program can show only one window")
+		}
+		ran, show = true, loop
+	}
+	if w.auto != nil {
+		if serr := w.auto.start(w); serr != nil {
+			return arg.Errorf("can't start the automation: %v", serr)
+		}
+		defer w.auto.stop()
+	}
+	w.running = true
+	defer func() { w.running = false }()
 
 	var failed *object.Error
-	loopErr := loop(w, func(events []Event) bool {
-		result := call(tick, events)
-		if e, ok := result.(*object.Error); ok {
-			failed = e
-			return false
-		}
-		return result != arg.False
+	loopErr := show(w, func(events []Event) bool {
+		keepGoing, err := w.frame(tick, events)
+		failed = err
+		return keepGoing
 	})
 	if failed != nil {
 		return failed
@@ -225,6 +399,37 @@ func run(args ...object.Object) object.Object {
 	return arg.Null
 }
 
+// frame is one frame of a running window: the automation's commands, the
+// events, tick, and the replies to the commands, which see what tick did.
+// With on_demand, tick runs only when there is something to do.
+func (w *Window) frame(tick object.Object, events []Event) (bool, *object.Error) {
+	replies := w.auto.runJobs()
+	events = append(events, w.queued...)
+	w.queued = nil
+	busy := len(events) > 0 || len(replies) > 0 || w.wake || !w.started
+	keepGoing := true
+	w.idle = !busy && w.onDemand
+	if !w.idle {
+		w.started, w.wake = true, false
+		start := time.Now()
+		result := call(tick, events)
+		w.stats.tickMS = float64(time.Since(start).Microseconds()) / 1000
+		w.stats.ticks++
+		w.stats.events += len(events)
+		if w.drew {
+			w.stats.frames++
+			w.drew = false
+		}
+		if e, ok := result.(*object.Error); ok {
+			w.auto.reply(replies, true)
+			return false, e
+		}
+		keepGoing = result != arg.False
+	}
+	w.auto.reply(replies, busy)
+	return keepGoing && !w.auto.quitting(), nil
+}
+
 // call runs tick with the events as a list of hashes, the way list.sort
 // calls its comparison: with the checks of a call written in the program,
 // for a function of either engine.
@@ -233,80 +438,10 @@ func call(tick object.Object, events []Event) object.Object {
 	for i, e := range events {
 		list.Elements[i] = e.hash()
 	}
-	return evaluator.ApplyFunction(token.Token{}, tick, []object.Object{list})
+	return apply(tick, list)
 }
 
-// Mods are the modifier keys held during an event.
-type Mods struct{ Shift, Alt, Cmd, Ctrl bool }
-
-// Pen is what the pointer knows besides its position.
-type Pen struct {
-	Pressure float64    // 0 to 1, after the device's response curve; 1 for a mouse
-	Raw      float64    // 0 to 1, as the device reported it
-	Tilt     [2]float64 // tablet tilt, -1 to 1 on each axis
-	Source   string     // "mouse", "trackpad" or "tablet"
-	Eraser   bool       // the eraser end of a tablet pen
-}
-
-// Event is one input event. X and Y are buffer pixels.
-type Event struct {
-	Type   string // down, up, move, scroll, key, type, resize or close
-	X, Y   int    // the pointer, for down, up, move and scroll
-	Button string // down and up: "left", "right" or "middle"
-	Key    string // key: the key's name, like "A", "Escape" or "ArrowLeft"
-	Text   string // type: the character typed
-	DY     float64
-	W, H   int // resize: the new size
-	Mods   Mods
-	Pen    Pen // down, up and move
-}
-
-// hash is the event as the program sees it. Only the keys that mean
-// something for its type are there.
-func (e Event) hash() *object.Hash {
-	h := object.NewHash()
-	arg.Set(h, "type", arg.Str(e.Type))
-	switch e.Type {
-	case "down", "up", "move", "scroll":
-		arg.Set(h, "pos", arg.PointOf(e.X, e.Y))
-	}
-	switch e.Type {
-	case "down", "up":
-		arg.Set(h, "button", arg.Str(e.Button))
-	case "key":
-		arg.Set(h, "key", arg.Str(e.Key))
-	case "type":
-		arg.Set(h, "text", arg.Str(e.Text))
-	case "scroll":
-		arg.Set(h, "dy", arg.Float(e.DY))
-	case "resize":
-		arg.Set(h, "size", arg.PointOf(e.W, e.H))
-	}
-	if e.Type != "resize" && e.Type != "close" {
-		arg.Set(h, "mods", modsHash(e.Mods))
-	}
-	switch e.Type {
-	case "down", "up", "move":
-		arg.Set(h, "pen", penHash(e.Pen))
-	}
-	return h
-}
-
-func modsHash(m Mods) *object.Hash {
-	h := object.NewHash()
-	arg.Set(h, "shift", arg.Bool(m.Shift))
-	arg.Set(h, "alt", arg.Bool(m.Alt))
-	arg.Set(h, "cmd", arg.Bool(m.Cmd))
-	arg.Set(h, "ctrl", arg.Bool(m.Ctrl))
-	return h
-}
-
-func penHash(p Pen) *object.Hash {
-	h := object.NewHash()
-	arg.Set(h, "pressure", arg.Float(p.Pressure))
-	arg.Set(h, "raw", arg.Float(p.Raw))
-	arg.Set(h, "source", arg.Str(p.Source))
-	arg.Set(h, "tilt", &object.Point{Coords: []object.Object{arg.Float(p.Tilt[0]), arg.Float(p.Tilt[1])}})
-	arg.Set(h, "eraser", arg.Bool(p.Eraser))
-	return h
+// apply calls a function of the program with args.
+func apply(fn object.Object, args ...object.Object) object.Object {
+	return evaluator.ApplyFunction(token.Token{}, fn, args)
 }

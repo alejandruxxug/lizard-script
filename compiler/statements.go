@@ -78,6 +78,11 @@ func (c *Compiler) compileStatement(st ast.Statement) {
 	case *ast.LayerStatement:
 		c.compileLayer(st)
 
+	case *ast.UseStatement:
+		// The parser only takes a use at the top level, where the scope
+		// is the globals, read by name; the evaluator loads the module.
+		c.emit(code.OpUse, c.node(st))
+
 	case *ast.BlockStatement:
 		c.compileBlock(st)
 

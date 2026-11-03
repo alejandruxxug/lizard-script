@@ -14,6 +14,7 @@ import (
 	"lizardscript/terrarium"
 	"lizardscript/token"
 	"lizardscript/vm"
+	"path/filepath"
 	"strings"
 )
 
@@ -37,6 +38,8 @@ func Start(in io.Reader, out io.Writer) {
 	evaluator.Output = out
 	evaluator.ResetSteps()
 	evaluator.ResetMath()
+	evaluator.ResetModules()
+	evaluator.ModulePrelude = terrarium.InstallCore
 	terrarium.InstallCore(env)
 
 	var input strings.Builder
@@ -106,7 +109,7 @@ func evalInput(input string, env *object.Environment, out io.Writer) {
 	switch result := result.(type) {
 	case nil, *object.Null:
 	case *object.Error:
-		fmt.Fprintln(out, result.Message)
+		PrintError(out, result, "")
 	case *object.String:
 		fmt.Fprintln(out, quoteForDisplay(result.Value))
 	default:
@@ -128,28 +131,22 @@ func quoteForDisplay(text string) string {
 // and syntax and runtime errors go to errOut. It reports whether the program
 // ran without errors.
 func Run(source string, out, errOut io.Writer) bool {
-	p := parser.New(lexer.New(source))
-	program := p.ParseProgram()
-	if len(p.Errors()) != 0 {
-		printErrors(errOut, p.Errors())
-		return false
-	}
-
-	evaluator.Output = out
-	evaluator.ResetMath()
-	env := object.NewEnvironment()
-	terrarium.Install(env)
-	if err, ok := evaluator.Eval(program, env).(*object.Error); ok {
-		fmt.Fprintln(errOut, err.Message)
-		return false
-	}
-	return true
+	return RunFile("", source, out, errOut, false)
 }
 
 // RunVM is Run on the bytecode VM (package vm) instead of the evaluator.
 // The output is the same.
 func RunVM(source string, out, errOut io.Writer) bool {
-	p := parser.New(lexer.New(source))
+	return RunFile("", source, out, errOut, true)
+}
+
+// RunFile is Run for the program in the file name, on the VM when onVM is
+// set. The name is where its use statements look for modules (next to it)
+// and what os.program_dir() tells; it doesn't change any message of the
+// program's own, and an error from a module shows the module's file in
+// front. Modules get the Terrarium too, and io.error writes to errOut.
+func RunFile(name, source string, out, errOut io.Writer, onVM bool) bool {
+	p := parser.New(lexer.NewNamed(source, name))
 	program := p.ParseProgram()
 	if len(p.Errors()) != 0 {
 		printErrors(errOut, p.Errors())
@@ -157,14 +154,43 @@ func RunVM(source string, out, errOut io.Writer) bool {
 	}
 
 	evaluator.Output = out
+	evaluator.ResetSteps()
 	evaluator.ResetMath()
+	evaluator.ResetModules()
+	evaluator.ModulePrelude = terrarium.Install
+	terrarium.Stderr = errOut
+	terrarium.ProgramFile = name
 	env := object.NewEnvironment()
 	terrarium.Install(env)
-	if err, ok := vm.Run(program, env).(*object.Error); ok {
-		fmt.Fprintln(errOut, err.Message)
+	var result object.Object
+	if onVM {
+		result = vm.Run(program, env)
+	} else {
+		result = evaluator.Eval(program, env)
+	}
+	if err, ok := result.(*object.Error); ok {
+		PrintError(errOut, err, name)
 		return false
 	}
 	return true
+}
+
+// PrintError writes err the way the command line shows it: its message,
+// and for an error from another file than main (a module) that file in
+// front of each line, from main's folder: "draw/shapes.liz: [line 2,
+// column 5] runtime error: ...".
+func PrintError(out io.Writer, err *object.Error, main string) {
+	if err.Source == "" || err.Source == main {
+		fmt.Fprintln(out, err.Message)
+		return
+	}
+	source := err.Source
+	if rel, rerr := filepath.Rel(filepath.Dir(main), source); rerr == nil {
+		source = filepath.ToSlash(rel)
+	}
+	for _, line := range strings.Split(err.Message, "\n") {
+		fmt.Fprintln(out, source+": "+line)
+	}
 }
 
 func printErrors(out io.Writer, errors []string) {

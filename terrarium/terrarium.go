@@ -8,6 +8,8 @@
 //	json   reading and writing JSON (written in lizard-script)
 //	img    images: load, save and change pixels
 //	clip   the system clipboard
+//	io     the standard input, output and error streams
+//	lizard the language itself: tokens, syntax trees, sandboxed runs, docs
 //	window a window to draw in, with its input (package terrarium/window)
 //	pen    pen pressure, which comes in the window's events
 //
@@ -65,6 +67,8 @@ func InstallCore(env *object.Environment) {
 	env.Define("time", timeModule())
 	env.Define("img", imgModule())
 	env.Define("clip", clipModule())
+	env.Define("io", ioModule())
+	env.Define("lizard", lizardReflectModule())
 	for _, name := range lizardModules {
 		module, err := lizardModule(name)
 		if err != nil {

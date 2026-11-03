@@ -689,3 +689,79 @@ func TestContinuesLine(t *testing.T) {
 		}
 	}
 }
+
+// TestEndPositions checks where each token ends: just after its last
+// character, counting characters and lines like the start does.
+func TestEndPositions(t *testing.T) {
+	tests := []struct {
+		input              string
+		literal            string
+		endLine, endColumn int
+	}{
+		{"let", "let", 1, 4},
+		{"  x1 ", "x1", 1, 5},
+		{"===", "===", 1, 4},
+		{`"héllo"`, "héllo", 1, 8},
+		{"\"a\nbc\"", "a\nbc", 2, 4},
+		{`"a\"b"`, `a"b`, 1, 7},
+		{"45deg", "0.7853981633974483", 1, 6},
+		{"1e3", "1e3", 1, 4},
+		{"#fff", "#fff", 1, 5},
+		{`"open`, `"open`, 1, 6},
+		{"é", "é", 1, 2},
+		{"x\n", "x", 1, 2},
+	}
+
+	for _, tt := range tests {
+		got := New(tt.input).NextToken()
+		if got.Literal != tt.literal || got.EndLine != tt.endLine || got.EndColumn != tt.endColumn {
+			t.Errorf("%q: got %q ending at %d:%d, want %q ending at %d:%d",
+				tt.input, got.Literal, got.EndLine, got.EndColumn, tt.literal, tt.endLine, tt.endColumn)
+		}
+	}
+
+	l := New("ab")
+	l.NextToken()
+	if eof := l.NextToken(); eof.Type != token.EOF || eof.EndLine != 1 || eof.EndColumn != 3 || eof.Column != 3 {
+		t.Errorf("EOF from %d:%d to %d:%d, want 1:3 to 1:3", eof.Line, eof.Column, eof.EndLine, eof.EndColumn)
+	}
+}
+
+// TestKeepComments checks that a lexer asked to keep comments returns them
+// as COMMENT tokens, and that one that isn't still skips them.
+func TestKeepComments(t *testing.T) {
+	input := "let x = 1 -~> one\r\n-~> two\nx"
+	want := []struct {
+		typ                              token.TokenType
+		literal                          string
+		line, column, endLine, endColumn int
+	}{
+		{token.LET, "let", 1, 1, 1, 4},
+		{token.IDENT, "x", 1, 5, 1, 6},
+		{token.ASSIGN, "=", 1, 7, 1, 8},
+		{token.INT, "1", 1, 9, 1, 10},
+		{token.COMMENT, "-~> one", 1, 11, 1, 18},
+		{token.COMMENT, "-~> two", 2, 1, 2, 8},
+		{token.IDENT, "x", 3, 1, 3, 2},
+		{token.EOF, "", 3, 2, 3, 2},
+	}
+
+	l := New(input)
+	l.KeepComments()
+	for i, w := range want {
+		got := l.NextToken()
+		if got.Type != w.typ || got.Literal != w.literal || got.Line != w.line || got.Column != w.column ||
+			got.EndLine != w.endLine || got.EndColumn != w.endColumn {
+			t.Fatalf("token %d: got %s %q %d:%d-%d:%d, want %s %q %d:%d-%d:%d", i,
+				got.Type, got.Literal, got.Line, got.Column, got.EndLine, got.EndColumn,
+				w.typ, w.literal, w.line, w.column, w.endLine, w.endColumn)
+		}
+	}
+
+	plain := New(input)
+	for _, typ := range []token.TokenType{token.LET, token.IDENT, token.ASSIGN, token.INT, token.IDENT, token.EOF} {
+		if got := plain.NextToken(); got.Type != typ {
+			t.Fatalf("without KeepComments got %s, want %s", got.Type, typ)
+		}
+	}
+}
