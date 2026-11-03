@@ -1,0 +1,8 @@
+-~> A runtime error: the program runs until the mistake, then stops.
+-~> Run it with: go run . examples/errors/runtime.liz
+
+let toes = 20
+puts("the lizard has", toes, "toes")
+puts("toes per foot:", toes / 4)
+puts("toes per wing:", toes / 0)
+puts("this line never runs")

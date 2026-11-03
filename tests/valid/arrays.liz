@@ -1,0 +1,13 @@
+let a = [1, "two", true, [4], {"five": 5}]
+puts(a, len(a))
+puts(a[0], a[1], a[3][0], a[4]["five"], a[5], a[-1])
+a[0] = 100
+puts(a[0])
+let b = a
+b[1] = "shared"
+puts(a[1])
+puts([1, 2] + [3], [] + [], [1, [2, [3]]])
+let nums = range(1, 6)
+puts(nums, first(nums), last(nums), rest(nums), first([]), rest([]))
+push(nums, 6)
+puts(pop(nums), nums)

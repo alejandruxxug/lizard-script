@@ -1,0 +1,27 @@
+-~> The builtin functions, including type conversion.
+
+puts("puts writes its arguments separated by spaces:", 1, true, [2])
+
+puts("len of a string:", len("lizard"), " of an array:", len([1, 2]), " of a hash:", len({"a": 1}))
+
+puts("type(5) =", type(5), " type of a string:", type("5"), " type([]) =", type([]))
+puts("type(len) =", type(len), " type of a function:", type(function() {}))
+
+-~> Conversion between types.
+let text = "41"
+let number = int(text) + 1
+puts("int of the string 41, plus 1:", number)
+puts("str(42) + an exclamation mark:", str(42) + "!")
+puts("int(true) =", int(true), " int(false) =", int(false))
+
+-~> range builds arrays of numbers.
+puts("range(5) =", range(5), " range(2, 6) =", range(2, 6))
+
+-~> Array and hash helpers.
+let a = [1, 2, 3]
+push(a, 4)
+puts("after push:", a)
+puts("pop:", pop(a), " first:", first(a), " last:", last(a), " rest:", rest(a))
+let h = {"b": 2, "a": 1}
+puts("keys:", keys(h), " values:", values(h))
+puts("delete:", delete(h, "b"), " and the hash is now", h)

@@ -1,0 +1,74 @@
+-~> Optional extensions: closures, short-circuit evaluation and
+-~> higher-order functions.
+
+-~> Closures: the returned function remembers count.
+function makeCounter() {
+  let count = 0
+  return function() {
+    count = count + 1
+    count
+  }
+}
+let counterA = makeCounter()
+let counterB = makeCounter()
+counterA()
+counterA()
+puts("counterA:", counterA(), " counterB:", counterB())
+
+function adder(x) {
+  function(y) { x + y }
+}
+let addTen = adder(10)
+puts("addTen(5) =", addTen(5))
+
+-~> Short-circuit: the right side only runs when it is needed.
+let calls = 0
+function noisy() {
+  calls = calls + 1
+  true
+}
+false && noisy()
+true || noisy()
+puts("after false && noisy() and true || noisy(), noisy ran", calls, "times")
+
+-~> So this doesn't divide by zero:
+let d = 0
+puts("d != 0 && 10 / d > 1 is", d != 0 && 10 / d > 1)
+
+-~> Higher-order functions: functions that take or return functions.
+function map(list, f) {
+  let result = []
+  for (let i = 0; i < len(list); i = i + 1) {
+    push(result, f(list[i]))
+  }
+  result
+}
+
+function filter(list, keep) {
+  let result = []
+  for (let i = 0; i < len(list); i = i + 1) {
+    if (keep(list[i])) {
+      push(result, list[i])
+    }
+  }
+  result
+}
+
+function reduce(list, f, start) {
+  let acc = start
+  for (let i = 0; i < len(list); i = i + 1) {
+    acc = f(acc, list[i])
+  }
+  acc
+}
+
+let evens = filter(range(1, 11), function(n) { n % 2 == 0 })
+puts("evens:", evens)
+puts("their squares:", map(evens, function(n) { n ** 2 }))
+puts("their sum:", reduce(evens, function(a, b) { a + b }, 0))
+
+function compose(f, g) {
+  function(x) { f(g(x)) }
+}
+let squareThenAddTen = compose(addTen, function(x) { x * x })
+puts("squareThenAddTen(3) =", squareThenAddTen(3))

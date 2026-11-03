@@ -1,0 +1,10 @@
+function average(list) {
+  let total = 0
+  for (let i = 0; i < len(list); i = i + 1) {
+    total = total + list[i]
+  }
+  total / len(list)
+}
+puts(average([1, 2, 3]))
+puts(average([]))
+puts("never printed")

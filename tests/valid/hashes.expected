@@ -1,0 +1,7 @@
+{"name": "Liz", 1: "one", true: "yes"}
+Liz one yes null null
+{"name": "Iggy", 1: "one", true: "yes", "new": [1, 2]} 4
+["name", 1, true, "new"] ["Iggy", "one", "yes", [1, 2]]
+true false {"name": "Iggy", true: "yes", "new": [1, 2]}
+{"dyn": "dynamic", "ab": 6}
+{} 0

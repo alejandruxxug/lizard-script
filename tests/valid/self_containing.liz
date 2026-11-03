@@ -1,0 +1,11 @@
+let a = [1]
+push(a, a)
+puts(a, len(a))
+let h = {"name": "loop"}
+h["me"] = h
+puts(h)
+let b = [1]
+push(b, b)
+puts(a == b, a === b, a == [1, a])
+let shared = [0]
+puts([shared, shared])

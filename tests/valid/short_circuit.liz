@@ -1,0 +1,13 @@
+let calls = 0
+function track(value) {
+  calls = calls + 1
+  value
+}
+puts(false && track(true), calls)
+puts(true || track(true), calls)
+puts(true && track(false), calls)
+puts(false || track("x"), calls)
+puts(0 || "", 1 && "yes", !0, !"")
+let zero = 0
+puts(zero != 0 && 10 / zero > 1)
+puts(true || undefinedVariable)

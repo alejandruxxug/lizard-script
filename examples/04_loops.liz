@@ -1,0 +1,32 @@
+-~> while and for loops, break, and nested loops.
+
+let countdown = 3
+while (countdown > 0) {
+  puts("countdown:", countdown)
+  countdown = countdown - 1
+}
+
+let total = 0
+for (let i = 1; i <= 100; i = i + 1) {
+  total = total + i
+}
+puts("1 + 2 + ... + 100 =", total)
+
+-~> break leaves the innermost loop.
+let n = 1
+while (true) {
+  if (n * n > 50) {
+    break
+  }
+  n = n + 1
+}
+puts("the first n with n * n > 50 is", n)
+
+-~> A multiplication table with two loops.
+for (let row = 1; row <= 3; row = row + 1) {
+  let line = ""
+  for (let col = 1; col <= 3; col = col + 1) {
+    line = line + str(row * col) + " "
+  }
+  puts(line)
+}

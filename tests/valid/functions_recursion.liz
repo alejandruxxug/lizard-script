@@ -1,0 +1,20 @@
+function add(a, b) { return a + b }
+function noReturn() { }
+function early(x) {
+  if (x > 0) { return "positive" }
+  return "not positive"
+}
+puts(add(2, 3), noReturn(), early(5), early(-5))
+
+function factorial(n) { if (n <= 1) { 1 } else { n * factorial(n - 1) } }
+function fib(n) { if (n < 2) { n } else { fib(n - 1) + fib(n - 2) } }
+function sumTo(n) { if (n == 0) { 0 } else { n + sumTo(n - 1) } }
+puts(factorial(20), fib(25), sumTo(5000))
+
+function ackermann(m, n) {
+  if (m == 0) { return n + 1 }
+  if (n == 0) { return ackermann(m - 1, 1) }
+  ackermann(m - 1, ackermann(m, n - 1))
+}
+puts(ackermann(2, 3))
+puts(function(x) { x * 2 }(21))

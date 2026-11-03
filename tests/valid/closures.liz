@@ -1,0 +1,20 @@
+function counter() {
+  let n = 0
+  function() { n = n + 1 }
+}
+let a = counter()
+let b = counter()
+a()
+a()
+puts(a(), b())
+
+let fs = []
+for (let i = 0; i < 3; i = i + 1) {
+  let j = i
+  push(fs, function() { j * 10 })
+}
+puts(fs[0](), fs[1](), fs[2]())
+
+let late = function() { definedLater }
+let definedLater = "seen"
+puts(late())

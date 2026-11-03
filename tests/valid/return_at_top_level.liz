@@ -1,0 +1,5 @@
+puts("before")
+if (true) {
+  return
+}
+puts("never printed")

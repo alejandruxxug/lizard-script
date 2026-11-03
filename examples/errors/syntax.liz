@@ -1,0 +1,10 @@
+-~> Syntax errors: the parser reports each mistake with its line and
+-~> column, and the program doesn't run at all, not even its first line.
+-~> After an error the parser skips to the next ";" or "}" and carries on,
+-~> so ending each statement with ";" lets it find all three mistakes.
+-~> Run it with: go run . examples/errors/syntax.liz
+
+puts("this line never runs");
+let = 5;
+let total = (1 + 2;
+if (true) { break }

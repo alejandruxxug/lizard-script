@@ -1,0 +1,26 @@
+-~> Arithmetic, comparison and logical expressions, with precedence.
+
+puts("1 + 2 * 3 =", 1 + 2 * 3)
+puts("(1 + 2) * 3 =", (1 + 2) * 3)
+puts("10 - 4 - 3 =", 10 - 4 - 3, "(left associative)")
+puts("2 ** 3 ** 2 =", 2 ** 3 ** 2, "(right associative)")
+puts("-2 ** 2 =", -2 ** 2, "(** is stronger than -)")
+
+-~> / rounds towards zero, // rounds down, % goes with //.
+puts("7 / 2 =", 7 / 2, " -7 / 2 =", -7 / 2)
+puts("7 // 2 =", 7 // 2, " -7 // 2 =", -7 // 2)
+puts("7 % 3 =", 7 % 3, " -7 % 3 =", -7 % 3)
+
+puts("3 < 5 is", 3 < 5, " 3 >= 5 is", 3 >= 5)
+puts("abc < abd as strings is", "abc" < "abd")
+
+-~> && binds tighter than ||.
+puts("true || false && false is", true || false && false)
+puts("!(1 > 2) is", !(1 > 2))
+
+-~> == converts between types, === doesn't.
+puts("5 == the string 5 is", 5 == "5", " 5 === the string 5 is", 5 === "5")
+puts("1 == true is", 1 == true, " 1 === true is", 1 === true)
+
+-~> Strings: + joins them, * repeats them.
+puts("Liz" + "ard", "ab" * 3)

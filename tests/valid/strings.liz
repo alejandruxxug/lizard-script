@@ -1,0 +1,7 @@
+let s = "lizard"
+puts(s + " " + "script", s * 2, 2 * "ab", "" * 5)
+puts(s[0], s[5], s[6], len(s))
+puts("ñandú"[0], "ñandú"[4])
+puts("apple" < "banana", "b" > "a", "abc" <= "abc", "a" == "a", "a" != "b")
+puts("multi
+line")

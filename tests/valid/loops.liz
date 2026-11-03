@@ -1,0 +1,24 @@
+let i = 0
+let evens = []
+while (i < 10) {
+  i = i + 1
+  if (i % 2 == 0) { push(evens, i) }
+}
+puts(evens)
+
+let total = 0
+for (let k = 0; k < 5; k = k + 1) {
+  for (let j = 0; j < 5; j = j + 1) {
+    if (j > k) { break }
+    total = total + 1
+  }
+}
+puts(total)
+
+let n = 0
+for (;;) {
+  n = n + 1
+  if (n == 4) { break }
+}
+puts(n)
+puts(while (false) {})

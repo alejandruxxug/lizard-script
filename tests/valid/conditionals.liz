@@ -1,0 +1,15 @@
+function grade(n) {
+  if (n >= 90) {
+    "A"
+  } elif (n >= 80) {
+    "B"
+  } elif (n >= 70) {
+    if (n >= 75) { "C+" } else { "C" }
+  } else {
+    "F"
+  }
+}
+puts(grade(95), grade(85), grade(77), grade(71), grade(10))
+let x = if (false) { 1 }
+puts(x)
+if (0) { puts("no") } elif ("") { puts("no") } elif ([1]) { puts("[1] is true") }

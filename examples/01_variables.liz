@@ -1,0 +1,18 @@
+-~> Variables: declare with let, read by name, change with =.
+
+let name = "Liz"
+let toes = 20
+puts(name, "has", toes, "toes")
+
+toes = toes - 1
+puts("after an accident,", name, "has", toes, "toes")
+
+-~> = is an expression, so assignments can be chained.
+let a = 0
+let b = 0
+a = b = 7
+puts("a =", a, "and b =", b)
+
+-~> let again in the same scope replaces the variable.
+let toes = "many"
+puts("toes is now", toes)

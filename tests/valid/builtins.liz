@@ -1,0 +1,6 @@
+puts()
+puts("a", 1, true, [1, "b"], {"c": 2})
+puts(len(""), len("ñandú"), len([1, 2, 3]), len({"a": 1}))
+puts(type(1), type("s"), type(true), type([]), type({}), type(if (false) {}), type(puts), type(function() {}))
+puts(str(1) + str(true) + str([1, "a"]), int("123") + int("-23"), int(true), int(false), int(7))
+puts(range(3), range(3, 6), range(5, 1))

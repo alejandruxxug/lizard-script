@@ -1,0 +1,30 @@
+-~> if, elif and else, nested conditionals, and if as a value.
+
+function describe(temperature) {
+  if (temperature < 15) {
+    puts(temperature, "-> too cold, the lizard hides")
+  } elif (temperature < 30) {
+    if (temperature >= 25) {
+      puts(temperature, "-> perfect, the lizard sunbathes")
+    } else {
+      puts(temperature, "-> fine, the lizard walks around")
+    }
+  } else {
+    puts(temperature, "-> too hot, the lizard looks for shade")
+  }
+}
+
+describe(10)
+describe(20)
+describe(27)
+describe(35)
+
+-~> An if gives the value of the block that ran.
+let toes = 4
+let label = if (toes == 5) { "complete" } else { "missing toes" }
+puts("the foot is", label)
+
+-~> Conditions accept any value: 0, "", [], {} and null count as false.
+if (0) { puts("not shown") } else { puts("0 counts as false") }
+if ("Liz") { puts("a non-empty string counts as true") }
+if ([]) { puts("not shown") } else { puts("an empty array counts as false") }

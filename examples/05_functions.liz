@@ -1,0 +1,38 @@
+-~> Functions: definition, parameters, return values and recursion.
+
+function add(a, b) {
+  return a + b
+}
+puts("add(2, 3) =", add(2, 3))
+
+-~> Without return, a function gives the value of its last statement.
+function square(x) {
+  x * x
+}
+puts("square(9) =", square(9))
+
+-~> A function can also be stored in a variable.
+let greet = function(name) { "Hello, " + name + "!" }
+puts(greet("Liz"))
+
+-~> Recursion.
+function factorial(n) {
+  if (n <= 1) {
+    return 1
+  }
+  return n * factorial(n - 1)
+}
+puts("factorial(10) =", factorial(10))
+
+function fib(n) {
+  if (n < 2) {
+    return n
+  }
+  fib(n - 1) + fib(n - 2)
+}
+puts("fib(20) =", fib(20))
+
+-~> Mutual recursion: each function calls the other.
+function isEven(n) { if (n == 0) { true } else { isOdd(n - 1) } }
+function isOdd(n) { if (n == 0) { false } else { isEven(n - 1) } }
+puts("isEven(10) =", isEven(10), " isOdd(7) =", isOdd(7))

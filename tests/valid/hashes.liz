@@ -1,0 +1,12 @@
+let h = {"name": "Liz", 1: "one", true: "yes"}
+puts(h)
+puts(h["name"], h[1], h[true], h["missing"], h["1"])
+h["name"] = "Iggy"
+h["new"] = [1, 2]
+puts(h, len(h))
+puts(keys(h), values(h))
+puts(delete(h, 1), delete(h, 1), h)
+let k = "dyn"
+let d = {k: k + "amic", "a" + "b": 2 * 3}
+puts(d)
+puts({}, len({}))

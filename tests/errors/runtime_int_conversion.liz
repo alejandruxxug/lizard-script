@@ -1,0 +1,2 @@
+puts(int("12") + 1)
+puts(int("twelve"))

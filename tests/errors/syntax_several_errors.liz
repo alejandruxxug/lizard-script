@@ -1,0 +1,4 @@
+puts("nothing runs when there is a syntax error");
+let = 1;
+let y = (2 + ;
+if (true) { 1 } else

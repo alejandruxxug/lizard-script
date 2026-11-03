@@ -1,0 +1,4 @@
+function f() {
+  total = 5
+}
+f()

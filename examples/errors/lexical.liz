@@ -1,0 +1,4 @@
+-~> A lexical error: @ is not a character of the language.
+-~> Run it with: go run . examples/errors/lexical.liz
+
+let price = 10 @ 2

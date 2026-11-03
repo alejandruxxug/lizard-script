@@ -1,0 +1,40 @@
+-~> Global and local variables, and the same name in different scopes.
+
+let x = "global"
+
+function show() {
+  let x = "local to show"
+  puts("inside show, x is", x)
+}
+show()
+puts("after show, x is still", x)
+
+-~> A block has its own scope: let inside it creates a new variable.
+if (true) {
+  let x = "local to the if"
+  puts("inside the if, x is", x)
+}
+puts("after the if, x is", x)
+
+-~> Without let, = changes the variable of the outer scope.
+let counter = 0
+function increment() {
+  counter = counter + 1
+}
+increment()
+increment()
+puts("counter after two increments:", counter)
+
+-~> Parameters are local: they hide the global with the same name.
+let value = 100
+function double(value) {
+  value * 2
+}
+puts("double(5) =", double(5), "and value is still", value)
+
+-~> The variable of a for header only exists inside the loop.
+let i = "outside"
+for (let i = 0; i < 2; i = i + 1) {
+  puts("in the loop, i is", i)
+}
+puts("after the loop, i is", i)

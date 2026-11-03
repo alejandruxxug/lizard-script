@@ -1,0 +1,3 @@
+# Test programs and their expected output compare byte for byte.
+*.liz text eol=lf
+*.expected text eol=lf

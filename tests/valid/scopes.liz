@@ -1,0 +1,31 @@
+let x = "global"
+function f() {
+  let x = "f"
+  function g() {
+    let x = "g"
+    x
+  }
+  [x, g()]
+}
+puts(f(), x)
+
+let count = 0
+function bump() { count = count + 1 }
+bump()
+bump()
+puts(count)
+
+function shadow(count) {
+  count = count + 100
+  count
+}
+puts(shadow(1), count)
+
+if (true) { let inner = 1; x = "changed by the if" }
+puts(x)
+
+for (let x = 0; x < 1; x = x + 1) { puts("loop x", x) }
+puts(x)
+
+let len = function(v) { "my own len" }
+puts(len([1, 2]))

@@ -1,0 +1,10 @@
+-~> A comment on its own line.
+let a = 5; let b = 6 -~> a comment after code
+let c = 7
+;;
+puts(a + b + c);
+puts(10 // 3) -~> // is integer division, not a comment
+let long = 1 +
+  2 +
+  3
+puts(long)

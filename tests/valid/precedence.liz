@@ -1,0 +1,7 @@
+-~> Precedence and associativity of every operator level.
+puts(1 + 2 * 3, (1 + 2) * 3, 2 * 3 + 4 * 5)
+puts(20 - 5 - 3, 100 / 10 / 5, 2 ** 3 ** 2)
+puts(-2 ** 2, (-2) ** 2, 2 ** 3 * 2, 2 * 3 ** 2)
+puts(1 + 2 < 4, 1 < 2 == true, !true == false)
+puts(true || false && false, (true || false) && false)
+puts(7 % 3 * 2, 7 // 2 * 2, -7 // 2, -7 % 3, -7 / 2)

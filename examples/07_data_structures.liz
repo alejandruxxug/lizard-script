@@ -1,0 +1,37 @@
+-~> Arrays and hashes.
+
+let toes = [5, 5, 4, 5]
+puts("toes:", toes, "length:", len(toes))
+puts("first foot:", toes[0], "third foot:", toes[2])
+toes[2] = 5
+puts("after fixing the third foot:", toes)
+push(toes, 6)
+puts("after push:", toes)
+puts("pop gives", pop(toes), "and leaves", toes)
+puts("first:", first(toes), "last:", last(toes), "rest:", rest(toes))
+puts("joined:", [1, 2] + [3])
+puts("out of range gives", toes[10])
+
+let lizard = {"name": "Liz", "age": 3, "colors": ["green", "brown"]}
+puts("lizard:", lizard)
+puts("name:", lizard["name"], "second color:", lizard["colors"][1])
+lizard["age"] = lizard["age"] + 1
+lizard["tail"] = true
+puts("keys:", keys(lizard))
+puts("values:", values(lizard))
+delete(lizard, "tail")
+puts("without the tail:", lizard)
+puts("a missing key gives", lizard["wings"])
+
+-~> Arrays and hashes are shared: a function can change them.
+let lizards = [
+  {"name": "Liz", "age": 3},
+  {"name": "Iggy", "age": 7}
+]
+function birthday(l) {
+  l["age"] = l["age"] + 1
+}
+for (let i = 0; i < len(lizards); i = i + 1) {
+  birthday(lizards[i])
+}
+puts("after the birthdays:", lizards)

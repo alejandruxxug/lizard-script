@@ -1,0 +1,9 @@
+let a = 1
+let b = a + 1
+puts(a, b)
+a = 10
+puts(a, b)
+let c = a = b = 3
+puts(a, b, c)
+let a = "replaced"
+puts(a)
