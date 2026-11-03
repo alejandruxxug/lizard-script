@@ -46,7 +46,7 @@ prefix     = ( "-" | "!" ) prefix | power ;
 power      = postfix [ "**" prefix ] ;
 postfix    = primary { "(" [ arguments ] ")" | "[" expression "]" | "." IDENT } ;
 
-primary    = IDENT | INT | STRING | "true" | "false"
+primary    = IDENT | INT | FLOAT | STRING | "true" | "false"
            | "(" expression ")"
            | arrayLiteral
            | hashLiteral
@@ -93,13 +93,20 @@ From weakest to strongest:
 
 ```ebnf
 IDENT   = ( letter | "_" ) { letter | digit | "_" } ;
-INT     = digit { digit } ;
+INT     = digit { digit } [ "px" ] ;
+FLOAT   = digit { digit } "." digit { digit } [ unit ]
+        | digit { digit } ( "deg" | "rad" | "turn" ) ;
+unit    = "deg" | "rad" | "turn" | "px" ;
 STRING  = '"' { any character except '"' and '\' | escape } '"' ;
 escape  = "\\" ( '"' | "\\" | "n" | "t" ) ;
 comment = "-~>" { any character except newline } ;
 ```
 
-Whitespace and comments are skipped between tokens. Integers are always decimal, so `010` is 10.
+Whitespace and comments are skipped between tokens. Numbers are always decimal, so `010` is 10.
+
+A float needs digits on both sides of the `.`: `1.5` and `10.0` are floats, `.5` is a `.` and an integer, and `1.` is an integer and a `.`, so `1.x` is dot access on an integer (an error when it runs). `1.5.x` is the float `1.5` and then dot access.
+
+A unit must come right after the number, with no space: `45deg`, `1.5rad`, `0.25turn`, `10px`. `deg`, `rad` and `turn` make a FLOAT in radians (`45deg` is 0.785..., `1turn` is 2π), and `px` leaves the number as it is. The unit is only taken when the whole word is one of the four, so `5degx` is not a unit: it is the integer `5` and then the name `degx`, as before. When a number is directly followed by a name like that and a statement should end there, the parser says `unknown unit "kg"` instead of the plain "expected end of statement" (a syntax error, not a lexical one). A number too big for a float is the syntax error `number ... is too large`.
 
 ## Rules that are not in the grammar
 

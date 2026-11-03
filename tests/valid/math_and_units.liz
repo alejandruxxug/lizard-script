@@ -1,0 +1,38 @@
+-~> The math library, reached with dot access, and angle units.
+puts(math.pi, math.tau, math.tau == 2 * math.pi)
+puts(math.sin(0), math.cos(0), math.tan(0))
+puts(math.sin(90deg), math.cos(180deg))
+puts(math.atan2(1, 1) == 45deg, math.atan2(0, -1) == math.pi)
+puts(math.sqrt(16), math.sqrt(2.25), math.abs(-3), math.abs(-1.5))
+puts(math.floor(1.9), math.floor(-1.1), math.ceil(1.1), math.ceil(-1.9))
+puts(math.round(1.5), math.round(2.5), math.round(-1.5), math.round(-2.5), math.round(1.4))
+puts(math.min(3, 1, 2), math.max(3, 1, 2), math.min(1.5, 2), math.max(1, 2.5))
+puts(type(math.round(2.5)), type(math.abs(-3)), type(math.sqrt(4)))
+
+-~> random is deterministic: the same seed gives the same numbers.
+math.seed(7)
+let first = [math.random(), math.random(1, 100), math.random(1, 100)]
+math.seed(7)
+let second = [math.random(), math.random(1, 100), math.random(1, 100)]
+puts(first == second, first === second)
+let r = math.random()
+puts(r >= 0 && r < 1)
+let n = math.random(5, 5)
+puts(n)
+
+-~> Units: deg, rad and turn give radians as a float; px keeps the number.
+puts(180deg, 45deg, 1.5rad, 1rad, 0.25turn, 1turn)
+puts(10px, 10.5px, type(10px), type(10.5px), type(45deg))
+puts(90deg == 0.25turn, 360deg == 1turn, 180deg == math.pi)
+puts(math.sin(90deg), math.cos(0.5turn))
+
+-~> A variable called math hides the library.
+function hide() {
+  let math = {"pi": 3}
+  math.pi
+}
+puts(hide(), math.pi)
+
+-~> A number followed by a dot and a name is still dot access.
+let h = {"x": 5}
+puts(h.x * 2.5)

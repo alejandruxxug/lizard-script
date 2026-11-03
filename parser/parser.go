@@ -16,6 +16,7 @@ import (
 	"lizardscript/ast"
 	"lizardscript/lexer"
 	"lizardscript/token"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -103,6 +104,7 @@ func New(l *lexer.Lexer) *Parser {
 	p.prefixParseFns = map[token.TokenType]prefixParseFn{
 		token.IDENT:    p.parseIdentifier,
 		token.INT:      p.parseIntegerLiteral,
+		token.FLOAT:    p.parseFloatLiteral,
 		token.STRING:   p.parseStringLiteral,
 		token.TRUE:     p.parseBoolean,
 		token.FALSE:    p.parseBoolean,
@@ -362,8 +364,21 @@ func (p *Parser) endStatement() {
 		return
 	}
 	if !p.peekEndsStatement() && p.peekToken.Line == p.curToken.Line {
+		if p.numberTouchesName() {
+			p.errorAt(p.curToken, "unknown unit %q", p.peekToken.Literal)
+			return
+		}
 		p.errorAt(p.peekToken, "expected end of statement, got %s", describeToken(p.peekToken))
 	}
+}
+
+// numberTouchesName reports whether a number is directly followed by a name
+// with no space, like 5kg. The lexer reads them as two tokens, since kg is
+// not a unit, and this is how the error says what was probably meant.
+func (p *Parser) numberTouchesName() bool {
+	cur, next := p.curToken, p.peekToken
+	return (cur.Type == token.INT || cur.Type == token.FLOAT) && next.Type == token.IDENT &&
+		next.Line == cur.Line && next.Column == cur.Column+len(cur.Literal)
 }
 
 // parseLetStatement parses: let <name> = <expression> ;
@@ -558,6 +573,17 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 		return nil
 	}
 	return &ast.IntegerLiteral{Token: p.curToken, Value: value}
+}
+
+// parseFloatLiteral converts the token's text to a number. A number too big
+// for a float is an error, since lizard-script has no infinity.
+func (p *Parser) parseFloatLiteral() ast.Expression {
+	value, err := strconv.ParseFloat(p.curToken.Literal, 64)
+	if err != nil || math.IsInf(value, 0) {
+		p.errorAt(p.curToken, "number %s is too large", p.curToken.Literal)
+		return nil
+	}
+	return &ast.FloatLiteral{Token: p.curToken, Value: value}
 }
 
 func (p *Parser) parseStringLiteral() ast.Expression {

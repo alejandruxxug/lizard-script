@@ -33,6 +33,7 @@ func Start(in io.Reader, out io.Writer) {
 	env := object.NewEnvironment()
 	evaluator.Output = out
 	evaluator.ResetSteps()
+	evaluator.ResetMath()
 
 	var input strings.Builder
 	waitingForElse := false
@@ -120,6 +121,7 @@ func Run(source string, out, errOut io.Writer) bool {
 	}
 
 	evaluator.Output = out
+	evaluator.ResetMath()
 	if err, ok := evaluator.Eval(program, object.NewEnvironment()).(*object.Error); ok {
 		fmt.Fprintln(errOut, err.Message)
 		return false

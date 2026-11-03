@@ -161,6 +161,7 @@ This one command runs everything:
 | [07_data_structures.liz](examples/07_data_structures.liz) | arrays and hashes |
 | [08_builtins.liz](examples/08_builtins.liz) | `puts`, `len`, `type`, conversion with `str` and `int`, and the other builtins |
 | [09_extensions.liz](examples/09_extensions.liz) | closures, short-circuit evaluation, higher-order functions |
+| [10_floats_and_math.liz](examples/10_floats_and_math.liz) | floats, the `math` library, angle units |
 | [fizzbuzz.liz](examples/fizzbuzz.liz) | a complete small program |
 | [errors/lexical.liz](examples/errors/lexical.liz) | a lexical error |
 | [errors/syntax.liz](examples/errors/syntax.liz) | several syntax errors reported at once |

@@ -2,6 +2,8 @@ package lexer
 
 import (
 	"lizardscript/token"
+	"math"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -142,9 +144,7 @@ func (l *Lexer) readToken() token.Token {
 			tok.Type = token.LookupIdent(tok.Literal)
 			return tok
 		} else if isDigit(l.ch) {
-			tok.Type = token.INT
-			tok.Literal = l.readNumber()
-			return tok
+			return l.readNumber()
 		}
 		return l.readIllegal()
 	}
@@ -281,13 +281,66 @@ func (l *Lexer) unknownEscape() token.Token {
 	return token.Token{Type: token.ILLEGAL, Literal: literal}
 }
 
-// readNumber reads consecutive digits and returns them as a string.
-func (l *Lexer) readNumber() string {
-	position := l.position
+// readNumber reads a number: digits, optionally a '.' and more digits, and
+// optionally a unit right after it. A '.' that isn't followed by a digit is
+// not part of the number, so 1.x is the integer 1, a dot and a name.
+func (l *Lexer) readNumber() token.Token {
+	start := l.position
+	tokenType := token.TokenType(token.INT)
+	l.skipDigits()
+	if l.ch == '.' && isDigit(l.peekChar()) {
+		tokenType = token.FLOAT
+		l.readChar()
+		l.skipDigits()
+	}
+	number := l.input[start:l.position]
+
+	if !isLetter(l.ch) {
+		return token.Token{Type: tokenType, Literal: number}
+	}
+	return l.readUnit(number, tokenType)
+}
+
+func (l *Lexer) skipDigits() {
 	for isDigit(l.ch) {
 		l.readChar()
 	}
-	return l.input[position:l.position]
+}
+
+// readUnit reads the unit that follows number, and returns the number
+// converted to it. deg, rad and turn give a FLOAT in radians, and px keeps
+// the number as it is. The unit is only taken when the whole word is one of
+// them: after any other word (5kg, 5degx) the number is left alone and the
+// word is read next as an identifier, as it always was.
+func (l *Lexer) readUnit(number string, tokenType token.TokenType) token.Token {
+	end := l.position
+	for end < len(l.input) && (isLetter(l.input[end]) || isDigit(l.input[end])) {
+		end++
+	}
+	unit := l.input[l.position:end]
+	value, _ := strconv.ParseFloat(number, 64)
+
+	switch unit {
+	case "px":
+	case "deg":
+		value = value * math.Pi / 180
+	case "rad":
+	case "turn":
+		value = value * 2 * math.Pi
+	default:
+		return token.Token{Type: tokenType, Literal: number}
+	}
+	l.readIdentifier()
+	if unit == "px" {
+		return token.Token{Type: tokenType, Literal: number}
+	}
+
+	// A number too big for a float turns into +Inf, which the parser rejects.
+	literal := strconv.FormatFloat(value, 'g', -1, 64)
+	if !strings.ContainsAny(literal, ".eIN") {
+		literal += ".0"
+	}
+	return token.Token{Type: token.FLOAT, Literal: literal}
 }
 
 func isLetter(ch byte) bool {

@@ -1,0 +1,33 @@
+-~> Decimal numbers, the math library and angle units: enough to draw
+-~> a circle and a wave.
+
+-~> Floats: a float on either side makes real division.
+puts(7 / 2, 7 / 2.0, 7 // 2.0, 7.5 % 2)
+puts(0.1 + 0.2, 1 == 1.0, 1 === 1.0, int(2.9), float(3))
+
+-~> Angles are radians. deg, rad and turn are units, px keeps the number.
+puts(180deg == math.pi, 0.25turn, 10px)
+
+-~> Points on a circle of radius 100px, every 90 degrees.
+let radius = 100px
+for (let i = 0; i < 4; i = i + 1) {
+  let angle = i * 90deg
+  let x = math.round(radius * math.cos(angle))
+  let y = math.round(radius * math.sin(angle))
+  puts("angle", i * 90, "-> (" + str(x) + ", " + str(y) + ")")
+}
+
+-~> A wave, sampled at six points, as bars of '#'.
+for (let i = 0; i < 6; i = i + 1) {
+  let height = math.round(5 + 4 * math.sin(i * 1turn / 6))
+  puts(i, "#" * height)
+}
+
+-~> random always gives the same numbers unless it is seeded differently.
+math.seed(2026)
+let dice = [math.random(1, 6), math.random(1, 6), math.random(1, 6)]
+math.seed(2026)
+puts(dice == [math.random(1, 6), math.random(1, 6), math.random(1, 6)])
+
+-~> sqrt, atan2, min and max.
+puts(math.sqrt(2), math.atan2(1, 1) / 1deg, math.min(3, 1.5), math.max(3, 1.5))

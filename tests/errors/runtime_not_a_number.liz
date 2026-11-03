@@ -1,0 +1,5 @@
+puts("before")
+let big = 10.0 ** 200
+puts(big > 1)
+puts(big * big)
+puts("never")

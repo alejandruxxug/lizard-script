@@ -554,3 +554,227 @@ func TestStepLimitRecovers(t *testing.T) {
 		t.Errorf("depth counters left at %d calls and %d evals", callDepth, evalDepth)
 	}
 }
+
+func TestFloatArithmetic(t *testing.T) {
+	checkAll(t, []expectation{
+		{"1.5", "1.5"},
+		{"10.0", "10.0"},
+		{"1.5 + 1", "2.5"},
+		{"1 + 1.5", "2.5"},
+		{"1.5 + 1.5", "3.0"},
+		{"0.1 + 0.2", "0.30000000000000004"},
+		{"2 * 0.5", "1.0"},
+		{"3 - 0.5", "2.5"},
+		{"-1.5", "-1.5"},
+		{"--1.5", "1.5"},
+		{"-0.0", "-0.0"},
+		// Integers with integers stay exact.
+		{"1 / 2", "0"},
+		{"1 + 2", "3"},
+		// / with a float is real division.
+		{"1 / 2.0", "0.5"},
+		{"1.0 / 2", "0.5"},
+		{"-7 / 2.0", "-3.5"},
+		{"1 / 3.0", "0.3333333333333333"},
+		// // floors, and gives a float.
+		{"7.5 // 2", "3.0"},
+		{"-7.5 // 2", "-4.0"},
+		{"7 // 2.0", "3.0"},
+		{"7 // -2.0", "-4.0"},
+		{"-7.5 // -2", "3.0"},
+		{"0.5 // 2", "0.0"},
+		// % pairs with //.
+		{"7.5 % 2", "1.5"},
+		{"-7.5 % 2", "0.5"},
+		{"7.5 % -2", "-0.5"},
+		{"-7.5 % -2", "-1.5"},
+		{"7 % 2.5", "2.0"},
+		{"6.0 % 3", "0.0"},
+		{"let a = -7.5; let b = 2.0; (a // b) * b + a % b", "-7.5"},
+		{"let a = 7.5; let b = -2; (a // b) * b + a % b", "7.5"},
+		// **.
+		{"2.0 ** 3", "8.0"},
+		{"2 ** 3.0", "8.0"},
+		{"2.0 ** -1", "0.5"},
+		{"4 ** 0.5", "2.0"},
+		{"2.5 ** 2", "6.25"},
+		{"0.0 ** 0", "1.0"},
+		{"-2.0 ** 2", "-4.0"},
+		{"-8.0 ** 0.5", "-2.8284271247461903"},
+		{"2 ** 10", "1024"},
+		// Precedence is the same as for integers.
+		{"1.5 + 2 * 3", "7.5"},
+		{"(1.5 + 2) * 2", "7.0"},
+	})
+}
+
+func TestFloatComparisons(t *testing.T) {
+	checkAll(t, []expectation{
+		{"1.5 < 2", "true"},
+		{"2 < 1.5", "false"},
+		{"1.5 > 1", "true"},
+		{"1.0 <= 1", "true"},
+		{"1 >= 1.5", "false"},
+		{"1.5 < 2.5", "true"},
+		{"0.1 + 0.2 > 0.3", "true"},
+		{"1 == 1.0", "true"},
+		{"1.0 == 1", "true"},
+		{"1 != 1.0", "false"},
+		{"1.5 == 1.5", "true"},
+		{"1.5 == 2", "false"},
+		{"\"1.5\" == 1.5", "true"},
+		{"1.5 == \"1.5\"", "true"},
+		{"\"5\" == 5.0", "true"},
+		{"\"1.50\" == 1.5", "true"},
+		{"\"-2.5\" == -2.5", "true"},
+		{"\"abc\" == 1.5", "false"},
+		{"\"1e3\" == 1000.0", "false"},
+		{"\"1.\" == 1.0", "false"},
+		{"\"inf\" == 1.0", "false"},
+		{"true == 1.0", "true"},
+		{"false == 0.0", "true"},
+		{"[] == 0.0", "false"},
+		{"\"\" == 0.0", "false"},
+		{"[1, 2.0] == [1.0, 2]", "true"},
+		{"[1, 2.0] === [1.0, 2]", "false"},
+		{"1 === 1.0", "false"},
+		{"1.0 === 1.0", "true"},
+		{"1.0 !== 1", "true"},
+		{"\"1.5\" === 1.5", "false"},
+		{"0.0 == -0.0", "true"},
+	})
+}
+
+func TestFloatTruthinessAndTypes(t *testing.T) {
+	checkAll(t, []expectation{
+		{"if (0.0) { 1 } else { 2 }", "2"},
+		{"if (0.5) { 1 } else { 2 }", "1"},
+		{"!0.0", "true"},
+		{"!1.5", "false"},
+		{"0.0 && true", "false"},
+		{"1.5 || false", "true"},
+		{"type(1.5)", "\"FLOAT\""},
+		{"type(1)", "\"INTEGER\""},
+		{"type(1 + 0.5)", "\"FLOAT\""},
+		{"type(2 // 1.0)", "\"FLOAT\""},
+		{"type(10px)", "\"INTEGER\""},
+		{"type(10.5px)", "\"FLOAT\""},
+	})
+}
+
+func TestFloatPrinting(t *testing.T) {
+	checkAll(t, []expectation{
+		{"str(1.0)", "\"1.0\""},
+		{"str(0.5)", "\"0.5\""},
+		{"str(0.1)", "\"0.1\""},
+		{"str(-2.25)", "\"-2.25\""},
+		{"str(100.0)", "\"100.0\""},
+		{"str(123456789.0)", "\"123456789.0\""},
+		{"str(10.0 ** 20)", "\"100000000000000000000.0\""},
+		{"str(10.0 ** 21)", "\"1e+21\""},
+		{"str(10.0 ** 25)", "\"1e+25\""},
+		{"str(1.5 * 10.0 ** 22)", "\"1.5e+22\""},
+		{"str(0.000001)", "\"0.000001\""},
+		{"str(0.0000001)", "\"1e-07\""},
+		{"str(0.0)", "\"0.0\""},
+		{"str(1 / 3.0)", "\"0.3333333333333333\""},
+		{"[1.5, 2.0]", "[1.5, 2.0]"},
+		{"{\"a\": 0.5}", "{\"a\": 0.5}"},
+	})
+}
+
+func TestFloatBuiltins(t *testing.T) {
+	checkAll(t, []expectation{
+		{"int(1.9)", "1"},
+		{"int(-1.9)", "-1"},
+		{"int(0.5)", "0"},
+		{"int(-0.5)", "0"},
+		{"int(3.0)", "3"},
+		{"int(7)", "7"},
+		{"float(3)", "3.0"},
+		{"float(1.5)", "1.5"},
+		{"float(\"1.5\")", "1.5"},
+		{"float(\"2\")", "2.0"},
+		{"float(\"-0.25\")", "-0.25"},
+		{"type(float(1))", "\"FLOAT\""},
+		{"str(2.0) + \"!\"", "\"2.0!\""},
+		{"len(str(1.5))", "3"},
+	})
+}
+
+func TestFloatErrors(t *testing.T) {
+	tests := []expectation{
+		{"1.5 / 0", "[line 1, column 5] runtime error: division by zero"},
+		{"1.5 / 0.0", "[line 1, column 5] runtime error: division by zero"},
+		{"1 / 0.0", "[line 1, column 3] runtime error: division by zero"},
+		{"1.5 // 0", "[line 1, column 5] runtime error: division by zero"},
+		{"1.5 // 0.0", "[line 1, column 5] runtime error: division by zero"},
+		{"1.5 % 0", "[line 1, column 5] runtime error: division by zero"},
+		{"1.5 % 0.0", "[line 1, column 5] runtime error: division by zero"},
+		{"1 % 0.0", "[line 1, column 3] runtime error: division by zero"},
+		{"10.0 ** 308 * 10", "[line 1, column 13] runtime error: the result is not a number"},
+		{"10.0 ** 400", "[line 1, column 6] runtime error: the result is not a number"},
+		{"-10.0 ** 400", "[line 1, column 7] runtime error: the result is not a number"},
+		{"0.0 ** -1", "[line 1, column 5] runtime error: the result is not a number"},
+		{"(0.0 - 8.0) ** 0.5", "[line 1, column 13] runtime error: the result is not a number"},
+		{"let big = 10.0 ** 308; big + big * 10", "[line 1, column 34] runtime error: the result is not a number"},
+		{"let big = 10.0 ** 308; big - big * 10 - big * 10", "[line 1, column 34] runtime error: the result is not a number"},
+		{"let tiny = 0.0000001; 10.0 ** 308 / tiny", "[line 1, column 35] runtime error: the result is not a number"},
+		{"1.5 + true", "[line 1, column 5] runtime error: type mismatch: FLOAT + BOOLEAN"},
+		{"1.5 + \"a\"", "[line 1, column 5] runtime error: type mismatch: FLOAT + STRING"},
+		{"\"a\" * 1.5", "[line 1, column 5] runtime error: type mismatch: STRING * FLOAT"},
+		{"[1][1.0]", "[line 1, column 4] runtime error: array index must be INTEGER, got FLOAT"},
+		{"{1.5: 2}", "[line 1, column 1] runtime error: unusable as hash key: FLOAT"},
+		{"{}[1.5]", "[line 1, column 3] runtime error: unusable as hash key: FLOAT"},
+		{"let h = {}; h[1.5] = 2", "[line 1, column 14] runtime error: unusable as hash key: FLOAT"},
+		{"delete({}, 1.5)", "[line 1, column 7] runtime error: delete: unusable as hash key: FLOAT"},
+		{"range(2.0)", "[line 1, column 6] runtime error: range: arguments must be INTEGER, got FLOAT"},
+		{"int(\"1.5\")", "[line 1, column 4] runtime error: int: not a whole number: \"1.5\""},
+		{"int(10.0 ** 25)", "[line 1, column 4] runtime error: int: the float is too big for an integer: 1e+25"},
+		{"float(\"abc\")", "[line 1, column 6] runtime error: float: not a number: \"abc\""},
+		{"float(\"1e3\")", "[line 1, column 6] runtime error: float: not a number: \"1e3\""},
+		{"float(\"\")", "[line 1, column 6] runtime error: float: not a number: \"\""},
+		{"float(true)", "[line 1, column 6] runtime error: float: argument not supported, got BOOLEAN"},
+		{"float()", "[line 1, column 6] runtime error: float: wrong number of arguments: want 1, got 0"},
+		{"len(1.5)", "[line 1, column 4] runtime error: len: argument not supported, got FLOAT"},
+		{"-\"a\"", "[line 1, column 1] runtime error: unknown operator: -STRING"},
+	}
+	checkErrors(t, tests)
+}
+
+func TestUnits(t *testing.T) {
+	checkAll(t, []expectation{
+		{"180deg", "3.141592653589793"},
+		{"45deg", "0.7853981633974483"},
+		{"90deg == 0.25turn", "true"},
+		{"1turn == 360deg", "true"},
+		{"1rad", "1.0"},
+		{"1.5rad", "1.5"},
+		{"0.25turn", "1.5707963267948966"},
+		{"10px", "10"},
+		{"10px / 4", "2"},
+		{"10.5px", "10.5"},
+		{"-45deg", "-0.7853981633974483"},
+		{"45deg + 45deg", "1.5707963267948966"},
+		{"type(45deg)", "\"FLOAT\""},
+		{"type(10px)", "\"INTEGER\""},
+		{"180deg == math.pi", "true"},
+	})
+}
+
+// checkErrors checks that each program fails with exactly the given message.
+func checkErrors(t *testing.T, tests []expectation) {
+	t.Helper()
+
+	for _, tt := range tests {
+		result := run(t, tt.input)
+		err, ok := result.(*object.Error)
+		if !ok {
+			t.Errorf("input %q - expected an error, got %s", tt.input, result.Inspect())
+			continue
+		}
+		if err.Message != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %s", tt.input, tt.expected, err.Message)
+		}
+	}
+}

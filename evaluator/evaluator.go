@@ -115,6 +115,9 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
 
+	case *ast.FloatLiteral:
+		return &object.Float{Value: node.Value}
+
 	case *ast.StringLiteral:
 		return &object.String{Value: node.Value}
 
@@ -251,6 +254,9 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 	if builtin, ok := builtins[node.Value]; ok {
 		return builtin
 	}
+	if node.Value == "math" {
+		return mathLibrary()
+	}
 	return newError(node.Token, "identifier not found: %s", node.Value)
 }
 
@@ -280,6 +286,8 @@ func isTruthy(obj object.Object) bool {
 		return false
 	case *object.Integer:
 		return obj.Value != 0
+	case *object.Float:
+		return obj.Value != 0
 	case *object.String:
 		return obj.Value != ""
 	case *object.Array:
@@ -303,6 +311,9 @@ func evalPrefixExpression(node *ast.PrefixExpression, right object.Object) objec
 	case "!":
 		return nativeBoolToBooleanObject(!isTruthy(right))
 	case "-":
+		if float, ok := right.(*object.Float); ok {
+			return &object.Float{Value: -float.Value}
+		}
 		integer, ok := right.(*object.Integer)
 		if !ok {
 			return newError(node.Token, "unknown operator: -%s", right.Type())
@@ -353,6 +364,8 @@ func evalInfixExpression(node *ast.InfixExpression, env *object.Environment) obj
 	switch {
 	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
 		return evalIntegerInfixExpression(node.Token, node.Operator, left.(*object.Integer).Value, right.(*object.Integer).Value)
+	case isNumber(left) && isNumber(right):
+		return evalFloatInfixExpression(node.Token, node.Operator, toFloat(left), toFloat(right))
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
 		return evalStringInfixExpression(node.Token, node.Operator, left.(*object.String).Value, right.(*object.String).Value)
 	case node.Operator == "*" && left.Type() == object.STRING_OBJ && right.Type() == object.INTEGER_OBJ:
@@ -490,7 +503,7 @@ func looseEquals(left, right object.Object) bool {
 	return equals(left, right, false)
 }
 
-// toNumber is the conversion of looseEquals. It fails for anything that
+// toNumber is the conversion of looseEquals when no float is involved. It fails for anything that
 // isn't an integer, a boolean or a string with a whole number.
 func toNumber(obj object.Object) (int64, bool) {
 	switch obj := obj.(type) {
@@ -537,6 +550,14 @@ func equals(left, right object.Object, strict bool) bool {
 			if strict {
 				return false
 			}
+			if left.Type() == object.FLOAT_OBJ || right.Type() == object.FLOAT_OBJ {
+				leftFloat, leftOk := looseFloat(left)
+				rightFloat, rightOk := looseFloat(right)
+				if !leftOk || !rightOk || leftFloat != rightFloat {
+					return false
+				}
+				continue
+			}
 			leftNumber, leftOk := toNumber(left)
 			rightNumber, rightOk := toNumber(right)
 			if !leftOk || !rightOk || leftNumber != rightNumber {
@@ -548,6 +569,10 @@ func equals(left, right object.Object, strict bool) bool {
 		switch left := left.(type) {
 		case *object.Integer:
 			if left.Value != right.(*object.Integer).Value {
+				return false
+			}
+		case *object.Float:
+			if left.Value != right.(*object.Float).Value {
 				return false
 			}
 		case *object.Boolean:

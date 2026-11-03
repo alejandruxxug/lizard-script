@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"lizardscript/object"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -35,6 +36,7 @@ func init() {
 		"type":   builtinType,
 		"str":    builtinStr,
 		"int":    builtinInt,
+		"float":  builtinFloat,
 		"range":  builtinRange,
 	} {
 		builtins[name] = &object.Builtin{Name: name, Fn: fn}
@@ -219,7 +221,8 @@ func builtinStr(args ...object.Object) object.Object {
 	return &object.String{Value: args[0].Inspect()}
 }
 
-// int(x) turns a string with a whole number, or a boolean, into an integer.
+// int(x) turns a string with a whole number, a boolean or a float into an
+// integer. A float loses its decimals, rounding towards zero.
 func builtinInt(args ...object.Object) object.Object {
 	if len(args) != 1 {
 		return wrongCount("1", len(args))
@@ -227,6 +230,12 @@ func builtinInt(args ...object.Object) object.Object {
 	switch arg := args[0].(type) {
 	case *object.Integer:
 		return arg
+	case *object.Float:
+		integer, ok := floatToInteger(math.Trunc(arg.Value))
+		if !ok {
+			return argError("the float is too big for an integer: %s", arg.Inspect())
+		}
+		return integer
 	case *object.Boolean:
 		if arg.Value {
 			return &object.Integer{Value: 1}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"hash/fnv"
 	"lizardscript/ast"
+	"math"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +17,7 @@ type ObjectType string
 
 const (
 	INTEGER_OBJ  = "INTEGER"
+	FLOAT_OBJ    = "FLOAT"
 	BOOLEAN_OBJ  = "BOOLEAN"
 	STRING_OBJ   = "STRING"
 	NULL_OBJ     = "NULL"
@@ -43,6 +46,31 @@ type Integer struct {
 
 func (i *Integer) Type() ObjectType { return INTEGER_OBJ }
 func (i *Integer) Inspect() string  { return fmt.Sprintf("%d", i.Value) }
+
+// Float is a 64-bit decimal number. It is never infinite or NaN: the
+// evaluator turns any operation that would produce one into an error.
+type Float struct {
+	Value float64
+}
+
+func (f *Float) Type() ObjectType { return FLOAT_OBJ }
+
+// Inspect writes the shortest text that reads back as the same float. It
+// always has a '.' or an exponent, so 1.0 never looks like the integer 1.
+// Very big and very small numbers use an exponent: 1e+21, 1e-07.
+func (f *Float) Inspect() string {
+	abs := math.Abs(f.Value)
+	var text string
+	if abs >= 1e21 || (abs != 0 && abs < 1e-6) {
+		text = strconv.FormatFloat(f.Value, 'e', -1, 64)
+	} else {
+		text = strconv.FormatFloat(f.Value, 'f', -1, 64)
+	}
+	if !strings.ContainsAny(text, ".e") {
+		text += ".0"
+	}
+	return text
+}
 
 // Boolean is true or false. There are only two of them, see the evaluator.
 type Boolean struct {

@@ -147,6 +147,17 @@ func (il *IntegerLiteral) expressionNode()      {}
 func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
 func (il *IntegerLiteral) String() string       { return il.Token.Literal }
 
+// FloatLiteral is a decimal number written in the code. A number with a unit
+// like 45deg is one too, already converted by the lexer.
+type FloatLiteral struct {
+	Token token.Token // the FLOAT token
+	Value float64
+}
+
+func (fl *FloatLiteral) expressionNode()      {}
+func (fl *FloatLiteral) TokenLiteral() string { return fl.Token.Literal }
+func (fl *FloatLiteral) String() string       { return fl.Token.Literal }
+
 // Boolean is true or false.
 type Boolean struct {
 	Token token.Token // the TRUE or FALSE token

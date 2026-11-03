@@ -578,3 +578,72 @@ func TestDotErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestFloatLiterals(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected float64
+	}{
+		{"1.5", 1.5},
+		{"0.25", 0.25},
+		{"10.0", 10},
+		{"007.5", 7.5},
+		{"45deg", 0.7853981633974483},
+		{"1.5rad", 1.5},
+		{"0.25turn", 1.5707963267948966},
+		{"2.5px", 2.5},
+	}
+	for _, tt := range tests {
+		statement := parse(t, tt.input).Statements[0].(*ast.ExpressionStatement)
+		literal, ok := statement.Expression.(*ast.FloatLiteral)
+		if !ok {
+			t.Fatalf("input %q - expected *ast.FloatLiteral, got %T", tt.input, statement.Expression)
+		}
+		if literal.Value != tt.expected {
+			t.Errorf("input %q - expected %v, got %v", tt.input, tt.expected, literal.Value)
+		}
+	}
+
+	// px keeps an integer an integer.
+	statement := parse(t, "10px").Statements[0].(*ast.ExpressionStatement)
+	if literal, ok := statement.Expression.(*ast.IntegerLiteral); !ok || literal.Value != 10 {
+		t.Errorf("10px - expected the integer 10, got %T", statement.Expression)
+	}
+}
+
+func TestFloatTrees(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"1.5 + 2 * 0.5", "(1.5 + (2 * 0.5))"},
+		{"-1.5 ** 2", "(-(1.5 ** 2))"},
+		{"a.b * 1.5", "((a[\"b\"]) * 1.5)"},
+		{"1.5.x", "(1.5[\"x\"])"},
+		{"1.x", "(1[\"x\"])"},
+	}
+	for _, tt := range tests {
+		if got := parse(t, tt.input).String(); got != tt.expected {
+			t.Errorf("input %q - expected %s, got %s", tt.input, tt.expected, got)
+		}
+	}
+}
+
+func TestFloatErrors(t *testing.T) {
+	huge := strings.Repeat("9", 400)
+	tests := []struct{ input, expected string }{
+		{"5kg", `[line 1, column 1] syntax error: unknown unit "kg"`},
+		{"let x = 1.5kg", `[line 1, column 9] syntax error: unknown unit "kg"`},
+		{"1x", `[line 1, column 1] syntax error: unknown unit "x"`},
+		{"1e5", `[line 1, column 1] syntax error: unknown unit "e5"`},
+		{"5degx", `[line 1, column 1] syntax error: unknown unit "degx"`},
+		{"5 kg", `[line 1, column 3] syntax error: expected end of statement, got identifier "kg"`},
+		{"1 + 2.5meters", `[line 1, column 5] syntax error: unknown unit "meters"`},
+		{huge + ".0", `[line 1, column 1] syntax error: number ` + huge + `.0 is too large`},
+		{huge + "turn", `[line 1, column 1] syntax error: number +Inf is too large`},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if len(p.Errors()) != 1 || p.Errors()[0] != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}

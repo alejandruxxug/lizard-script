@@ -2,6 +2,7 @@ package lexer
 
 import (
 	"lizardscript/token"
+	"strings"
 	"testing"
 )
 
@@ -402,6 +403,77 @@ func TestStringEscapes(t *testing.T) {
 // escapes still count the source characters, not the decoded ones.
 func TestEscapePositions(t *testing.T) {
 	l := New(`"a\nb" x`)
+	l.NextToken()
+	if got := l.NextToken(); got.Line != 1 || got.Column != 8 {
+		t.Errorf("x at line %d, column %d, want line 1, column 8", got.Line, got.Column)
+	}
+}
+
+// TestFloatsAndUnits checks decimal numbers, and the units that follow a
+// number. deg, rad and turn become a FLOAT in radians, px keeps the number.
+func TestFloatsAndUnits(t *testing.T) {
+	flt := func(s string) token.Token { return token.Token{Type: token.FLOAT, Literal: s} }
+	num := func(s string) token.Token { return token.Token{Type: token.INT, Literal: s} }
+	ident := func(s string) token.Token { return token.Token{Type: token.IDENT, Literal: s} }
+	dot := token.Token{Type: token.DOT, Literal: "."}
+
+	tests := []struct {
+		input    string
+		expected []token.Token
+	}{
+		{"1.5", []token.Token{flt("1.5")}},
+		{"0.25", []token.Token{flt("0.25")}},
+		{"10.0", []token.Token{flt("10.0")}},
+		{"007.50", []token.Token{flt("007.50")}},
+		{"1.5.2", []token.Token{flt("1.5"), dot, num("2")}},
+		{"1.x", []token.Token{num("1"), dot, ident("x")}},
+		{"1. 5", []token.Token{num("1"), dot, num("5")}},
+		{".5", []token.Token{dot, num("5")}},
+		{"a.5", []token.Token{ident("a"), dot, num("5")}},
+		{"1.5.x", []token.Token{flt("1.5"), dot, ident("x")}},
+		{"-1.5", []token.Token{{Type: token.MINUS, Literal: "-"}, flt("1.5")}},
+		// Units.
+		{"180deg", []token.Token{flt("3.141592653589793")}},
+		{"45deg", []token.Token{flt("0.7853981633974483")}},
+		{"0deg", []token.Token{flt("0.0")}},
+		{"1.5rad", []token.Token{flt("1.5")}},
+		{"1rad", []token.Token{flt("1.0")}},
+		{"0.25turn", []token.Token{flt("1.5707963267948966")}},
+		{"1turn", []token.Token{flt("6.283185307179586")}},
+		{"10px", []token.Token{num("10")}},
+		{"1.5px", []token.Token{flt("1.5")}},
+		{"10px 20px", []token.Token{num("10"), num("20")}},
+		{"10px.x", []token.Token{num("10"), dot, ident("x")}},
+		// A word that is not exactly a unit is left to the identifier.
+		{"5kg", []token.Token{num("5"), ident("kg")}},
+		{"1.5kg x", []token.Token{flt("1.5"), ident("kg"), ident("x")}},
+		{"1x", []token.Token{num("1"), ident("x")}},
+		{"5degx", []token.Token{num("5"), ident("degx")}},
+		{"5degrees", []token.Token{num("5"), ident("degrees")}},
+		{"5Deg", []token.Token{num("5"), ident("Deg")}},
+		{"5deg2", []token.Token{num("5"), ident("deg2")}},
+		{"5pxy", []token.Token{num("5"), ident("pxy")}},
+		{"5_", []token.Token{num("5"), ident("_")}},
+		{"1e5", []token.Token{num("1"), ident("e5")}},
+		// A number too big for a float becomes +Inf for the parser to reject.
+		{strings.Repeat("9", 400) + "rad", []token.Token{flt("+Inf")}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, want := range append(tt.expected, token.Token{Type: token.EOF, Literal: ""}) {
+			got := l.NextToken()
+			if got.Type != want.Type || got.Literal != want.Literal {
+				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
+					tt.input, i, want, got)
+			}
+		}
+	}
+}
+
+// TestFloatPositions checks the columns after numbers with a '.' and a unit.
+func TestFloatPositions(t *testing.T) {
+	l := New("1.5deg x")
 	l.NextToken()
 	if got := l.NextToken(); got.Line != 1 || got.Column != 8 {
 		t.Errorf("x at line %d, column %d, want line 1, column 8", got.Line, got.Column)
