@@ -11,8 +11,9 @@
 -~> written with str(). A value that can't be JSON (a function) or that
 -~> contains itself is an error.
 -~>
--~> Everything but json itself lives inside the function below, so a
--~> program's own names never meet the helpers.
+-~> The module runs in an environment of its own (see terrarium/lizard.go),
+-~> and its helpers live inside the function below, so only parse and
+-~> write become the json builtins.
 
 let json = function() {
   -~> Objects and arrays nest at most this deep, so a hostile input can't

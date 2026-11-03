@@ -1,6 +1,6 @@
 # 16. Projects
 
-[← Previous: Builtins reference](15-builtins-reference.md) · [Index](../README.md) · [Cheat sheet →](cheatsheet.md) · [Español](../es/16-projects.md)
+[← Previous: Builtins reference](15-builtins-reference.md) · [Index](../README.md) · [Next: The Terrarium →](17-terrarium.md) · [Español](../es/16-projects.md)
 
 Four small programs that put the chapters together. Each one is built in steps: read a step, try to write the next one yourself, then compare. Save each program in a file and run it with `./lizardscript file.liz`.
 
@@ -420,4 +420,4 @@ A few things to notice:
 
 **Go further:** add a `rect(corner, size, color, mark)` shape; make the sun's rays with eight `line`s at `i * 45deg`; or sort `shapes` with `list.sort` so that a `"z"` key decides what is drawn on top.
 
-[← Previous: Builtins reference](15-builtins-reference.md) · [Index](../README.md) · [Cheat sheet →](cheatsheet.md)
+[← Previous: Builtins reference](15-builtins-reference.md) · [Index](../README.md) · [Next: The Terrarium →](17-terrarium.md)

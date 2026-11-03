@@ -10,6 +10,7 @@ package pen
 import (
 	"lizardscript/object"
 	"lizardscript/terrarium/internal/arg"
+	"os"
 	"sync"
 	"time"
 )
@@ -124,13 +125,21 @@ func snapshot(t, x, y, height float64, phase string) Sample {
 		Rotation: s.Rotation, Source: src, Phase: phase}
 }
 
+// configOnce makes the user's pen file be read once per program.
+var configOnce sync.Once
+
 // Module is the pen module:
 //
-//	pen.available()  whether this system can report pen pressure at all
+//	pen.available()              whether this system can report pen pressure at all
+//	pen.curve(source)            the response curve of "trackpad", "tablet" or "mouse"
+//	pen.curve(source, curve)     changes it
 //
-// The pressure itself comes in the window's pointer events, as e.pen.
+// The pressure itself comes in the window's pointer events, as e.pen. The
+// first call reads the user's pen file (see LoadUserConfig).
 func Module() *object.Hash {
+	configOnce.Do(func() { LoadUserConfig(os.Stderr) })
 	return arg.Module("pen", map[string]object.BuiltinFunction{
+		"curve": curveFunc,
 		"available": func(args ...object.Object) object.Object {
 			if err := arg.Count(args, 0, 0); err != nil {
 				return err

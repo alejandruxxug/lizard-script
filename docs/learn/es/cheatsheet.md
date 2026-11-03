@@ -70,6 +70,22 @@ false true
 | `text.` | `slice find split join replace trim lines starts ends upper lower code char number` |
 | `list.` | `slice insert remove index reverse sort copy` |
 
+## El Terrario (capítulo 17)
+
+| Módulo | Nombres |
+| --- | --- |
+| `fs.` | `read write append exists list mkdir remove home join` |
+| `os.` | `args env exit platform locale config_dir` |
+| `time.` | `ms now sleep` |
+| `json.` | `parse write(value, indent = 0)` |
+| `img.` | `new load save get set pixels from_pixels` + dibujo |
+| `clip.` | `get set` |
+| `window.` | `open(w, h, title, options) run(w, tick) title` + dibujo (no en el REPL) |
+| `pen.` | `available`; la presión es `e.pen.pressure` en los eventos de la ventana |
+| dibujo (`img.` y `window.`) | `size clear fill(t, [x, y, w, h], c) span(t, y, x0, x1, c) spans blit(t, source, pos)` |
+
+Los errores dicen `fs.read: can't read x.txt: ...` y `try` los atrapa. Eventos: `e.type` es `down up move scroll key type resize close`; `e.pos`, `e.button`, `e.key`, `e.text`, `e.pen.pressure`.
+
 ## Errores comunes
 
 | Mensaje | Solución |
@@ -90,6 +106,7 @@ false true
 go build                  # crea ./lizardscript
 ./lizardscript            # REPL; exit o Ctrl+D para salir
 ./lizardscript prog.liz   # ejecuta un archivo
+./lizardscript prog.liz a b   # os.args() es ["a", "b"]
 ```
 
 [Índice](../README.md) · [Ejercicios →](exercises.md)

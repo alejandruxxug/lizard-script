@@ -70,6 +70,22 @@ false true
 | `text.` | `slice find split join replace trim lines starts ends upper lower code char number` |
 | `list.` | `slice insert remove index reverse sort copy` |
 
+## The Terrarium (chapter 17)
+
+| Module | Names |
+| --- | --- |
+| `fs.` | `read write append exists list mkdir remove home join` |
+| `os.` | `args env exit platform locale config_dir` |
+| `time.` | `ms now sleep` |
+| `json.` | `parse write(value, indent = 0)` |
+| `img.` | `new load save get set pixels from_pixels` + drawing |
+| `clip.` | `get set` |
+| `window.` | `open(w, h, title, options) run(w, tick) title` + drawing (not in the REPL) |
+| `pen.` | `available`; pressure is `e.pen.pressure` in window events |
+| drawing (`img.` and `window.`) | `size clear fill(t, [x, y, w, h], c) span(t, y, x0, x1, c) spans blit(t, source, pos)` |
+
+Errors read `fs.read: can't read x.txt: ...` and `try` catches them. Events: `e.type` is `down up move scroll key type resize close`; `e.pos`, `e.button`, `e.key`, `e.text`, `e.pen.pressure`.
+
 ## Common errors
 
 | Message | Fix |
@@ -90,6 +106,7 @@ false true
 go build                  # builds ./lizardscript
 ./lizardscript            # REPL; exit or Ctrl+D to leave
 ./lizardscript prog.liz   # run a file
+./lizardscript prog.liz a b   # os.args() is ["a", "b"]
 ```
 
 [Index](../README.md) · [Exercises →](exercises.md)

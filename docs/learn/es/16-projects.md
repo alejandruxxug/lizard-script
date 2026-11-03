@@ -1,6 +1,6 @@
 # 16. Proyectos
 
-[← Anterior: Referencia de funciones integradas](15-builtins-reference.md) · [Índice](../README.md) · [Hoja de referencia →](cheatsheet.md) · [English](../en/16-projects.md)
+[← Anterior: Referencia de funciones integradas](15-builtins-reference.md) · [Índice](../README.md) · [Siguiente: El Terrario →](17-terrarium.md) · [English](../en/16-projects.md)
 
 Cuatro programas pequeños que juntan todos los capítulos. Cada uno se construye por pasos: lee un paso, intenta escribir el siguiente por tu cuenta y luego compara. Guarda cada programa en un archivo y ejecútalo con `./lizardscript archivo.liz`.
 
@@ -420,4 +420,4 @@ Algunas cosas para notar:
 
 **Para ir más allá:** agrega una figura `rect(corner, size, color, mark)`; dibuja los rayos del sol con ocho `line` a `i * 45deg`; u ordena `shapes` con `list.sort` para que una clave `"z"` decida qué se dibuja encima.
 
-[← Anterior: Referencia de funciones integradas](15-builtins-reference.md) · [Índice](../README.md) · [Hoja de referencia →](cheatsheet.md)
+[← Anterior: Referencia de funciones integradas](15-builtins-reference.md) · [Índice](../README.md) · [Siguiente: El Terrario →](17-terrarium.md)

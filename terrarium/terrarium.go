@@ -16,28 +16,13 @@
 package terrarium
 
 import (
-	"embed"
-	"fmt"
-	"lizardscript/evaluator"
-	"lizardscript/lexer"
 	"lizardscript/object"
-	"lizardscript/parser"
-	"strings"
 	"sync"
 )
 
 // Args are the program's own arguments, the ones after its file name. A
 // host sets them before Install; os.args() gives them.
 var Args []string
-
-// sources are the modules written in lizard-script, run into the
-// environment by InstallCore.
-//
-//go:embed lib/*.liz
-var sources embed.FS
-
-// lizardModules are the files of sources, in the order they run.
-var lizardModules = []string{"json.liz"}
 
 // extras are the modules that live in their own packages, like window,
 // added by Register.
@@ -81,25 +66,10 @@ func InstallCore(env *object.Environment) {
 	env.Define("img", imgModule())
 	env.Define("clip", clipModule())
 	for _, name := range lizardModules {
-		if err := runModule(name, env); err != nil {
+		module, err := lizardModule(name)
+		if err != nil {
 			panic(err)
 		}
+		env.Define(name, module)
 	}
-}
-
-// runModule runs one module written in lizard-script into env.
-func runModule(name string, env *object.Environment) error {
-	code, err := sources.ReadFile("lib/" + name)
-	if err != nil {
-		return err
-	}
-	p := parser.New(lexer.NewNamed(string(code), "terrarium/"+name))
-	program := p.ParseProgram()
-	if len(p.Errors()) != 0 {
-		return fmt.Errorf("terrarium/%s: %s", name, strings.Join(p.Errors(), "; "))
-	}
-	if result, ok := evaluator.Eval(program, env).(*object.Error); ok {
-		return fmt.Errorf("terrarium/%s: %s", name, result.Message)
-	}
-	return nil
 }

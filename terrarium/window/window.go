@@ -241,7 +241,8 @@ type Mods struct{ Shift, Alt, Cmd, Ctrl bool }
 
 // Pen is what the pointer knows besides its position.
 type Pen struct {
-	Pressure float64    // 0 to 1; 1 for a mouse
+	Pressure float64    // 0 to 1, after the device's response curve; 1 for a mouse
+	Raw      float64    // 0 to 1, as the device reported it
 	Tilt     [2]float64 // tablet tilt, -1 to 1 on each axis
 	Source   string     // "mouse", "trackpad" or "tablet"
 	Eraser   bool       // the eraser end of a tablet pen
@@ -303,6 +304,7 @@ func modsHash(m Mods) *object.Hash {
 func penHash(p Pen) *object.Hash {
 	h := object.NewHash()
 	arg.Set(h, "pressure", arg.Float(p.Pressure))
+	arg.Set(h, "raw", arg.Float(p.Raw))
 	arg.Set(h, "source", arg.Str(p.Source))
 	arg.Set(h, "tilt", &object.Point{Coords: []object.Object{arg.Float(p.Tilt[0]), arg.Float(p.Tilt[1])}})
 	arg.Set(h, "eraser", arg.Bool(p.Eraser))

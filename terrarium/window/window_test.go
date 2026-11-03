@@ -10,6 +10,7 @@ import (
 	"lizardscript/terrarium"
 	"lizardscript/terrarium/pen"
 	"lizardscript/vm"
+	"math"
 	"strings"
 	"testing"
 )
@@ -83,7 +84,7 @@ func TestWindow(t *testing.T) {
 			"[#000000, #ff0000]"},
 		{"options", `window.open(10, 10, "", {"scale": 2, "resizable": true, "frameless": false, "fps": 30})`, "<window 10x10>"},
 		{"title", `window.title(window.open(1, 1, "a"), "b")`, "null"},
-		{"pen", `[keys(pen), type(pen.available())]`, `[["available"], "BOOLEAN"]`},
+		{"pen", `[keys(pen), type(pen.available())]`, `[["available", "curve"], "BOOLEAN"]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := runProgram(t, tc.source, nil).Inspect(); got != tc.want {
@@ -203,7 +204,7 @@ func TestEventHash(t *testing.T) {
 		want  string
 	}{
 		{Event{Type: "down", X: 1, Y: 2, Button: "right", Mods: mods, Pen: Pen{Pressure: 1, Source: "mouse"}},
-			`{"type": "down", "pos": (1, 2), "button": "right", "mods": {"shift": true, "alt": false, "cmd": false, "ctrl": false}, "pen": {"pressure": 1.0, "source": "mouse", "tilt": (0.0, 0.0), "eraser": false}}`},
+			`{"type": "down", "pos": (1, 2), "button": "right", "mods": {"shift": true, "alt": false, "cmd": false, "ctrl": false}, "pen": {"pressure": 1.0, "raw": 0.0, "source": "mouse", "tilt": (0.0, 0.0), "eraser": false}}`},
 		{Event{Type: "scroll", X: 5, Y: 6, DY: -1.5},
 			`{"type": "scroll", "pos": (5, 6), "dy": -1.5, "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
 		{Event{Type: "key", Key: "A"}, `{"type": "key", "key": "A", "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
@@ -237,14 +238,19 @@ w`, nil)
 }
 
 func TestPenAt(t *testing.T) {
+	// The default trackpad curve is {0.8, 1, 1.5}: 0.7 is below it, 0.9 is
+	// halfway, and halfway to the power of 1.5 is 0.3536.
 	native := []pen.Sample{
-		{Phase: "drag", Pressure: 0.2, Source: "trackpad"},
+		{Phase: "drag", Pressure: 0.9, Source: "trackpad"},
 		{Phase: "drag", Pressure: 0.7, Source: "trackpad"},
 	}
-	if p := penAt(native, "drag", true); p.Pressure != 0.7 || p.Source != "trackpad" {
-		t.Errorf("drag pen = %+v, want the newest sample", p)
+	if p := penAt(native, "drag", true); p.Raw != 0.7 || p.Pressure != 0 || p.Source != "trackpad" {
+		t.Errorf("drag pen = %+v, want the newest sample, curved", p)
 	}
-	if p := penAt(nil, "down", false); p.Pressure != 1 || p.Source != "mouse" {
+	if p := penAt(native[:1], "drag", true); p.Raw != 0.9 || math.Abs(p.Pressure-0.3536) > 1e-4 {
+		t.Errorf("drag pen = %+v, want raw 0.9 and pressure 0.3536", p)
+	}
+	if p := penAt(nil, "down", false); p.Pressure != 1 || p.Raw != 1 || p.Source != "mouse" {
 		t.Errorf("no samples gave %+v, want a mouse", p)
 	}
 }

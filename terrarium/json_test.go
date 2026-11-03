@@ -69,3 +69,16 @@ func TestJSONRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// The json functions run in an environment of their own, and their errors
+// are at the program's call, like any builtin's.
+func TestJSONIsABuiltinModule(t *testing.T) {
+	check(t, []testCase{
+		{"a program's text doesn't reach json", `let text = "x"; let list = 1; json.write({"a": [1]})`, `{"a":[1]}`, false},
+		{"builtins", `type(json.parse)`, "BUILTIN", false},
+		{"shown as builtins", `json.write`, "builtin json.write", false},
+		{"error at the call", "let a = 1\njson.parse(\"[\")", "[line 2, column 11] runtime error: json.parse: line 1, column 2: the text ends where a value should be", true},
+		{"argument count", `json.parse()`, "[line 1, column 11] runtime error: json.parse: wrong number of arguments: want 1, got 0", true},
+		{"write error at the call", `json.write(function() {})`, "[line 1, column 11] runtime error: json.write: can't write a FUNCTION as JSON", true},
+	})
+}

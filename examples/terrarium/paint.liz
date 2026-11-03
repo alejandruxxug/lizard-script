@@ -1,5 +1,7 @@
 -~> Paint with the mouse, a trackpad or a pen: drag to paint circles whose
--~> size follows the pressure. c clears, Esc quits.
+-~> size follows the pressure. c clears, Esc quits. While you draw, the
+-~> title shows the pressure, the device's raw one and the device, to tune
+-~> the pressure curve (see pen.curve in docs/TERRARIUM.md).
 -~> Run it with: lizardscript examples/terrarium/paint.liz
 
 let paper = #f4efe6
@@ -22,6 +24,16 @@ function brush(pressure) {
   2 + pressure * 14
 }
 
+-~> A number rounded to two decimals, as text.
+function hundredths(x) {
+  str(math.round(x * 100) / 100.0)
+}
+
+-~> Shows the pen's pressure in the title: "pressure 0.42 (raw 0.91) · trackpad".
+function show(pen) {
+  window.title(w, "pressure " + hundredths(pen.pressure) + " (raw " + hundredths(pen.raw) + ") · " + pen.source)
+}
+
 -~> A drag can move far in one frame: fill the gap with circles.
 function stroke(from, to, r) {
   let steps = math.max(1, math.ceil(math.dist(from, to) / (r / 2)))
@@ -37,11 +49,14 @@ window.run(w, function(events) {
     let e = events[i]
     if (e.type == "down" && e.button == "left") {
       circle(e.pos, brush(e.pen.pressure), ink)
+      show(e.pen)
       last = e.pos
     } elif (e.type == "move" && last != null) {
       stroke(last, e.pos, brush(e.pen.pressure))
+      show(e.pen)
       last = e.pos
     } elif (e.type == "up") {
+      window.title(w, "paint 🦎")
       last = null
     } elif (e.type == "type" && e.text == "c") {
       window.clear(w, paper)

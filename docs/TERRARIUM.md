@@ -162,7 +162,7 @@ time.sleep(500)
 
 ## json
 
-Written in lizard-script itself (`terrarium/lib/json.liz`).
+Written in lizard-script itself (`terrarium/lib/json.liz`); its functions are builtins like the others'.
 
 Objects are hashes, arrays are arrays, strings are strings, `true` and `false` are booleans and `null` is `null`. A number without a fraction or exponent is an `INTEGER` (a `FLOAT` when it is too big for one); any other is a `FLOAT`.
 
@@ -333,7 +333,8 @@ Each event is a hash with a `type` and the keys that mean something for it. Posi
 
 | key | what it is |
 | --- | --- |
-| `pressure` | 0 to 1; always 1 for a mouse |
+| `pressure` | 0 to 1, after the device's [response curve](#the-response-curve); always 1 for a mouse |
+| `raw` | 0 to 1, as the device reported it |
 | `source` | `"mouse"`, `"trackpad"` (a Force Touch trackpad) or `"tablet"` |
 | `tilt` | a point, -1 to 1 on each axis (tablets) |
 | `eraser` | whether the eraser end of the pen is in use |
@@ -342,13 +343,57 @@ Use `key` for keys that do something (Escape, arrows, shortcuts with `mods.cmd`)
 
 ## pen
 
-Pen pressure comes in the window's pointer events, as `e.pen`. macOS reports it from Force Touch trackpads and tablets; Windows 8 and later from Windows Ink pens (Wacom, Surface, Huion, XP-Pen). Other systems, and a plain mouse anywhere, report a pressure of 1.
+Pen pressure comes in the window's pointer events, as `e.pen`. macOS reports it from Force Touch trackpads and tablets; Windows 8 and later from Windows Ink pens (Wacom, Surface, Huion, XP-Pen). Other systems, and a plain mouse anywhere, report a pressure of 1. Each source has a response curve that shapes the pressure.
 
 ### pen.available()
 Whether this system can report pressure at all. Even when it is true, a mouse reports 1.
 ```
 let size = 2 + e.pen.pressure * 14
 ```
+
+### pen.curve(source)
+### pen.curve(source, curve)
+The response curve of a source (`"trackpad"`, `"tablet"` or `"mouse"`), as a hash `{"low", "high", "gamma"}`. With a second argument it changes the curve first: the keys left out keep their value, and the call fails with a clear message for an unknown source or key, a value that isn't a number, or one out of range. It returns the curve now in use.
+```
+pen.curve("trackpad")                   -~> {"low": 0.8, "high": 1.0, "gamma": 1.5}
+pen.curve("trackpad", {"gamma": 1.2})   -~> {"low": 0.8, "high": 1.0, "gamma": 1.2}
+```
+
+### The response curve
+
+A Force Touch trackpad needs a firm press to register a click (about 90% of its range), so by the time drawing starts the raw pressure is already high and strokes come out thick. A curve fixes that for one source. The pressure a program sees is:
+
+```
+clamp((raw - low) / (high - low), 0, 1) ** gamma
+```
+
+`low` is the raw pressure that counts as zero, `high` the one that counts as full, and `gamma` bends what is between: above 1 keeps light pressures small, below 1 raises them. Valid curves have `0 <= low < high <= 1` and `0.1 <= gamma <= 10`. `e.pen.raw` is always the device's own value.
+
+| source | default curve |
+| --- | --- |
+| `"trackpad"` | `{"low": 0.8, "high": 1.0, "gamma": 1.5}` |
+| `"tablet"` | `{"low": 0, "high": 1, "gamma": 1}` (no change) |
+| `"mouse"` | `{"low": 0, "high": 1, "gamma": 1}` (no change) |
+
+The trackpad default is a starting point, not a measured value: tune it for your trackpad (below).
+
+### The pen file
+
+Instead of calling `pen.curve` in every program, put the curves in `<os.config_dir()>/lizard/pen.liz` (on macOS `~/Library/Application Support/lizard/pen.liz`). It is lizard-script code; a variable named `trackpad`, `tablet` or `mouse` that holds a hash sets that curve, and keys left out keep their default:
+
+```
+-~> My trackpad registers a click late: ignore the first 85%.
+let trackpad = {"low": 0.85, "gamma": 1.4}
+```
+
+The file is read once, when the program starts. A file that doesn't exist is fine. A file with an error (a syntax error, a value out of range, a variable that isn't a hash) prints a warning to stderr and every curve keeps its default; it never stops the program. Calling `pen.curve` in a program overrides the file.
+
+### Tuning the curve
+
+1. Run `lizardscript examples/terrarium/paint.liz` and draw with your trackpad.
+2. While you draw, the title shows `pressure 0.42 (raw 0.91) · trackpad`: the pressure the program uses, the device's raw value, and the source.
+3. Press as lightly as you can while still drawing and watch `raw`. Set `low` just below it. Press as hard as you comfortably do and set `high` to that raw value (or leave it at 1).
+4. Raise `gamma` to make light strokes thinner, lower it to make them thicker. Edit `pen.liz`, run paint again, repeat.
 
 ---
 
@@ -371,16 +416,16 @@ terrarium.Install(env)
 
 | Package | What is in it |
 | --- | --- |
-| `terrarium` | `Install`, the core modules (one file each: `fs.go`, `os.go`, `time.go`, `img.go`, `clip.go`), the system parts (`sys_darwin.go`, `sys_windows.go`, `sys_other.go`) and the modules in lizard-script (`lib/*.liz`) |
+| `terrarium` | `Install`, the core modules (one file each: `fs.go`, `os.go`, `time.go`, `img.go`, `clip.go`), the system parts (`sys_darwin.go`, `sys_windows.go`, `sys_other.go`) and the modules in lizard-script (`lib/*.liz`, run by `lizard.go`) |
 | `terrarium/window` | the window module and the Ebitengine loop (`ebiten.go`) |
-| `terrarium/pen` | pressure: macOS (`pen_darwin.go`), Windows Ink (`pen_windows.go`), none (`pen_other.go`) |
+| `terrarium/pen` | pressure: macOS (`pen_darwin.go`), Windows Ink (`pen_windows.go`), none (`pen_other.go`); the response curve (`curve.go`) and the pen file (`config.go`) |
 | `terrarium/internal/arg` | checking a builtin's arguments, making values, building a module hash |
 | `terrarium/internal/pixels` | the pixel buffer under images and windows |
 | `terrarium/internal/canvas` | the drawing functions every target shares |
 
 ## Adding a module
 
-1. **Lizard-script first.** If the module only needs what lizard-script already has, write it in lizard-script, in `terrarium/lib/name.liz`, and add the file to `lizardModules` in `terrarium.go`. Keep its helpers inside one function that returns the module's hash, the way `json.liz` does, so a program's own names never meet them.
+1. **Lizard-script first.** If the module only needs what lizard-script already has, write it in lizard-script, in `terrarium/lib/name.liz`, defining a variable `name` that holds a hash of its functions, and add `name` to `lizardModules` in `terrarium/lizard.go`. The file runs in an environment of its own, so a program's variables (`let text = ...`) never reach its code, and each function becomes a builtin `name.function` whose errors are reported at the program's call, like any builtin's. Keeping the helpers inside one function that returns the hash, the way `json.liz` does, keeps them out of the module.
 2. **Go when it reaches the system.** Write `terrarium/name.go` with a function that returns `arg.Module("name", ...)`, and define it in `InstallCore`. Put the code that differs between systems in files with build tags, like `sys_darwin.go`. A module that needs a big dependency or a screen goes in its own package that calls `terrarium.Register` from its `init`, like `window`.
 3. **Every builtin** checks its arguments with `arg` (`arg.Count`, `arg.String`, ...), returns an `*object.Error` for anything that goes wrong (no panics), and has a comment that says what it does. A value Go keeps for the program is an `object.Native` with a kind of its own; a new drawing target implements `pixels.Target`.
 4. **Test it** the way the others are: a table of programs and what they give, errors included, with files in `t.TempDir()`. Nothing in a test opens a window or touches the real clipboard.

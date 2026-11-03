@@ -22,6 +22,7 @@ Una guía para aprender y enseñar lizard-script, un pequeño lenguaje interpret
 | 14 | [Errors, `try`/`catch` and `null`](en/14-errors.md) | [Errores, `try`/`catch` y `null`](es/14-errors.md) |
 | 15 | [Builtins reference](en/15-builtins-reference.md) | [Referencia de funciones integradas](es/15-builtins-reference.md) |
 | 16 | [Projects](en/16-projects.md) | [Proyectos](es/16-projects.md) |
+| 17 | [The Terrarium: files, JSON, images, windows](en/17-terrarium.md) | [El Terrario: archivos, JSON, imágenes, ventanas](es/17-terrarium.md) |
 | | [Cheat sheet](en/cheatsheet.md) | [Hoja de referencia](es/cheatsheet.md) |
 | | [Exercises](en/exercises.md) | [Ejercicios](es/exercises.md) |
 
@@ -39,7 +40,7 @@ Every example that shows output was run with the interpreter, and the output is 
 
 ### How to install and run
 
-You need [Go](https://go.dev/dl/) 1.27 or newer (check with `go version`). There are no other dependencies.
+You need [Go](https://go.dev/dl/) 1.27 or newer (check with `go version`). The first `go build` downloads the few Go modules the window needs. On Linux, the window also needs the X11 and OpenGL development packages (see [Ebitengine's install guide](https://ebitengine.org/en/documents/install.html)); macOS and Windows need nothing else.
 
 ```sh
 git clone https://github.com/alejandruxxug/lizard-script.git
@@ -79,7 +80,7 @@ Cada ejemplo que muestra una salida se ejecutó con el intérprete, y la salida 
 
 ### Cómo instalarlo y ejecutarlo
 
-Necesitas [Go](https://go.dev/dl/) 1.27 o más reciente (compruébalo con `go version`). No hay más dependencias.
+Necesitas [Go](https://go.dev/dl/) 1.27 o más reciente (compruébalo con `go version`). El primer `go build` descarga los pocos módulos de Go que necesita la ventana. En Linux, la ventana también necesita los paquetes de desarrollo de X11 y OpenGL (mira la [guía de instalación de Ebitengine](https://ebitengine.org/en/documents/install.html)); macOS y Windows no necesitan nada más.
 
 ```sh
 git clone https://github.com/alejandruxxug/lizard-script.git

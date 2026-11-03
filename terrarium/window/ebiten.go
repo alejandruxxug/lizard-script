@@ -177,11 +177,17 @@ func penAt(native []pen.Sample, phase string, held bool) Pen {
 	latest := pen.Latest()
 	for i := len(native) - 1; i >= 0; i-- {
 		if s := native[i]; s.Phase == phase && s.Source != "mouse" {
-			return Pen{Pressure: s.Pressure, Tilt: s.Tilt, Source: s.Source, Eraser: latest.Eraser}
+			return newPen(s.Pressure, s.Tilt, s.Source, latest.Eraser)
 		}
 	}
 	if held && latest.OK && latest.Source != "" && latest.Source != "mouse" {
-		return Pen{Pressure: latest.Pressure, Tilt: latest.Tilt, Source: latest.Source, Eraser: latest.Eraser}
+		return newPen(latest.Pressure, latest.Tilt, latest.Source, latest.Eraser)
 	}
-	return Pen{Pressure: 1, Source: "mouse"}
+	return newPen(1, [2]float64{}, "mouse", false)
+}
+
+// newPen is a pen with the device's response curve applied to the raw
+// pressure.
+func newPen(raw float64, tilt [2]float64, source string, eraser bool) Pen {
+	return Pen{Pressure: pen.Shape(source, raw), Raw: raw, Tilt: tilt, Source: source, Eraser: eraser}
 }
