@@ -18,6 +18,8 @@ lizard-script is a small interpreted language written in Go, built phase by phas
 | 2 | Parser / AST | ✅ Done |
 | 3 | Evaluator | ✅ Done |
 | 4 | REPL | ✅ Done |
+| 5 | Bytecode compiler + VM (`--vm`) | ✅ Done |
+| 6 | The Terrarium, the standard library | ✅ Done |
 
 ## A taste of the language
 
@@ -83,10 +85,15 @@ lizard-script/
 ├── parser/    # turns tokens into an AST with a Pratt parser (+ tests)
 ├── object/    # the values of a running program and the environments that hold variables
 ├── evaluator/ # runs the AST by walking it, plus the builtins (+ tests)
+├── code/      # the bytecode: opcodes and how instructions are encoded
+├── compiler/  # turns the AST into bytecode (+ tests)
+├── vm/        # runs the bytecode on a stack machine (+ tests)
+├── terrarium/ # the standard library: fs, os, time, json, img, clip, window, pen
 ├── repl/      # the interactive REPL, and running whole files (+ tests)
 ├── examples/  # one program per feature, and programs that show each kind of error
 ├── tests/     # valid and failing programs with their expected output
-├── docs/      # design document, grammar and semantics
+├── docs/      # design, grammar, semantics, the Terrarium, and the teaching guide (docs/learn)
+├── proposals/ # Lizard Enhancement Proposals (LEPs)
 └── main.go    # the lizardscript command
 ```
 
@@ -94,7 +101,7 @@ lizard-script/
 
 ### Install
 
-You need [Go](https://go.dev/dl/) 1.27 or newer. Check it with `go version`. The project has no other dependencies.
+You need [Go](https://go.dev/dl/) 1.27 or newer. Check it with `go version`. The first build downloads the Go modules the Terrarium's window uses; on Linux the window also needs the X11/OpenGL development packages (see [Ebitengine's install guide](https://ebitengine.org/en/documents/install.html)).
 
 ```sh
 git clone https://github.com/alejandruxxug/lizard-script.git
@@ -183,3 +190,11 @@ To add a test, write the `.liz` file and generate its `.expected` file with `go 
 ## Credits
 
 This project follows the structure of the interpreter built in class, the `evaluator` branch of [sebastianzapatar/compi8am](https://github.com/sebastianzapatar/compi8am/tree/evaluator), which is itself based on Thorsten Ball's *Writing an Interpreter in Go*.
+
+## Contributing
+
+lizard-script is open source, and anyone is welcome to tweak it, build on it and propose changes. Bug fixes, docs and Terrarium additions go through normal pull requests; changes to the language itself start as a **Lizard Enhancement Proposal**. See [CONTRIBUTING.md](CONTRIBUTING.md) and [proposals/](proposals/README.md).
+
+## License
+
+[MIT](LICENSE) © 2026 Alejandro Urrego Giraldo, Maria José Sosa Fernández, Samuel Buelvas Cabrales, and the lizard-script contributors.
