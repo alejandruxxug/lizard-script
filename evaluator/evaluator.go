@@ -439,14 +439,14 @@ func repeatString(tok token.Token, s string, count int64) object.Object {
 // Arrays and hashes are equal when their contents are. Functions are only
 // equal to themselves.
 func strictEquals(left, right object.Object) bool {
-	return (&equality{strict: true}).equals(left, right)
+	return equals(left, right, true)
 }
 
 // looseEquals is ==. It works like === but first converts between some
 // types: true and false are 1 and 0, and a string that is a whole number
 // equals that number. So 1 == true and "5" == 5, but 1 !== true.
 func looseEquals(left, right object.Object) bool {
-	return (&equality{strict: false}).equals(left, right)
+	return equals(left, right, false)
 }
 
 // toNumber is the conversion of looseEquals. It fails for anything that
@@ -468,92 +468,98 @@ func toNumber(obj object.Object) (int64, bool) {
 	}
 }
 
-// pair is two arrays or two hashes being compared.
+// pair is two values being compared.
 type pair struct {
 	left, right object.Object
 }
 
-// equality is one comparison with == or ===, applied all the way down to
-// the elements of arrays and hashes.
-type equality struct {
-	strict bool
-	// open has the pairs being compared right now. Meeting one of them again
-	// means they contain themselves, and that pair is taken as equal: if
-	// anything differs, the comparison finds it somewhere else. Without
-	// this, comparing an array that contains itself would never end.
-	open map[pair]bool
-}
+// equals compares two values with === when strict is set, or with ==.
+// Arrays and hashes are compared element by element, with the same kind of
+// equality.
+//
+// The pairs left to compare are kept in a stack instead of the function
+// calling itself, so arrays nested a million times don't overflow Go's
+// stack. seen has the pairs of arrays and hashes already taken apart.
+// Meeting one again, because a value contains itself or the same value
+// appears twice, needs no second look: its elements are already on the way.
+// That is also why comparing an array that contains itself ends.
+func equals(left, right object.Object, strict bool) bool {
+	stack := []pair{{left, right}}
+	var seen map[pair]bool
 
-func (e *equality) equals(left, right object.Object) bool {
-	if left.Type() != right.Type() {
-		if e.strict {
-			return false
-		}
-		leftNumber, leftOk := toNumber(left)
-		rightNumber, rightOk := toNumber(right)
-		return leftOk && rightOk && leftNumber == rightNumber
-	}
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		left, right := current.left, current.right
 
-	switch left := left.(type) {
-	case *object.Integer:
-		return left.Value == right.(*object.Integer).Value
-	case *object.Boolean:
-		return left.Value == right.(*object.Boolean).Value
-	case *object.String:
-		return left.Value == right.(*object.String).Value
-	case *object.Null:
-		return true
-	case *object.Array:
-		right := right.(*object.Array)
-		if len(left.Elements) != len(right.Elements) {
-			return false
+		if left.Type() != right.Type() {
+			if strict {
+				return false
+			}
+			leftNumber, leftOk := toNumber(left)
+			rightNumber, rightOk := toNumber(right)
+			if !leftOk || !rightOk || leftNumber != rightNumber {
+				return false
+			}
+			continue
 		}
-		if !e.enter(left, right) {
-			return true
-		}
-		defer e.leave(left, right)
-		for i := range left.Elements {
-			if !e.equals(left.Elements[i], right.Elements[i]) {
+
+		switch left := left.(type) {
+		case *object.Integer:
+			if left.Value != right.(*object.Integer).Value {
+				return false
+			}
+		case *object.Boolean:
+			if left.Value != right.(*object.Boolean).Value {
+				return false
+			}
+		case *object.String:
+			if left.Value != right.(*object.String).Value {
+				return false
+			}
+		case *object.Null:
+		case *object.Array:
+			right := right.(*object.Array)
+			if len(left.Elements) != len(right.Elements) {
+				return false
+			}
+			if seen[current] {
+				continue
+			}
+			if seen == nil {
+				seen = map[pair]bool{}
+			}
+			seen[current] = true
+			for i := range left.Elements {
+				stack = append(stack, pair{left.Elements[i], right.Elements[i]})
+			}
+		case *object.Hash:
+			right := right.(*object.Hash)
+			if len(left.Pairs) != len(right.Pairs) {
+				return false
+			}
+			if seen[current] {
+				continue
+			}
+			if seen == nil {
+				seen = map[pair]bool{}
+			}
+			seen[current] = true
+			for key, entry := range left.Pairs {
+				other, ok := right.Pairs[key]
+				if !ok {
+					return false
+				}
+				stack = append(stack, pair{entry.Value, other.Value})
+			}
+		default:
+			if left != right {
 				return false
 			}
 		}
-		return true
-	case *object.Hash:
-		right := right.(*object.Hash)
-		if len(left.Pairs) != len(right.Pairs) {
-			return false
-		}
-		if !e.enter(left, right) {
-			return true
-		}
-		defer e.leave(left, right)
-		for key, entry := range left.Pairs {
-			other, ok := right.Pairs[key]
-			if !ok || !e.equals(entry.Value, other.Value) {
-				return false
-			}
-		}
-		return true
-	default:
-		return left == right
 	}
-}
 
-// enter marks left and right as being compared. It returns false if they
-// already were.
-func (e *equality) enter(left, right object.Object) bool {
-	if e.open == nil {
-		e.open = map[pair]bool{}
-	}
-	if e.open[pair{left, right}] {
-		return false
-	}
-	e.open[pair{left, right}] = true
 	return true
-}
-
-func (e *equality) leave(left, right object.Object) {
-	delete(e.open, pair{left, right})
 }
 
 // Assignment

@@ -74,7 +74,7 @@ type Array struct {
 }
 
 func (a *Array) Type() ObjectType { return ARRAY_OBJ }
-func (a *Array) Inspect() string  { return inspectNested(a, map[Object]bool{}) }
+func (a *Array) Inspect() string  { return inspectNested(a) }
 
 // HashKey identifies a key of a Hash. Two keys are the same when they have
 // the same type and value, so 1 and "1" are different keys.
@@ -158,46 +158,90 @@ func (h *Hash) Each(f func(pair HashPair)) {
 }
 
 func (h *Hash) Type() ObjectType { return HASH_OBJ }
-func (h *Hash) Inspect() string  { return inspectNested(h, map[Object]bool{}) }
+func (h *Hash) Inspect() string  { return inspectNested(h) }
+
+// inspectStep is one piece of output left to write: a value, or a text.
+// After the text of a step with close, close is no longer being written.
+type inspectStep struct {
+	value Object
+	text  string
+	close Object
+}
 
 // inspectNested writes a value inside an array or hash. Strings get their
-// quotes, so ["1"] and [1] look different. open has the arrays and hashes
-// being written right now: meeting one of them again means it contains
-// itself, and it is shown as [...] or {...} instead of looping forever.
-func inspectNested(o Object, open map[Object]bool) string {
-	switch o := o.(type) {
-	case *String:
-		return "\"" + o.Value + "\""
+// quotes, so ["1"] and [1] look different.
+//
+// It keeps the pieces left to write in a stack instead of calling itself for
+// each element, so an array nested a million times doesn't overflow Go's
+// stack, and it writes everything into one buffer, so deep nesting doesn't
+// copy the text again at every level.
+//
+// open has the arrays and hashes being written right now: meeting one of
+// them again means it contains itself, and it is shown as [...] or {...}
+// instead of looping forever.
+func inspectNested(root Object) string {
+	var out strings.Builder
+	open := map[Object]bool{}
+	stack := []inspectStep{{value: root}}
 
-	case *Array:
-		if open[o] {
-			return "[...]"
+	for len(stack) > 0 {
+		step := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		if step.value == nil {
+			out.WriteString(step.text)
+			if step.close != nil {
+				delete(open, step.close)
+			}
+			continue
 		}
-		open[o] = true
-		defer delete(open, o)
 
-		parts := []string{}
-		for _, e := range o.Elements {
-			parts = append(parts, inspectNested(e, open))
+		// The pieces of an array or hash go on the stack last first, so
+		// they come off in order.
+		switch o := step.value.(type) {
+		case *String:
+			out.WriteString("\"" + o.Value + "\"")
+
+		case *Array:
+			if open[o] {
+				out.WriteString("[...]")
+				continue
+			}
+			open[o] = true
+			out.WriteString("[")
+			stack = append(stack, inspectStep{text: "]", close: o})
+			for i := len(o.Elements) - 1; i >= 0; i-- {
+				stack = append(stack, inspectStep{value: o.Elements[i]})
+				if i > 0 {
+					stack = append(stack, inspectStep{text: ", "})
+				}
+			}
+
+		case *Hash:
+			if open[o] {
+				out.WriteString("{...}")
+				continue
+			}
+			open[o] = true
+			out.WriteString("{")
+			stack = append(stack, inspectStep{text: "}", close: o})
+			for i := len(o.Order) - 1; i >= 0; i-- {
+				pair := o.Pairs[o.Order[i]]
+				stack = append(stack,
+					inspectStep{value: pair.Value},
+					inspectStep{text: ": "},
+					inspectStep{value: pair.Key})
+				if i > 0 {
+					stack = append(stack, inspectStep{text: ", "})
+				}
+			}
+
+		default:
+			out.WriteString(o.Inspect())
 		}
-		return "[" + strings.Join(parts, ", ") + "]"
-
-	case *Hash:
-		if open[o] {
-			return "{...}"
-		}
-		open[o] = true
-		defer delete(open, o)
-
-		parts := []string{}
-		o.Each(func(pair HashPair) {
-			parts = append(parts, inspectNested(pair.Key, open)+": "+inspectNested(pair.Value, open))
-		})
-		return "{" + strings.Join(parts, ", ") + "}"
-
-	default:
-		return o.Inspect()
 	}
+
+	return out.String()
 }
 
 // Function is a function value. Env is the environment where it was

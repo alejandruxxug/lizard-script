@@ -5,6 +5,7 @@ import (
 	"lizardscript/lexer"
 	"lizardscript/object"
 	"lizardscript/parser"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -391,4 +392,55 @@ func TestErrors(t *testing.T) {
 func TestCallDepthRecovers(t *testing.T) {
 	run(t, "function loop(n) { loop(n + 1) } loop(0)")
 	checkAll(t, []expectation{{"function f(n) { if (n == 0) { return 0 } f(n - 1) } f(5000)", "0"}})
+}
+
+// nest wraps inner in depth arrays, or in depth hashes when hash is set.
+func nest(inner object.Object, depth int, hash bool) object.Object {
+	value := inner
+	for i := 0; i < depth; i++ {
+		if hash {
+			h := object.NewHash()
+			h.Set(&object.String{Value: "in"}, value)
+			value = h
+		} else {
+			value = &object.Array{Elements: []object.Object{value}}
+		}
+	}
+	return value
+}
+
+// TestDeepNesting checks that showing and comparing deeply nested values
+// doesn't depend on Go's stack. The stack is limited to 1 MB during the
+// test, where code that calls itself once per level crashes after a few
+// thousand levels.
+func TestDeepNesting(t *testing.T) {
+	const depth = 100000
+	defer debug.SetMaxStack(debug.SetMaxStack(1 << 20))
+
+	array := nest(&object.Integer{Value: 1}, depth, false)
+	shown := array.Inspect()
+	if shown != strings.Repeat("[", depth)+"1"+strings.Repeat("]", depth) {
+		t.Errorf("deep array shown wrong, starts with %q", shown[:20])
+	}
+
+	hash := nest(&object.String{Value: "x"}, depth, true)
+	shown = hash.Inspect()
+	if shown != strings.Repeat("{\"in\": ", depth)+"\"x\""+strings.Repeat("}", depth) {
+		t.Errorf("deep hash shown wrong, starts with %q", shown[:20])
+	}
+
+	same := nest(&object.String{Value: "1"}, depth, false)
+	different := nest(&object.Integer{Value: 2}, depth, false)
+	if !looseEquals(array, same) {
+		t.Error("deep arrays should be ==")
+	}
+	if strictEquals(array, same) {
+		t.Error("deep arrays with 1 and \"1\" inside should not be ===")
+	}
+	if looseEquals(array, different) {
+		t.Error("deep arrays with 1 and 2 inside should not be ==")
+	}
+	if !strictEquals(hash, nest(&object.String{Value: "x"}, depth, true)) {
+		t.Error("deep hashes should be ===")
+	}
 }
