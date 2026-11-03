@@ -192,6 +192,9 @@ func illegalMessage(tok token.Token) string {
 		return "bad color " + tok.Literal
 	}
 	// A lone backslash outside a string is an unexpected character.
+	if strings.HasPrefix(tok.Literal, "\\u") && lexer.ExplainUnicodeEscape(tok.Literal) != "" {
+		return lexer.ExplainUnicodeEscape(tok.Literal)
+	}
 	if strings.HasPrefix(tok.Literal, "\\") && len(tok.Literal) > 1 {
 		return fmt.Sprintf("unknown escape %s in string", tok.Literal)
 	}
@@ -620,6 +623,7 @@ func (p *Parser) parseFunctionDeclaration() ast.Statement {
 		Literal: "let",
 		Line:    function.Line,
 		Column:  function.Column,
+		Source:  function.Source,
 	}}
 
 	p.nextToken()

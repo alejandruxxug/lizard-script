@@ -1,0 +1,1 @@
+[line 2, column 9] lexical error: invalid unicode escape \uD83D: surrogate halves (D800 to DFFF) are not characters

@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 // Output is where puts writes. Tests and the REPL can change it.
@@ -66,7 +65,7 @@ func builtinLen(args ...object.Object) object.Object {
 	}
 	switch arg := args[0].(type) {
 	case *object.String:
-		return &object.Integer{Value: int64(utf8.RuneCountInString(arg.Value))}
+		return &object.Integer{Value: int64(arg.Len())}
 	case *object.Array:
 		return &object.Integer{Value: int64(len(arg.Elements))}
 	case *object.Hash:

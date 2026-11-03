@@ -566,6 +566,11 @@ func TestDotErrors(t *testing.T) {
 		{".a", `[line 1, column 1] syntax error: expected an expression, got "."`},
 		{`a."\q"`, `[line 1, column 3] lexical error: unknown escape \q in string`},
 		{`let s = "a\qb"`, `[line 1, column 9] lexical error: unknown escape \q in string`},
+		{`let s = "a\u12"`, `[line 1, column 9] lexical error: invalid unicode escape \u12: \u needs exactly 4 hex digits`},
+		{`let s = "\uD83D\uDE00"`, `[line 1, column 9] lexical error: invalid unicode escape \uD83D: surrogate halves (D800 to DFFF) are not characters`},
+		{`let s = "\u{110000}"`, `[line 1, column 9] lexical error: invalid unicode escape \u{110000}: code point above 10FFFF`},
+		{`let s = "\u{41"`, `[line 1, column 9] lexical error: invalid unicode escape \u{41: \u{...} needs 1 to 6 hex digits and a closing }`},
+		{`let s = "\u{}"`, `[line 1, column 9] lexical error: invalid unicode escape \u{}: \u{...} needs 1 to 6 hex digits and a closing }`},
 		{`let s = "a" \ 1`, `[line 1, column 13] lexical error: unexpected character "\\"`},
 	}
 

@@ -1,0 +1,1 @@
+[line 2, column 9] lexical error: invalid unicode escape \u12: \u needs exactly 4 hex digits

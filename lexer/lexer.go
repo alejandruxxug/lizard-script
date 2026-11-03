@@ -15,17 +15,28 @@ const commentStart = "-~>"
 // Lexer turns lizard-script source code into a stream of tokens.
 type Lexer struct {
 	input        string
-	position     int  // current position in input (points to current char)
-	readPosition int  // current reading position in input (after current char)
-	ch           byte // current char under examination
-	line         int  // 1-based line of ch
-	column       int  // 1-based column of ch
+	position     int    // current position in input (points to current char)
+	readPosition int    // current reading position in input (after current char)
+	ch           byte   // current char under examination
+	line         int    // 1-based line of ch
+	column       int    // 1-based column of ch
+	source       string // name stamped on every token, "" when unnamed
 }
 
 // New creates a Lexer for input and loads its first character.
 func New(input string) *Lexer {
 	l := &Lexer{input: input, line: 1}
 	l.readChar()
+	return l
+}
+
+// NewNamed is New for a source that has a name, like a file name. Every
+// token carries the name in its Source field, so a host that loads several
+// sources can tell where a token came from. The name is never part of any
+// message. New(input) is NewNamed(input, "").
+func NewNamed(input, name string) *Lexer {
+	l := New(input)
+	l.source = name
 	return l
 }
 
@@ -74,6 +85,7 @@ func (l *Lexer) NextToken() token.Token {
 	line, column := l.line, l.column
 	tok := l.readToken()
 	tok.Line, tok.Column = line, column
+	tok.Source = l.source
 	return tok
 }
 
@@ -249,6 +261,12 @@ func (l *Lexer) readString() token.Token {
 			if l.atEnd() {
 				return token.Token{Type: token.ILLEGAL, Literal: l.input[start:l.position]}
 			}
+			if l.ch == 'u' {
+				if bad, ok := l.readUnicodeEscape(&content); !ok {
+					return bad
+				}
+				continue
+			}
 			escaped, ok := unescape(l.ch)
 			if !ok {
 				return l.unknownEscape()
@@ -269,8 +287,75 @@ func unescape(ch byte) (byte, bool) {
 		return '\n', true
 	case 't':
 		return '\t', true
+	case 'r':
+		return '\r', true
 	}
 	return 0, false
+}
+
+// readUnicodeEscape reads the rest of \uXXXX (exactly 4 hex digits) or
+// \u{X...} (1 to 6 hex digits), with ch on the 'u', and writes the code
+// point to content. It leaves ch on the last character of the escape. A
+// bad escape (too few digits, a missing }, a surrogate half, a value above
+// 10FFFF) returns an ILLEGAL token whose literal is the escape as written;
+// the parser explains it with ExplainUnicodeEscape. The rest of the string
+// is skipped, like for an unknown escape.
+func (l *Lexer) readUnicodeEscape(content *strings.Builder) (token.Token, bool) {
+	start := l.position - 1 // the backslash
+	braces := l.peekChar() == '{'
+	if braces {
+		l.readChar()
+	}
+	digits := 0
+	for isHexDigit(l.peekChar()) && digits < 6 && (braces || digits < 4) {
+		l.readChar()
+		digits++
+	}
+	if braces && l.peekChar() == '}' {
+		l.readChar()
+	}
+	literal := l.input[start : l.position+1]
+	if ExplainUnicodeEscape(literal) != "" {
+		l.skipRestOfString()
+		return token.Token{Type: token.ILLEGAL, Literal: literal}, false
+	}
+	value, _ := strconv.ParseUint(strings.Trim(literal[2:], "{}"), 16, 32)
+	content.WriteRune(rune(value))
+	return token.Token{}, true
+}
+
+// ExplainUnicodeEscape says what is wrong with the escape text (like \u12
+// or \u{D800}) that readUnicodeEscape rejected, or returns "" when the
+// escape is fine.
+func ExplainUnicodeEscape(escape string) string {
+	body := escape[2:]
+	if strings.HasPrefix(body, "{") {
+		if !strings.HasSuffix(body, "}") || len(body) < 3 {
+			return "invalid unicode escape " + escape + ": \\u{...} needs 1 to 6 hex digits and a closing }"
+		}
+		body = body[1 : len(body)-1]
+	} else if len(body) != 4 {
+		return "invalid unicode escape " + escape + ": \\u needs exactly 4 hex digits"
+	}
+	value, _ := strconv.ParseUint(body, 16, 32)
+	switch {
+	case value >= 0xD800 && value <= 0xDFFF:
+		return "invalid unicode escape " + escape + ": surrogate halves (D800 to DFFF) are not characters"
+	case value > 0x10FFFF:
+		return "invalid unicode escape " + escape + ": code point above 10FFFF"
+	}
+	return ""
+}
+
+// skipRestOfString moves ch to the closing quote of the string (or the end
+// of input), so that quote is not read as the start of another string.
+func (l *Lexer) skipRestOfString() {
+	for !l.atEnd() && l.ch != '"' {
+		if l.ch == '\\' {
+			l.readChar()
+		}
+		l.readChar()
+	}
 }
 
 // unknownEscape returns the ILLEGAL token for an escape like \q, with ch on

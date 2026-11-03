@@ -1,6 +1,14 @@
 package evaluator
 
-import "testing"
+import (
+	"lizardscript/object"
+	"lizardscript/token"
+	"strings"
+	"testing"
+	"time"
+)
+
+var testTok = token.Token{Line: 1, Column: 1}
 
 func TestTextFunctions(t *testing.T) {
 	ResetMath()
@@ -129,4 +137,68 @@ func TestTextErrors(t *testing.T) {
 		{`text.char(55296)`, "[line 1, column 10] runtime error: text.char: 55296 is not a character code"},
 		{`text.char("a")`, "[line 1, column 10] runtime error: text.char: argument 1 must be INTEGER, got STRING"},
 	})
+}
+
+// TestStringIndexCache checks that the cached characters give the same
+// answers as the plain conversion, for ASCII and non-ASCII text, and that
+// the helpers can be mixed on the same string.
+func TestStringIndexCache(t *testing.T) {
+	checkAll(t, []expectation{
+		{`let s = "añ🦎b"; [len(s), s[0], s[1], s[2], s[3], s[4], s[-1]]`, `[4, "a", "ñ", "🦎", "b", null, null]`},
+		{`let s = "añ🦎b"; [text.slice(s, 1, 3), text.code(s, 2), text.find(s, "b"), len(s)]`, `["ñ🦎", 129422, 3, 4]`},
+		{`let s = "hello"; [len(s), s[4], text.slice(s, -3, 5), text.code(s, -1), text.find(s, "l", 3)]`, `[5, "o", "llo", 111, 3]`},
+		{`let s = ""; [len(s), s[0], text.slice(s, 0, 3), text.find(s, "")]`, `[0, null, "", 0]`},
+		{`"\u00e9\u{1F98E}"[1]`, `"🦎"`},
+	})
+}
+
+// longString is n characters of text; wide mixes in a non-ASCII one.
+func longString(n int, wide bool) *object.String {
+	b := []rune(strings.Repeat("abcdefgh", n/8+1))[:n]
+	if wide {
+		b[0] = 'é'
+	}
+	return &object.String{Value: string(b)}
+}
+
+// BenchmarkIndexEveryChar reads every character of a 200 KB string by index,
+// the loop that used to be O(n squared).
+func BenchmarkIndexEveryChar(b *testing.B) {
+	for _, wide := range []bool{false, true} {
+		name := map[bool]string{false: "ascii", true: "unicode"}[wide]
+		b.Run(name, func(b *testing.B) {
+			s := longString(200_000, wide)
+			n := int64(s.Len())
+			for i := 0; i < b.N; i++ {
+				for j := int64(0); j < n; j++ {
+					evalIndexExpression(testTok, s, &object.Integer{Value: j})
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkIndexEveryCharOld is the same loop with the old conversion on
+// every access, for comparison.
+func BenchmarkIndexEveryCharOld(b *testing.B) {
+	s := longString(20_000, false) // 10 times smaller: the old loop is too slow at 200 KB
+	n := len([]rune(s.Value))
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < n; j++ {
+			_ = string([]rune(s.Value)[j])
+		}
+	}
+}
+
+// TestIndexIsLinear fails if indexing every character of a long string goes
+// back to converting the whole string on every access.
+func TestIndexIsLinear(t *testing.T) {
+	s := longString(200_000, true)
+	start := time.Now()
+	for j := 0; j < s.Len(); j++ {
+		evalIndexExpression(testTok, s, &object.Integer{Value: int64(j)})
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("indexing 200000 characters took %v", took)
+	}
 }

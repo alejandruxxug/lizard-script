@@ -1,0 +1,2 @@
+puts("ok")
+let s = "half \uD83D pair"

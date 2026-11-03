@@ -9,6 +9,10 @@ type Token struct {
 	Literal string
 	Line    int // 1-based line where the token starts
 	Column  int // 1-based column where the token starts
+	// Source is the name of the source the token was read from, given to
+	// lexer.NewNamed. It is "" for an unnamed source. It never appears in
+	// messages; it is for hosts that load several sources.
+	Source string
 }
 
 const (

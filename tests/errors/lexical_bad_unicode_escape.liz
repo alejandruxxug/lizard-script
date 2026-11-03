@@ -1,0 +1,2 @@
+puts("ok")
+let s = "short \u12 escape"

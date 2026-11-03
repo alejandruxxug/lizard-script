@@ -107,7 +107,8 @@ FLOAT   = digit { digit } "." digit { digit } [ unit ]
         | digit { digit } ( "deg" | "rad" | "turn" ) ;
 unit    = "deg" | "rad" | "turn" | "px" ;
 STRING  = '"' { any character except '"' and '\' | escape } '"' ;
-escape  = "\\" ( '"' | "\\" | "n" | "t" ) ;
+escape  = "\\" ( '"' | "\\" | "n" | "t" | "r" | unicode ) ;
+unicode = "u" hex hex hex hex | "u{" hex { hex } "}" ;   (* 1 to 6 digits inside the braces *)
 COLOR   = "#" hex hex hex [ hex hex hex [ hex hex ] ] ;
 hex     = digit | "a".."f" | "A".."F" ;
 comment = "-~>" { any character except newline } ;
@@ -163,7 +164,7 @@ A parameter can have a default value, `function t(key, values = null)`, also in 
 
 ## Known limitations
 
-- Strings can span several lines. Inside a string, `\"` is a quote, `\\` a backslash, `\n` a line break and `\t` a tab. Any other backslash sequence, like `\q`, is the lexical error `unknown escape \q in string`, and a string that ends in a lone `\` is unterminated.
+- Strings can span several lines. Inside a string, `\"` is a quote, `\\` a backslash, `\n` a line break, `\t` a tab and `\r` a carriage return. `\uXXXX` (exactly 4 hex digits) and `\u{X...}` (1 to 6 hex digits) are that code point, so `"\u00e9"` and `"\u{E9}"` are `é` and `"\u{1F98E}"` is a lizard. A `\u` that is malformed, a surrogate half (D800 to DFFF) or a value above 10FFFF is the lexical error `invalid unicode escape \u12: ...` with the reason. Any other backslash sequence, like `\q`, is the lexical error `unknown escape \q in string`, and a string that ends in a lone `\` is unterminated.
 - Identifiers and comments are ASCII. A non-ASCII character in code is a lexical error, although strings and comments can contain it.
 - `;` is optional at the end of a line, but a line break doesn't end an expression that can continue. A line starting with an operator, `(` or `[` continues the previous expression, so `x` followed by a line with `-1` is a subtraction.
 - For the same reason, `return` takes the expression on the next line as its value, unless a `;` or `}` comes first.

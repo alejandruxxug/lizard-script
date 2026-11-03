@@ -1,0 +1,11 @@
+-~> \r and \uXXXX / \u{X...} escapes
+puts(len("a\rb"))
+puts(text.code("a\rb", 1))
+puts("Aé€")
+puts("\u{1F98E}")
+puts(len("\u{1F98E}"))
+puts(text.code("\u{1F98E}", 0))
+puts("\u{41}\u{000042}")
+puts("A1")
+puts("\\u0041 stays as it is")
+puts("\u{10FFFF}" == "\u{10FFFF}")

@@ -377,7 +377,22 @@ func TestStringEscapes(t *testing.T) {
 		{`"\""`, []token.Token{{Type: token.STRING, Literal: `"`}}},
 		{`"añ\n🦎"`, []token.Token{{Type: token.STRING, Literal: "añ\n🦎"}}},
 		{`"\q"`, []token.Token{{Type: token.ILLEGAL, Literal: `\q`}}},
-		{`"ab\r cd" x`, []token.Token{{Type: token.ILLEGAL, Literal: `\r`}, {Type: token.IDENT, Literal: "x"}}},
+		{`"ab\q cd" x`, []token.Token{{Type: token.ILLEGAL, Literal: `\q`}, {Type: token.IDENT, Literal: "x"}}},
+		{`"a\rb"`, []token.Token{{Type: token.STRING, Literal: "a\rb"}}},
+		{`"\u0041\u00e9\u20AC"`, []token.Token{{Type: token.STRING, Literal: "Aé€"}}},
+		{`"\u{1F98E} \u{41}\u{000041}\u{10FFFF}"`, []token.Token{{Type: token.STRING, Literal: "🦎 AA\U0010FFFF"}}},
+		{`"\u00411"`, []token.Token{{Type: token.STRING, Literal: "A1"}}},
+		{`"\u"`, []token.Token{{Type: token.ILLEGAL, Literal: `\u`}}},
+		{`"\u12" x`, []token.Token{{Type: token.ILLEGAL, Literal: `\u12`}, {Type: token.IDENT, Literal: "x"}}},
+		{`"\u12G4" x`, []token.Token{{Type: token.ILLEGAL, Literal: `\u12`}, {Type: token.IDENT, Literal: "x"}}},
+		{`"\uD800"`, []token.Token{{Type: token.ILLEGAL, Literal: `\uD800`}}},
+		{`"\uDFFF"`, []token.Token{{Type: token.ILLEGAL, Literal: `\uDFFF`}}},
+		{`"\u{dead}"`, []token.Token{{Type: token.ILLEGAL, Literal: `\u{dead}`}}},
+		{`"\u{110000}"`, []token.Token{{Type: token.ILLEGAL, Literal: `\u{110000}`}}},
+		{`"\u{}"`, []token.Token{{Type: token.ILLEGAL, Literal: `\u{}`}}},
+		{`"\u{41"`, []token.Token{{Type: token.ILLEGAL, Literal: `\u{41`}}},
+		{`"\u{1234567}"`, []token.Token{{Type: token.ILLEGAL, Literal: `\u{123456`}}},
+		{`"\u00`, []token.Token{{Type: token.ILLEGAL, Literal: `\u00`}}},
 		{`"\ñ \" x" y`, []token.Token{{Type: token.ILLEGAL, Literal: `\ñ`}, {Type: token.IDENT, Literal: "y"}}},
 		{`"open\`, []token.Token{{Type: token.ILLEGAL, Literal: `"open\`}}},
 		{`"open\"`, []token.Token{{Type: token.ILLEGAL, Literal: `"open\"`}}},
@@ -568,6 +583,42 @@ func TestCompoundAssignTokens(t *testing.T) {
 				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
 					tt.input, i, want, got)
 			}
+		}
+	}
+}
+
+// TestSourceNames checks that NewNamed stamps every token with the name and
+// New leaves it empty.
+func TestSourceNames(t *testing.T) {
+	input := "let x = \"a\"\nx"
+	for _, name := range []string{"", "lib.liz", "user"} {
+		var l *Lexer
+		if name == "" {
+			l = New(input)
+		} else {
+			l = NewNamed(input, name)
+		}
+		count := 0
+		for tok := l.NextToken(); ; tok = l.NextToken() {
+			count++
+			if tok.Source != name {
+				t.Errorf("name %q: token %+v has Source %q", name, tok, tok.Source)
+			}
+			if tok.Type == token.EOF {
+				break
+			}
+		}
+		if count < 5 {
+			t.Errorf("name %q: only %d tokens", name, count)
+		}
+	}
+
+	// The name never changes the positions.
+	a, b := New("x\n  y"), NewNamed("x\n  y", "n")
+	for i := 0; i < 3; i++ {
+		ta, tb := a.NextToken(), b.NextToken()
+		if ta.Line != tb.Line || ta.Column != tb.Column || ta.Literal != tb.Literal {
+			t.Errorf("token %d differs: %+v vs %+v", i, ta, tb)
 		}
 	}
 }

@@ -13,7 +13,6 @@ import (
 	"lizardscript/token"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 // The values that exist only once, so they can be compared by pointer.
@@ -246,6 +245,7 @@ func newError(tok token.Token, format string, args ...any) *object.Error {
 			tok.Line, tok.Column, fmt.Sprintf(format, args...)),
 		Line:   tok.Line,
 		Column: tok.Column,
+		Source: tok.Source,
 	}
 }
 
@@ -1094,10 +1094,10 @@ func evalIndexExpression(tok token.Token, left, index object.Object) object.Obje
 			return newError(tok, "string index must be INTEGER, got %s", index.Type())
 		}
 		i := integer.Value
-		if i < 0 || i >= int64(utf8.RuneCountInString(left.Value)) {
+		if i < 0 || i >= int64(left.Len()) {
 			return NULL
 		}
-		return &object.String{Value: string([]rune(left.Value)[i])}
+		return &object.String{Value: string(left.RuneAt(int(i)))}
 
 	case *object.Color:
 		return evalColorProperty(tok, left, index)

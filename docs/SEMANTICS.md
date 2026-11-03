@@ -142,7 +142,7 @@ A point is shown as `(1, 2)` or `(0.5, 2)`, each coordinate the way `puts` write
 
 ## Strings
 
-In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break and `\t` is a tab. The value of the string holds the character, not the two source characters, so `len("a\nb")` is 3.
+In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break, `\t` is a tab and `\r` is a carriage return. `\uXXXX` and `\u{X...}` are the character with that code point (`"\u{1F98E}"` is one character, so its `len` is 1); surrogate halves and values above 10FFFF are lexical errors. The value of the string holds the character, not the two source characters, so `len("a\nb")` is 3. Indexing (`s[i]`), `len` and the `text` helpers that count characters (`slice`, `find`, `code`) are fast on long strings: a string remembers its characters after the first use, so a loop over every index of a 200 KB string is linear, not quadratic.
 
 ## Layers
 
@@ -237,6 +237,10 @@ A host that embeds the interpreter can watch a program run. Both hooks are packa
 | `evaluator.OnLayer func(name string, enter bool, tok token.Token)` | With `enter` true when a layer's body starts, and with `enter` false when it ends, also when it ends by an error, a `return` or a `break`. `name` is the layer's name without quotes, and `tok` the `layer` word (its line and column). Layers nest, so exits come in the reverse order of the enters. |
 
 A host that tags what a program makes keeps a stack of names in `OnLayer` and reads the current top whenever a builtin it provides is called.
+
+### Source names (for hosts)
+
+A host that loads several sources (libraries and the user's program) into one environment can name each one: `lexer.NewNamed(input, name)` is `lexer.New(input)` whose tokens all carry `Source: name` (`lexer.New` leaves it `""`). The name is copied into the tree, so the token of any statement a hook receives (`LetStatement.Token.Source`, and so on) tells which source it came from, even when a function defined in `"lib.liz"` runs because of a call in `"user"`. A runtime error gets the same in `object.Error.Source`, next to `Line` and `Column`: those are positions inside that source. Names never appear in messages, so output is the same with or without them.
 
 ## Errors
 

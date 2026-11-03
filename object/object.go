@@ -117,8 +117,61 @@ func (b *Boolean) Type() ObjectType { return BOOLEAN_OBJ }
 func (b *Boolean) Inspect() string  { return fmt.Sprintf("%t", b.Value) }
 
 // String is a text. Its length and indexes count characters, not bytes.
+//
+// Reading by character index is O(1) after the first access: Len and RuneAt
+// keep what they learned about Value. Value must not change once a String
+// has been read this way, and a String is not safe for concurrent use.
 type String struct {
 	Value string
+
+	scanned bool   // Value was looked at
+	ascii   bool   // every byte of Value is below 0x80
+	runes   []rune // the characters, only filled for non-ASCII text
+}
+
+// scan looks at Value once.
+func (s *String) scan() {
+	if s.scanned {
+		return
+	}
+	s.scanned = true
+	s.ascii = true
+	for i := 0; i < len(s.Value); i++ {
+		if s.Value[i] >= 0x80 {
+			s.ascii = false
+			s.runes = []rune(s.Value)
+			return
+		}
+	}
+}
+
+// Len is the number of characters of the string.
+func (s *String) Len() int {
+	s.scan()
+	if s.ascii {
+		return len(s.Value)
+	}
+	return len(s.runes)
+}
+
+// Runes returns the characters of the string. The caller must not change
+// the slice.
+func (s *String) Runes() []rune {
+	s.scan()
+	if s.ascii {
+		s.runes = []rune(s.Value)
+		s.ascii = false // runes is filled now, use it from here on
+	}
+	return s.runes
+}
+
+// RuneAt returns the character at index i, which must be 0 <= i < Len().
+func (s *String) RuneAt(i int) rune {
+	s.scan()
+	if s.ascii {
+		return rune(s.Value[i])
+	}
+	return s.runes[i]
 }
 
 func (s *String) Type() ObjectType { return STRING_OBJ }
@@ -369,6 +422,10 @@ type Error struct {
 	// Line and Column are where the error happened, the same numbers that
 	// are in Message. They are 0 for an error that has no position yet.
 	Line, Column int
+	// Source is the name of the source where the error happened (see
+	// lexer.NewNamed), or "" when that source has no name. It is not part
+	// of Message.
+	Source string
 	// Uncatchable marks the errors that protect the host: the step limit
 	// and the stack overflows. A try statement lets them go through.
 	Uncatchable bool

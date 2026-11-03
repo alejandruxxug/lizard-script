@@ -100,17 +100,28 @@ func clampIndex(i int64, length int) int {
 
 // stringAndIntegers reads a string followed by count integers.
 func stringAndIntegers(args []object.Object, count int) (string, []int64, *object.Error) {
-	if err := checkCount(args, count+1, count+1); err != nil {
-		return "", nil, err
-	}
-	s, err := stringArg(args, 0)
+	s, numbers, err := stringObjectAndIntegers(args, count)
 	if err != nil {
 		return "", nil, err
 	}
+	return s.Value, numbers, nil
+}
+
+// stringObjectAndIntegers is stringAndIntegers that keeps the string object,
+// so helpers that work by character index can use its cached characters.
+func stringObjectAndIntegers(args []object.Object, count int) (*object.String, []int64, *object.Error) {
+	if err := checkCount(args, count+1, count+1); err != nil {
+		return nil, nil, err
+	}
+	s, ok := args[0].(*object.String)
+	if !ok {
+		return nil, nil, argError("argument 1 must be STRING, got %s", args[0].Type())
+	}
 	numbers := make([]int64, count)
 	for i := range numbers {
+		var err *object.Error
 		if numbers[i], err = integerArg(args, i+1); err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
 	return s, numbers, nil
@@ -119,16 +130,19 @@ func stringAndIntegers(args []object.Object, count int) (string, []int64, *objec
 // text.slice(s, start, end) is the characters from start up to end. Both
 // are clamped to the string, and a negative one counts from the end.
 func textSlice(args ...object.Object) object.Object {
-	s, n, err := stringAndIntegers(args, 2)
+	s, n, err := stringObjectAndIntegers(args, 2)
 	if err != nil {
 		return err
 	}
-	runes := []rune(s)
-	start, end := clampIndex(n[0], len(runes)), clampIndex(n[1], len(runes))
+	length := s.Len()
+	start, end := clampIndex(n[0], length), clampIndex(n[1], length)
 	if end < start {
 		end = start
 	}
-	return &object.String{Value: string(runes[start:end])}
+	if length == len(s.Value) { // all ASCII: characters are bytes
+		return &object.String{Value: s.Value[start:end]}
+	}
+	return &object.String{Value: string(s.Runes()[start:end])}
 }
 
 // text.find(s, sub, [from]) is the character index of the first sub at or
@@ -137,28 +151,37 @@ func textFind(args ...object.Object) object.Object {
 	if err := checkCount(args, 2, 3); err != nil {
 		return err
 	}
-	s, err := stringArg(args, 0)
-	if err != nil {
-		return err
+	str, ok := args[0].(*object.String)
+	if !ok {
+		return argError("argument 1 must be STRING, got %s", args[0].Type())
 	}
 	sub, err := stringArg(args, 1)
 	if err != nil {
 		return err
 	}
-	runes := []rune(s)
+	s := str.Value
+	length := str.Len()
 	from := 0
 	if len(args) == 3 {
 		n, err := integerArg(args, 2)
 		if err != nil {
 			return err
 		}
-		from = clampIndex(n, len(runes))
+		from = clampIndex(n, length)
 	}
-	at := strings.Index(string(runes[from:]), sub)
+	if length == len(s) { // all ASCII: characters are bytes
+		at := strings.Index(s[from:], sub)
+		if at < 0 {
+			return &object.Integer{Value: -1}
+		}
+		return &object.Integer{Value: int64(from + at)}
+	}
+	rest := string(str.Runes()[from:])
+	at := strings.Index(rest, sub)
 	if at < 0 {
 		return &object.Integer{Value: -1}
 	}
-	return &object.Integer{Value: int64(from + utf8.RuneCountInString(string(runes[from:])[:at]))}
+	return &object.Integer{Value: int64(from + utf8.RuneCountInString(rest[:at]))}
 }
 
 // stringArgs checks that there are exactly count arguments, all strings,
@@ -290,19 +313,18 @@ func textLower(args ...object.Object) object.Object {
 // negative index counts from the end), or null when there is no such
 // character.
 func textCode(args ...object.Object) object.Object {
-	s, n, err := stringAndIntegers(args, 1)
+	s, n, err := stringObjectAndIntegers(args, 1)
 	if err != nil {
 		return err
 	}
-	runes := []rune(s)
 	i := n[0]
 	if i < 0 {
-		i += int64(len(runes))
+		i += int64(s.Len())
 	}
-	if i < 0 || i >= int64(len(runes)) {
+	if i < 0 || i >= int64(s.Len()) {
 		return NULL
 	}
-	return &object.Integer{Value: int64(runes[i])}
+	return &object.Integer{Value: int64(s.RuneAt(int(i)))}
 }
 
 // text.char(code) is the one-character string with that character code.
