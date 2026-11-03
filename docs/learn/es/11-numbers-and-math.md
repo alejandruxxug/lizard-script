@@ -68,7 +68,7 @@ puts(math.abs(a - 0.3) < 0.000001)
 true
 ```
 
-Los flotantes muy grandes y muy pequeños se imprimen con exponente. Pero en el código no puedes *escribir* un exponente: `1e3` no es un número válido.
+Los flotantes muy grandes y muy pequeños se imprimen con exponente:
 
 ```
 puts(1000000.0 * 1000000000000000.0, 0.0000001)
@@ -80,17 +80,33 @@ puts(1000000.0 * 1000000000000000.0, 0.0000001)
 1e+21 1e-07
 ```
 
+También puedes *escribir* un exponente: `1e3`, `2.5e-4` y `1E+6` son números válidos. Un número con exponente siempre es un flotante, aunque su valor sea entero:
+
 ```
-let big = 1e3
+puts(1e3, 2.5e-4, 1E+6)
+puts(type(1e3), 1e3 == 1000)
+puts(1e-7, 1.5e21)
 ```
 
 **Salida:**
 
 ```text
-[line 1, column 11] syntax error: unknown unit "e3"
+1000.0 0.00025 1000000.0
+FLOAT true
+1e-07 1.5e+21
 ```
 
-Las letras pegadas a un número parecen una unidad para el analizador, por eso `e3` aparece como una unidad desconocida. Escribe `1000.0`, o `10.0 ** 3`.
+Después de la `e` tienen que venir dígitos (con un `+` o un `-` opcional antes). Un número demasiado grande para un flotante es un error:
+
+```
+puts(1e400)
+```
+
+**Salida:**
+
+```text
+[line 1, column 6] syntax error: number 1e400 is too large
+```
 
 ## Convertir
 
@@ -233,6 +249,18 @@ let weight = 5kg
 [line 1, column 14] syntax error: unknown unit "kg"
 ```
 
+Se informa igual dentro de una llamada, un arreglo o un hash:
+
+```
+puts(5kg)
+```
+
+**Salida:**
+
+```text
+[line 1, column 6] syntax error: unknown unit "kg"
+```
+
 ## Números aleatorios
 
 `math.random()` da un flotante desde 0 hasta 1 (sin incluirlo); `math.random(a, b)` un entero de `a` a `b`, ambos incluidos.
@@ -280,7 +308,7 @@ for (let i = 0; i < 4; i += 1) {
 
 - `7 / 2` es `3`; `7 / 2.0` es `3.5`. Un flotante se imprime con `.`.
 - Los flotantes son aproximados: compáralos con una pequeña tolerancia.
-- No hay literales como `1e3`; no hay Infinity ni NaN.
+- `1e3` y `2.5e-4` son literales flotantes; no hay Infinity ni NaN.
 - `math.*` para raíces, redondeo, trigonometría y números aleatorios.
 - `45deg`, `0.5turn` y `1.2rad` son radianes; `10px` es simplemente `10`.
 - Los números aleatorios se repiten entre ejecuciones; `math.seed(n)` los cambia.

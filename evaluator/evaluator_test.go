@@ -186,6 +186,10 @@ func TestIfExpressions(t *testing.T) {
 		{"let x = 5; if (x > 10) { 1 } elif (x > 3) { 2 } else { 3 }", "2"},
 		{"let x = 1; if (x > 10) { 1 } elif (x > 3) { 2 } else { 3 }", "3"},
 		{"let y = if (true) { \"yes\" } else { \"no\" }; y", "\"yes\""},
+		{"let x = 5; if (x > 10) { 1 } else if (x > 3) { 2 } else { 3 }", "2"},
+		{"let x = 1; if (x > 10) { 1 } else if (x > 3) { 2 } else { 3 }", "3"},
+		{"let x = 1; if (x > 10) { 1 } else if (x > 3) { 2 }", "null"},
+		{"let x = 1; if (x > 10) { 1 } elif (x > 3) { 2 } else if (x > 0) { 3 } else { 4 }", "3"},
 	})
 }
 

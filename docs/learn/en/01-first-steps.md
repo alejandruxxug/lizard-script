@@ -143,12 +143,18 @@ puts("hi")
 
 ## Semicolons and lines
 
-A statement ends at the end of its line, so semicolons are optional. You can use them to put several statements on one line:
+**A statement ends at the end of its line.** It goes on to the next line only when the line ends with an operator (like `+` or `&&`), a comma or an opening bracket, or while a `(` or `[` is still open. So semicolons are optional; you can use them to put several statements on one line:
 
 ```
 let a = 1; let b = 2; puts(a + b)
 let c = 3
 puts(c)
+let sum = a +
+  b +
+  c
+puts(sum)
+puts(a,
+  b)
 ```
 
 **Output:**
@@ -156,7 +162,11 @@ puts(c)
 ```text
 3
 3
+6
+1 2
 ```
+
+To split a long line, end it with the operator, not the next one: `a +` then `b` on the next line. Chapter 3 shows what happens the other way round.
 
 ## Reading error messages
 
@@ -199,7 +209,7 @@ Chapter 14 is all about errors.
 - `./lizardscript` opens the REPL; `./lizardscript file.liz` runs a file.
 - `puts(a, b, ...)` prints values separated by spaces.
 - Comments start with `-~>`. Not `//` and not `#`.
-- `;` is optional at the end of a line.
+- A statement ends at the end of its line, unless the line ends with an operator, a comma or an open bracket. `;` is optional.
 - Errors look like `[line L, column C] kind error: message`.
 
 [Index](../README.md) · [Next: Values and types →](02-values-and-types.md)

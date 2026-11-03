@@ -27,7 +27,11 @@ func ResetMath() {
 	mathHash = nil
 	textHash = nil
 	listHash = nil
+	libraryResets++
 }
+
+// libraryResets counts the calls of ResetMath, for LibraryResets.
+var libraryResets uint64
 
 // mathLibrary returns the value of the name math, a hash of builtins and
 // constants. A variable called math hides it, like any builtin.
@@ -178,13 +182,16 @@ func mathExtreme(better func(first, second float64) bool) object.BuiltinFunction
 		if len(args) < 2 {
 			return wrongCount("at least 2", len(args))
 		}
-		numbers, err := numberArguments(args, len(args))
-		if err != nil {
-			return err
+		// Checked first and compared in place: these run in the inner
+		// loops of drawing code, so they don't make a slice of floats.
+		for _, arg := range args {
+			if !isNumber(arg) {
+				return argError("arguments must be INTEGER or FLOAT, got %s", arg.Type())
+			}
 		}
 		winner := 0
-		for i := 1; i < len(numbers); i++ {
-			if better(numbers[winner], numbers[i]) {
+		for i := 1; i < len(args); i++ {
+			if better(toFloat(args[winner]), toFloat(args[i])) {
 				winner = i
 			}
 		}

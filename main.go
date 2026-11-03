@@ -3,6 +3,8 @@
 //	lizardscript                           starts the REPL
 //	lizardscript program.liz [args]        runs a file
 //	lizardscript --vm program.liz [args]   runs a file on the bytecode VM
+//	lizardscript --profile program.liz     runs it on the VM and prints, after,
+//	                                       where the time went (to stderr)
 //
 // A program has the Terrarium, the standard library, installed, and
 // os.args() gives its args. The REPL has all of it but window and pen.
@@ -13,6 +15,7 @@ import (
 	"lizardscript/repl"
 	"lizardscript/terrarium"
 	_ "lizardscript/terrarium/window" // adds window and pen to terrarium.Install
+	"lizardscript/vm"
 	"os"
 )
 
@@ -25,9 +28,11 @@ func main() {
 		return
 	}
 
-	run := repl.Run
-	if args[0] == "--vm" {
-		run, args = repl.RunVM, args[1:]
+	run, profile := repl.Run, false
+	for len(args) > 0 && (args[0] == "--vm" || args[0] == "--profile") {
+		run = repl.RunVM
+		profile = profile || args[0] == "--profile"
+		args = args[1:]
 	}
 	if len(args) == 0 || len(args[0]) > 1 && args[0][0] == '-' {
 		usage()
@@ -38,12 +43,21 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if !run(string(source), os.Stdout, os.Stderr) {
+	if profile {
+		vm.StartProfile()
+	}
+	ok := run(string(source), os.Stdout, os.Stderr)
+	if profile {
+		result := vm.StopProfile()
+		result.File = args[0]
+		result.Write(os.Stderr)
+	}
+	if !ok {
 		os.Exit(1)
 	}
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: lizardscript [--vm] [file [args...]]")
+	fmt.Fprintln(os.Stderr, "usage: lizardscript [--vm | --profile] [file [args...]]")
 	os.Exit(2)
 }

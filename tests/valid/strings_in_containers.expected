@@ -1,0 +1,8 @@
+say "hi"
+["say \"hi\"", 1, "a\\b"]
+{"k": "line\nbreak", "t": "tab\there"}
+[["deep \"x\""]]
+["a", "b"]
+plain
+5
+["ñandú"]

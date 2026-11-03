@@ -9,11 +9,11 @@ A program can run on two engines: the tree-walking evaluator (`evaluator.Eval`, 
 | Type | Examples | Notes |
 | --- | --- | --- |
 | `INTEGER` | `5`, `-12` | 64-bit signed. Arithmetic wraps around on overflow, like Go. |
-| `FLOAT` | `1.5`, `-0.25`, `45deg` | 64-bit decimal number. Never infinite or NaN. |
+| `FLOAT` | `1.5`, `-0.25`, `45deg`, `1e3`, `2.5e-4` | 64-bit decimal number. Never infinite or NaN. |
 | `COLOR` | `#3fa34d`, `rgb(63, 163, 77)` | Four channels, each an integer 0 to 255. Can't be changed or used as a hash key. |
 | `POINT` | `(1, 2)`, `(0.5, 2, 3)` | Two or three coordinates, each an integer or a float that keeps its type. Can't be changed or used as a hash key. |
 | `BOOLEAN` | `true`, `false` | |
-| `STRING` | `"Liz"` | Length and indexes count characters, not bytes. Strings can't be changed. |
+| `STRING` | `"Liz"` | Length and indexes count characters, not bytes. Strings can't be changed. `"5" * 2` is `"55"`: a string times an integer repeats it. |
 | `NULL` | | What an `if` without `else`, a loop, `let`, `puts` and a missing index produce. It can't be written directly. |
 | `ARRAY` | `[1, "a", true]` | |
 | `HASH` | `{"name": "Liz", 1: true}` | Keys must be integers, booleans or strings, not floats. Keys keep the order they were added in. |
@@ -61,6 +61,10 @@ With a float on either side:
 
 Dividing by zero, with any of `/`, `//` or `%`, is an error, for `0` and `0.0`. A float result that would be infinite or not a number (`10.0 ** 400`, `0.0 ** -1`, a product that overflows) is the runtime error `the result is not a number`, so lizard-script never has Infinity or NaN.
 
+### Printing strings inside arrays and hashes
+
+`puts("hi")` and `str("hi")` write the text as it is. A string inside an array or hash is written as code, in quotes with escapes, so the output can be pasted back into a program and `["1"]` is not mistaken for `[1]`: `puts(["a", "say \"hi\"", "two\nlines"])` writes `["a", "say \"hi\"", "two\nlines"]`. The escapes are `\"`, `\\`, `\n`, `\t`, `\r`, and `\u{...}` for other control characters; any other character is written as it is. The REPL shows a string result in quotes too, with only `"` and `\` escaped, so a string with a new line in it still takes several lines. `str(["a"])` is the string `["a"]` (with its quotes), so the REPL shows it as `"[\"a\"]"`.
+
 ### Printing floats
 
 `puts` and `str` write the shortest text that reads back as the same float, and always with a `.` or an exponent, so a float never looks like an integer: `1.0`, `0.5`, `0.1`, `0.30000000000000004`. Numbers from `1e21` up and below `0.000001` use an exponent: `1e+21`, `1e-07`.
@@ -68,6 +72,8 @@ Dividing by zero, with any of `/`, `//` or `%`, is an error, for `0` and `0.0`. 
 ### Comparison
 
 `<`, `>`, `<=` and `>=` compare two numbers by value (an integer and a float work too: `1.5 < 2`), or two strings in dictionary order (byte by byte). Comparing different types is an error.
+
+Byte by byte is not alphabetical order: every uppercase letter is before every lowercase one (`"B" < "a"` is true), `"10" < "9"` is true, and a letter with an accent comes after `z` (`"é" < "z"` is false), because its bytes are higher. To sort names the way a person would, compare `text.lower(a)` and `text.lower(b)` (and know that accents still come last).
 
 ### Equality
 
@@ -85,8 +91,8 @@ Equality never fails, whatever the types.
 
 ## Control flow
 
-- `if` produces the value of the block that ran, or `null` if none did.
-- `while` and `for` produce `null`. `break` leaves the innermost loop. `continue` skips the rest of the current round of the innermost loop and goes on with the next one: in a `for` the update part still runs, in a `while` the condition is checked again. Both can sit inside blocks, layers and `try` statements of the loop.
+- `if` produces the value of the block that ran, or `null` if none did. `elif` and `else if` are the same: one more condition, checked only if the ones before were false.
+- `while` and `for` produce `null`. `break` leaves the innermost loop. `continue` skips the rest of the current round of the innermost loop and goes on with the next one: in a `for` the update part still runs, in a `while` the condition is checked again. Both can sit inside blocks, layers and `try` statements of the loop, and both are syntax errors outside a loop (or in a function defined inside one).
 - `try { ... } catch (e) { ... }` runs the first block. If a runtime error stops it (any error: a failed operation, a builtin, `error(...)`, a function called from the block), the rest of the block is skipped and the second block runs, with `e` holding a hash with `"message"` (the text of the error without the `[line, column] runtime error:` start), `"line"` and `"column"` (where it happened, integers). The name is a variable of the catch block only, and `catch { ... }` has none. Each block has its own scope. The statement has the value of the block that ran, so it can be the last statement of a function. `return`, `break` and `continue` in either block work as if the try was not there. An error inside the catch block is not caught by the same try, but an outer try catches it.
 - The errors that protect a host are never caught: the step limit (`the program ran too long`) and the stack overflows, also when they happen inside a builtin that called a function, like `list.sort`. They go up through every `try` and stop the program.
 - A block, and a function body, produces the value of its last statement.
@@ -96,13 +102,13 @@ Equality never fails, whatever the types.
 - Calling a function with a different number of arguments than it has parameters is an error, except for parameters with a default value.
 - A parameter can have a default: `function f(a, b = a * 2)`. When the call gives fewer arguments, each missing parameter gets its default, worked out at that call, in the scope of the function, from left to right, so it can use the parameters before it (not the ones after) and the variables around the function. `[]` as a default is a new list at each call. An error in a default is an error of the call. A call that leaves out a parameter without a default, or gives more arguments than parameters, is the error `wrong number of arguments: want 1 to 2, got 0` (`want 1, got 0` when no parameter has a default).
 - A function remembers the scope it was created in (it is a closure), and sees the changes made to it later.
-- A function without `return` gives the value of its last statement. A bare `return` gives `null`.
+- A function without `return` gives the value of its last statement. A bare `return` gives `null`, and so does a `return` at the end of its line: a statement ends at the end of its line ([GRAMMAR.md](GRAMMAR.md#where-a-statement-ends)), so the value must start on the line of the `return`.
 - `return` outside of a function ends the program. Its value is the value of the program, which the REPL shows.
 - More than 10000 nested calls is a stack overflow error. So is a smaller number of calls whose bodies are nested deeply enough that, together, they would use too much of the interpreter's memory: `stack overflow: the calls and the code inside them nest too deeply`. The VM doesn't need that second limit, so there only the 10000 calls count.
 
 ## Indexing
 
-- `array[i]` and `string[i]` take an integer, starting at 0. An index outside the array or string gives `null`.
+- `array[i]` and `string[i]` take an integer, starting at 0. An index outside the array or string gives `null`, and that includes a negative one: `[1, 2, 3][-1]` is `null`, not the last element. (The `text` and `list` functions are different: there a negative index counts from the end, so `text.slice("hello", -3, 5)` is `"llo"`. Use `a[len(a) - 1]` for the last element with `[]`.)
 - `hash[key]` gives `null` when the key isn't there. The key must be a valid key type. Keys are compared exactly, so `1` and `"1"` are different keys.
 - `array[i] = x` changes an element that already exists. An index outside of the array is an error, so use `push` to add elements.
 - `hash[key] = x` adds or replaces a key.

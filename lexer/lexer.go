@@ -20,6 +20,7 @@ type Lexer struct {
 	ch           byte   // current char under examination
 	line         int    // 1-based line of ch
 	column       int    // 1-based column of ch
+	endLine      int    // line where the last token ended, 0 before the first one
 	source       string // name stamped on every token, "" when unnamed
 }
 
@@ -78,15 +79,34 @@ func (l *Lexer) peekChar() byte {
 }
 
 // NextToken reads and returns the next token from the input, stamped with
-// the line and column where it starts.
+// the line and column where it starts and whether it starts its line.
 func (l *Lexer) NextToken() token.Token {
 	l.skipWhitespace()
 
 	line, column := l.line, l.column
 	tok := l.readToken()
 	tok.Line, tok.Column = line, column
+	tok.LineStart = line > l.endLine
 	tok.Source = l.source
+	l.endLine = l.line
 	return tok
+}
+
+// ContinuesLine reports whether a line that ends with a token of type t goes
+// on to the next line: t is a binary operator, an assignment, a '!', a '.',
+// a ',' or an opening bracket. Every other line ends its statement, unless
+// it is inside an open '(', '[' or hash. The parser and the REPL both follow
+// this rule.
+func ContinuesLine(t token.TokenType) bool {
+	switch t {
+	case token.PLUS, token.MINUS, token.ASTERISK, token.SLASH, token.DOUBLE_SLASH,
+		token.POW, token.MODULE, token.EQ, token.NOT_EQ, token.EXACT, token.NOT_EXACT,
+		token.LT, token.GT, token.LTE, token.GTE, token.AND, token.OR,
+		token.ASSIGN, token.PLUS_ASSIGN, token.MINUS_ASSIGN, token.ASTERISK_ASSIGN, token.SLASH_ASSIGN,
+		token.BANG, token.DOT, token.COMMA, token.LPAREN, token.LBRACKET, token.LBRACE:
+		return true
+	}
+	return false
 }
 
 // readToken reads the token that starts at the current character.
@@ -402,9 +422,11 @@ func isHexDigit(ch byte) bool {
 	return isDigit(ch) || 'a' <= ch && ch <= 'f' || 'A' <= ch && ch <= 'F'
 }
 
-// readNumber reads a number: digits, optionally a '.' and more digits, and
-// optionally a unit right after it. A '.' that isn't followed by a digit is
-// not part of the number, so 1.x is the integer 1, a dot and a name.
+// readNumber reads a number: digits, optionally a '.' and more digits,
+// optionally an exponent (1e3, 2.5e-4, 1E+6), and optionally a unit right
+// after it. A '.' that isn't followed by a digit is not part of the number,
+// so 1.x is the integer 1, a dot and a name. The same goes for an 'e' that
+// isn't followed by digits, so 1else is the integer 1 and a name.
 func (l *Lexer) readNumber() token.Token {
 	start := l.position
 	tokenType := token.TokenType(token.INT)
@@ -414,12 +436,34 @@ func (l *Lexer) readNumber() token.Token {
 		l.readChar()
 		l.skipDigits()
 	}
+	if l.startsExponent() {
+		tokenType = token.FLOAT
+		l.readChar()
+		if l.ch == '+' || l.ch == '-' {
+			l.readChar()
+		}
+		l.skipDigits()
+	}
 	number := l.input[start:l.position]
 
 	if !isLetter(l.ch) {
 		return token.Token{Type: tokenType, Literal: number}
 	}
 	return l.readUnit(number, tokenType)
+}
+
+// startsExponent reports whether ch is the 'e' or 'E' of an exponent: one
+// that is followed by digits, or by a sign and digits.
+func (l *Lexer) startsExponent() bool {
+	if l.ch != 'e' && l.ch != 'E' {
+		return false
+	}
+	next := l.peekChar()
+	if next == '+' || next == '-' {
+		after := l.position + 2
+		return after < len(l.input) && isDigit(l.input[after])
+	}
+	return isDigit(next)
 }
 
 func (l *Lexer) skipDigits() {

@@ -20,6 +20,8 @@ type frame struct {
 	given int // how many arguments the call gave
 	// the handlers and layers open when it started
 	handlers, layers int
+	// profile is the profile that counts this call, nil when it is off.
+	profile *profileState
 }
 
 // handler is an open try.
@@ -66,6 +68,7 @@ func (vm *VM) throw(err *object.Error) bool {
 		h := vm.handlers[len(vm.handlers)-1]
 		vm.handlers = vm.handlers[:len(vm.handlers)-1]
 		vm.closeLayers(h.layers)
+		vm.leaveFrames(h.frame + 1)
 		vm.frames = vm.frames[:h.frame+1]
 		vm.frames[h.frame].ip = h.catch
 		vm.sp = h.sp
@@ -74,6 +77,7 @@ func (vm *VM) throw(err *object.Error) bool {
 		return true
 	}
 	vm.closeLayers(0)
+	vm.leaveFrames(0)
 	vm.frames = vm.frames[:0]
 	vm.handlers = vm.handlers[:0]
 	return false
@@ -94,5 +98,9 @@ func (vm *VM) pushFrame(cl *Closure, count int) {
 		given:    count,
 		handlers: len(vm.handlers),
 		layers:   len(vm.layers),
+		profile:  profiler,
 	})
+	if profiler != nil {
+		profiler.enterFunction(fn)
+	}
 }

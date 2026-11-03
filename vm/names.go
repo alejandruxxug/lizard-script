@@ -11,7 +11,8 @@ import (
 // compiler/scopes.go); this follows it at run time.
 
 // lookup reads a name through n: the captured variables that might be set,
-// then the one that surely is, or the globals and the builtins.
+// then the one that surely is, or the globals and the builtins (see
+// globals.go).
 func lookup(n *code.Name, free []*Cell, globals *object.Environment) (object.Object, *object.Error) {
 	for _, i := range n.Checked {
 		if value := free[i].Value; value != nil {
@@ -21,13 +22,7 @@ func lookup(n *code.Name, free []*Cell, globals *object.Environment) (object.Obj
 	if n.Final >= 0 {
 		return free[n.Final].Value, nil
 	}
-	if value, ok := globals.Get(n.Name); ok {
-		return value, nil
-	}
-	if value, ok := evaluator.Builtin(n.Name); ok {
-		return value, nil
-	}
-	return nil, evaluator.NewError(n.Token, "identifier not found: %s", n.Name)
+	return global(n, globals)
 }
 
 // assign does name = value through n, like lookup finds it. Builtins can't

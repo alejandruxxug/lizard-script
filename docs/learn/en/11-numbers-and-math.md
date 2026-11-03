@@ -68,7 +68,7 @@ puts(math.abs(a - 0.3) < 0.000001)
 true
 ```
 
-Very large and very small floats are printed with an exponent. You can't *write* an exponent in code, though: `1e3` is not a number literal.
+Very large and very small floats are printed with an exponent:
 
 ```
 puts(1000000.0 * 1000000000000000.0, 0.0000001)
@@ -80,17 +80,33 @@ puts(1000000.0 * 1000000000000000.0, 0.0000001)
 1e+21 1e-07
 ```
 
+You can also *write* an exponent: `1e3`, `2.5e-4` and `1E+6` are number literals. A number with an exponent is always a float, even when its value is whole:
+
 ```
-let big = 1e3
+puts(1e3, 2.5e-4, 1E+6)
+puts(type(1e3), 1e3 == 1000)
+puts(1e-7, 1.5e21)
 ```
 
 **Output:**
 
 ```text
-[line 1, column 11] syntax error: unknown unit "e3"
+1000.0 0.00025 1000000.0
+FLOAT true
+1e-07 1.5e+21
 ```
 
-Letters right after a number look like a unit to the parser, so `e3` is reported as an unknown unit. Write `1000.0`, or `10.0 ** 3`.
+The `e` must be followed by digits (with an optional `+` or `-` before them). A number too big for a float is an error:
+
+```
+puts(1e400)
+```
+
+**Output:**
+
+```text
+[line 1, column 6] syntax error: number 1e400 is too large
+```
 
 ## Converting
 
@@ -233,6 +249,18 @@ let weight = 5kg
 [line 1, column 14] syntax error: unknown unit "kg"
 ```
 
+It is reported the same way inside a call, an array or a hash:
+
+```
+puts(5kg)
+```
+
+**Output:**
+
+```text
+[line 1, column 6] syntax error: unknown unit "kg"
+```
+
 ## Random numbers
 
 `math.random()` gives a float from 0 up to (not including) 1; `math.random(a, b)` an integer from `a` to `b`, both included.
@@ -280,7 +308,7 @@ for (let i = 0; i < 4; i += 1) {
 
 - `7 / 2` is `3`; `7 / 2.0` is `3.5`. A float is printed with a `.`.
 - Floats are approximate: compare with a small tolerance.
-- No `1e3` literals; no Infinity or NaN.
+- `1e3`, `2.5e-4` are float literals; no Infinity or NaN.
 - `math.*` for roots, rounding, trigonometry and random numbers.
 - `45deg`, `0.5turn`, `1.2rad` are radians; `10px` is just `10`.
 - Random numbers repeat from run to run; `math.seed(n)` changes them.

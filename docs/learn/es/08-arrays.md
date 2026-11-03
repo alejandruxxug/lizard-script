@@ -22,6 +22,21 @@ puts(type(toes))
 ARRAY
 ```
 
+Las cadenas dentro de un arreglo se muestran como se escriben en el código, entre comillas y con escapes, así que puedes pegar la salida de vuelta en un programa. Una cadena sola se muestra tal cual:
+
+```
+let quotes = ["say \"hi\"", "two\nlines", "back\\slash"]
+puts(quotes)
+puts("say \"hi\"")
+```
+
+**Salida:**
+
+```text
+["say \"hi\"", "two\nlines", "back\\slash"]
+say "hi"
+```
+
 Los elementos se numeran desde **0**. `a[i]` lee el elemento `i`:
 
 ```

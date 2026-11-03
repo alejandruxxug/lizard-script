@@ -9,8 +9,8 @@
 | comentario | `-~> hasta el final de la línea` |
 | crear una variable | `let x = 5` |
 | cambiar una variable | `x = 6`, `x += 1`, `-=`, `*=`, `/=` (no hay `**=`, `//=`, `%=`) |
-| fin de instrucción | un salto de línea o `;` (una línea que empieza con un operador, `(` o `[` continúa la anterior) |
-| condición | `if (a) { } elif (b) { } else { }` (no `else if`) |
+| fin de instrucción | el final de la línea o `;`; una línea que termina con un operador, `,` o un paréntesis o corchete abierto sigue en la siguiente |
+| condición | `if (a) { } elif (b) { } else { }` (`else if` también funciona) |
 | `if` como valor | `let s = if (n > 0) { "+" } else { "-" }` |
 | ciclo while | `while (cond) { }` |
 | ciclo for | `for (let i = 0; i < n; i += 1) { }` (no olvides el `let`) |
@@ -25,7 +25,7 @@
 | Tipo | Literales | Notas |
 | --- | --- | --- |
 | `INTEGER` | `42`, `-7`, `10px` | 64 bits |
-| `FLOAT` | `3.5`, `2.0`, `90deg`, `0.5turn`, `1rad` | no `.5`, no `1e3` |
+| `FLOAT` | `3.5`, `2.0`, `90deg`, `0.5turn`, `1rad` | `1e3` y `2.5e-4` son flotantes; no `.5` |
 | `STRING` | `"Liz"`, `"a\n\t\"\\"`, `"\u{1F98E}"` | solo comillas dobles; no se puede cambiar |
 | `BOOLEAN` | `true`, `false` | |
 | `NULL` | `null` | posición o clave que falta, sin resultado |
@@ -94,8 +94,9 @@ Los errores dicen `fs.read: can't read x.txt: ...` y `try` los atrapa. Eventos: 
 | `identifier not found: x` | error de tipeo, o `x` está fuera de su alcance |
 | `type mismatch: STRING + INTEGER` | `str(n)` |
 | `type mismatch: NULL + INTEGER` | una posición o clave que falta; revisa con `=== null` |
-| `expected "{", got "if"` | `elif`, no `else if` |
+| `continue outside of a loop` | `continue` (igual que `break`) solo funciona dentro de `while` o `for` |
 | `expected end of statement, got identifier ...` | ¿usaste `//` como comentario? Usa `-~>` |
+| `unknown unit "kg"` | solo `deg`, `rad`, `turn` y `px` pueden ir pegadas a un número; escribe `5 * kg` o cambia el nombre |
 | `negative exponent` | usa un flotante: `2.0 ** -1` |
 | `index out of range` | usa `push` para agregar elementos |
 | `wrong number of arguments: want 2, got 1` | revisa la llamada, o agrega un valor por defecto |

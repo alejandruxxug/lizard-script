@@ -16,26 +16,10 @@ type Cell struct {
 func (c *Cell) Type() object.ObjectType { return "CELL" }
 func (c *Cell) Inspect() string         { return "cell" }
 
-// Small integers are made once, so arithmetic on them doesn't allocate.
-// Integers can't change, so sharing them is invisible to a program.
-const (
-	smallMin = -256
-	smallMax = 1024
-)
-
-var smallIntegers = func() []*object.Integer {
-	ints := make([]*object.Integer, smallMax-smallMin)
-	for i := range ints {
-		ints[i] = &object.Integer{Value: int64(i + smallMin)}
-	}
-	return ints
-}()
-
+// integer is the value of an integer result, without an allocation when it
+// is small (see object.IntegerOf).
 func integer(value int64) *object.Integer {
-	if value >= smallMin && value < smallMax {
-		return smallIntegers[value-smallMin]
-	}
-	return &object.Integer{Value: value}
+	return object.IntegerOf(value)
 }
 
 // operators are the operator texts of the infix opcodes, for the evaluator.

@@ -459,6 +459,13 @@ func TestFloatsAndUnits(t *testing.T) {
 		{"1.5px", []token.Token{flt("1.5")}},
 		{"10px 20px", []token.Token{num("10"), num("20")}},
 		{"10px.x", []token.Token{num("10"), dot, ident("x")}},
+		// Exponents.
+		{"1e3", []token.Token{flt("1e3")}},
+		{"2.5e-4", []token.Token{flt("2.5e-4")}},
+		{"1E+6", []token.Token{flt("1E+6")}},
+		{"1e0 2e10", []token.Token{flt("1e0"), flt("2e10")}},
+		{"1e3.x", []token.Token{flt("1e3"), dot, ident("x")}},
+		{"1e3px", []token.Token{flt("1e3")}},
 		// A word that is not exactly a unit is left to the identifier.
 		{"5kg", []token.Token{num("5"), ident("kg")}},
 		{"1.5kg x", []token.Token{flt("1.5"), ident("kg"), ident("x")}},
@@ -469,7 +476,11 @@ func TestFloatsAndUnits(t *testing.T) {
 		{"5deg2", []token.Token{num("5"), ident("deg2")}},
 		{"5pxy", []token.Token{num("5"), ident("pxy")}},
 		{"5_", []token.Token{num("5"), ident("_")}},
-		{"1e5", []token.Token{num("1"), ident("e5")}},
+		{"1e", []token.Token{num("1"), ident("e")}},
+		{"1e+", []token.Token{num("1"), ident("e"), {Type: token.PLUS, Literal: "+"}}},
+		{"1else", []token.Token{num("1"), {Type: token.ELSE, Literal: "else"}}},
+		{"1ex5", []token.Token{num("1"), ident("ex5")}},
+		{"1e5kg", []token.Token{flt("1e5"), ident("kg")}},
 		// A number too big for a float becomes +Inf for the parser to reject.
 		{strings.Repeat("9", 400) + "rad", []token.Token{flt("+Inf")}},
 	}
@@ -619,6 +630,62 @@ func TestSourceNames(t *testing.T) {
 		ta, tb := a.NextToken(), b.NextToken()
 		if ta.Line != tb.Line || ta.Column != tb.Column || ta.Literal != tb.Literal {
 			t.Errorf("token %d differs: %+v vs %+v", i, ta, tb)
+		}
+	}
+}
+
+// TestLineStart checks which tokens are the first on their line. Blank
+// lines, comments and '\r' are only space, and the line break inside a
+// string doesn't make the token after it start a line.
+func TestLineStart(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []bool // LineStart of each token, before EOF
+	}{
+		{"a + b", []bool{true, false, false}},
+		{"a\n+ b", []bool{true, true, false}},
+		{"a +\nb", []bool{true, false, true}},
+		{"a;\n\n\nb", []bool{true, false, true}},
+		{"a -~> note\nb", []bool{true, true}},
+		{"-~> note\n  a", []bool{true}},
+		{"a\r\nb", []bool{true, true}},
+		{"\"one\ntwo\" + b", []bool{true, false, false}},
+		{"f(\n1,\n2\n)", []bool{true, false, true, false, true, true}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, want := range tt.expected {
+			if got := l.NextToken(); got.LineStart != want {
+				t.Errorf("input %q, token[%d] %q - LineStart %t, want %t", tt.input, i, got.Literal, got.LineStart, want)
+			}
+		}
+	}
+}
+
+// TestContinuesLine checks the tokens that let a statement go on to the next
+// line when its line ends with them.
+func TestContinuesLine(t *testing.T) {
+	continues := []token.TokenType{
+		token.PLUS, token.MINUS, token.ASTERISK, token.SLASH, token.DOUBLE_SLASH, token.POW,
+		token.MODULE, token.EQ, token.NOT_EQ, token.EXACT, token.NOT_EXACT, token.LT, token.GT,
+		token.LTE, token.GTE, token.AND, token.OR, token.ASSIGN, token.PLUS_ASSIGN,
+		token.MINUS_ASSIGN, token.ASTERISK_ASSIGN, token.SLASH_ASSIGN, token.BANG, token.DOT,
+		token.COMMA, token.LPAREN, token.LBRACKET, token.LBRACE,
+	}
+	ends := []token.TokenType{
+		token.IDENT, token.INT, token.FLOAT, token.STRING, token.COLOR, token.TRUE, token.FALSE,
+		token.RPAREN, token.RBRACKET, token.RBRACE, token.SEMICOLON, token.COLON,
+		token.RETURN, token.BREAK, token.EOF,
+	}
+	for _, t1 := range continues {
+		if !ContinuesLine(t1) {
+			t.Errorf("a line that ends with %s should go on", t1)
+		}
+	}
+	for _, t1 := range ends {
+		if ContinuesLine(t1) {
+			t.Errorf("a line that ends with %s should end", t1)
 		}
 	}
 }

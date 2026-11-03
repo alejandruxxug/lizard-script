@@ -105,7 +105,7 @@ func TestTryCatch(t *testing.T) {
 		{"let try = 1; try", "1"},
 		{"let try = 5; if try { 2 }", "2"},
 		{"let try = function(x) { x * 2 }; try(4)", "8"},
-		{"let try = 1;\ntry\n+ 1", "2"},
+		{"let try = 1;\ntry +\n1", "2"},
 		{"let catch = 3; catch", "3"},
 		{"let catch = 3; try { catch } catch (e) { 0 }", "3"},
 		{"let try = 1; try = try + 1; try", "2"},
@@ -175,14 +175,13 @@ func TestContinue(t *testing.T) {
 		{"let n = 0; while (true) { n += 1; if (n < 3) { continue }; break }; n", "3"},
 		// Ordinary names.
 		{"let continue = 4; continue + 1", "5"},
-		{"let continue = 4; continue", "4"},
-		{"let continue = 4; if (true) { continue }", "4"},
-		{"let continue = 4; function f() { continue } f()", "4"},
-		{"let continue = 4; let r = 0; while (r < 1) { r = r + 1; function f() { continue } f() }; r", "1"},
+		{"let continue = 4; if (true) { continue + 1 }", "5"},
+		{"let continue = 4; function f() { continue + 1 } f()", "5"},
+		{"let continue = 4; let r = 0; while (r < 1) { r = r + 1; function f() { continue + 1 } f() }; r", "1"},
 		{"let continue = 4; let r = 0; while (r < 2) { r = r + 1; continue + 1 }; r", "2"},
 		{"let continue = 4; let r = 0; while (r < 2) { r = r + 1; continue = 5 }; continue + 0", "5"},
 		{"let continue = function() { 3 }; let r = 0; while (r < 2) { r = r + 1; continue() }; r", "2"},
-		{"let continue = 4; let r = 0; while (r < 1) { r = r + 1; continue\n- 1 }; r", "1"},
+		{"let continue = 4; let r = 0; while (r < 1) { r = r + 1; continue -\n1 }; r", "1"},
 	})
 }
 
@@ -237,14 +236,6 @@ func TestCompoundAssignmentErrors(t *testing.T) {
 		{"let s = \"abc\"; s[0] += \"x\"", "[line 1, column 17] runtime error: strings can't be changed"},
 		{"let a = [1]; a[\"k\"] += 1", "[line 1, column 15] runtime error: array index must be INTEGER, got STRING"},
 		{"let x = 1; nope += x", "[line 1, column 12] runtime error: identifier not found: nope"},
-	})
-}
-
-func TestContinueOutsideALoopIsAName(t *testing.T) {
-	checkErrors(t, []expectation{
-		{"continue", "[line 1, column 1] runtime error: identifier not found: continue"},
-		{"if (true) { continue }", "[line 1, column 13] runtime error: identifier not found: continue"},
-		{"function f() { continue } f()", "[line 1, column 16] runtime error: identifier not found: continue"},
 	})
 }
 

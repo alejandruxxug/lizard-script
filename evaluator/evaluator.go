@@ -652,6 +652,10 @@ func toNumber(obj object.Object) (int64, bool) {
 	}
 }
 
+// uncheckedContainers is how many arrays and hashes equals takes apart
+// before it starts remembering them.
+const uncheckedContainers = 64
+
 // pair is two values being compared.
 type pair struct {
 	left, right object.Object
@@ -667,14 +671,26 @@ type pair struct {
 // Meeting one again, because a value contains itself or the same value
 // appears twice, needs no second look: its elements are already on the way.
 // That is also why comparing an array that contains itself ends.
+//
+// Most comparisons are small (two points, a hash of a few fields), so the
+// stack starts in a fixed buffer and seen is only made once more than
+// uncheckedContainers arrays and hashes were taken apart: until then
+// meeting one again only repeats comparisons, with the same answer, and a
+// value that contains itself soon goes past the limit.
 func equals(left, right object.Object, strict bool) bool {
-	stack := []pair{{left, right}}
+	var buffer [16]pair
+	stack := append(buffer[:0], pair{left, right})
 	var seen map[pair]bool
+	containers := 0
 
 	for len(stack) > 0 {
 		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		left, right := current.left, current.right
+		if left == right {
+			// The same value: equal to itself under both equalities.
+			continue
+		}
 
 		if left.Type() != right.Type() {
 			if strict {
@@ -731,13 +747,15 @@ func equals(left, right object.Object, strict bool) bool {
 			if len(left.Elements) != len(right.Elements) {
 				return false
 			}
-			if seen[current] {
-				continue
+			if containers++; containers > uncheckedContainers {
+				if seen[current] {
+					continue
+				}
+				if seen == nil {
+					seen = map[pair]bool{}
+				}
+				seen[current] = true
 			}
-			if seen == nil {
-				seen = map[pair]bool{}
-			}
-			seen[current] = true
 			for i := range left.Elements {
 				stack = append(stack, pair{left.Elements[i], right.Elements[i]})
 			}
@@ -746,13 +764,15 @@ func equals(left, right object.Object, strict bool) bool {
 			if len(left.Pairs) != len(right.Pairs) {
 				return false
 			}
-			if seen[current] {
-				continue
+			if containers++; containers > uncheckedContainers {
+				if seen[current] {
+					continue
+				}
+				if seen == nil {
+					seen = map[pair]bool{}
+				}
+				seen[current] = true
 			}
-			if seen == nil {
-				seen = map[pair]bool{}
-			}
-			seen[current] = true
 			for key, entry := range left.Pairs {
 				other, ok := right.Pairs[key]
 				if !ok {

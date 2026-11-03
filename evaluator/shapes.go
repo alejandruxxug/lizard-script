@@ -138,10 +138,12 @@ func negatePoint(point *object.Point) object.Object {
 }
 
 // channel turns a number into a color channel: rounded, and from 0 to 255.
-func channel(name string, value float64) (uint8, *object.Error) {
-	rounded := math.Round(value)
+// arg is the number as the program wrote it, so an error shows 300 for an
+// integer and 300.5 for a float.
+func channel(name string, arg object.Object) (uint8, *object.Error) {
+	rounded := math.Round(toFloat(arg))
 	if rounded < 0 || rounded > 255 {
-		return 0, argError("%s must be from 0 to 255, got %s", name, (&object.Float{Value: value}).Inspect())
+		return 0, argError("%s must be from 0 to 255, got %s", name, arg.Inspect())
 	}
 	return uint8(rounded), nil
 }
@@ -157,14 +159,13 @@ func builtinRGBA(args ...object.Object) object.Object {
 }
 
 func colorFromChannels(args []object.Object, count int) object.Object {
-	numbers, err := numberArguments(args, count)
-	if err != nil {
+	if _, err := numberArguments(args, count); err != nil {
 		return err
 	}
 	names := []string{"red", "green", "blue", "alpha"}
 	channels := []uint8{0, 0, 0, 255}
-	for i, number := range numbers {
-		value, err := channel(names[i], number)
+	for i := range args {
+		value, err := channel(names[i], args[i])
 		if err != nil {
 			return err
 		}

@@ -2,7 +2,7 @@
 
 [← Anterior: Operadores](04-operators.md) · [Índice](../README.md) · [Siguiente: Ciclos →](06-loops.md) · [English](../en/05-conditionals.md)
 
-Un condicional le permite a un programa elegir qué hacer. lizard-script tiene `if`, `elif` (abreviatura de "else if", "si no, si") y `else`.
+Un condicional le permite a un programa elegir qué hacer. lizard-script tiene `if`, `elif` (abreviatura de "else if", "si no, si", que también se puede escribir en dos palabras) y `else`.
 
 ## `if`, `elif`, `else`
 
@@ -28,9 +28,9 @@ Las condiciones se revisan de arriba hacia abajo, y solo se ejecuta el **primer*
 
 Las llaves `{ }` siempre son obligatorias, aunque haya una sola instrucción. Los paréntesis alrededor de la condición son opcionales, así que `if temperature < 15 { ... }` también funciona; esta guía siempre los escribe porque se lee mejor.
 
-## Error común: `else if`
+## `else if` es lo mismo que `elif`
 
-Muchos lenguajes escriben `else if`. En lizard-script, después de `else` tiene que venir `{`:
+Muchos lenguajes escriben `else if`, y lizard-script también lo acepta. Estos dos programas hacen lo mismo:
 
 ```
 let x = 3
@@ -44,10 +44,8 @@ if (x > 5) {
 **Salida:**
 
 ```text
-[line 4, column 8] syntax error: expected "{", got "if"
+medium
 ```
-
-Escribe `elif`:
 
 ```
 let x = 3
@@ -63,6 +61,8 @@ if (x > 5) {
 ```text
 medium
 ```
+
+Puedes mezclarlos en una misma cadena. Esta guía casi siempre escribe `elif` porque es más corto.
 
 ## Anidar
 
@@ -171,7 +171,7 @@ not huge
 ## Resumen
 
 - `if (cond) { } elif (cond) { } else { }`: llaves siempre, paréntesis opcionales.
-- Usa `elif`, no `else if`.
+- `elif` y `else if` significan lo mismo.
 - Cualquier valor sirve de condición.
 - Un `if` tiene valor: el del bloque que se ejecutó, o `null`.
 

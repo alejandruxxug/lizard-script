@@ -143,12 +143,18 @@ puts("hi")
 
 ## Punto y coma y líneas
 
-Una instrucción termina al final de su línea, así que el punto y coma es opcional. Puedes usarlo para poner varias instrucciones en una misma línea:
+**Una instrucción termina al final de su línea.** Solo sigue en la línea siguiente cuando la línea termina con un operador (como `+` o `&&`), una coma o un paréntesis o corchete que abre, o mientras un `(` o `[` sigue abierto. Así que el punto y coma es opcional; puedes usarlo para poner varias instrucciones en una misma línea:
 
 ```
 let a = 1; let b = 2; puts(a + b)
 let c = 3
 puts(c)
+let sum = a +
+  b +
+  c
+puts(sum)
+puts(a,
+  b)
 ```
 
 **Salida:**
@@ -156,7 +162,11 @@ puts(c)
 ```text
 3
 3
+6
+1 2
 ```
+
+Para partir una línea larga, termínala con el operador, no empieces la siguiente con él: `a +` y luego `b` en la línea siguiente. El capítulo 3 muestra qué pasa al revés.
 
 ## Cómo leer los mensajes de error
 
@@ -199,7 +209,7 @@ El capítulo 14 trata por completo de los errores.
 - `./lizardscript` abre el REPL; `./lizardscript archivo.liz` ejecuta un archivo.
 - `puts(a, b, ...)` imprime valores separados por espacios.
 - Los comentarios empiezan con `-~>`. Ni `//` ni `#`.
-- El `;` es opcional al final de una línea.
+- Una instrucción termina al final de su línea, salvo que la línea termine con un operador, una coma o un paréntesis o corchete abierto. El `;` es opcional.
 - Los errores se ven así: `[line L, column C] kind error: message`.
 
 [Índice](../README.md) · [Siguiente: Valores y tipos →](02-values-and-types.md)

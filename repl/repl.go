@@ -108,10 +108,20 @@ func evalInput(input string, env *object.Environment, out io.Writer) {
 	case *object.Error:
 		fmt.Fprintln(out, result.Message)
 	case *object.String:
-		fmt.Fprintln(out, "\""+result.Value+"\"")
+		fmt.Fprintln(out, quoteForDisplay(result.Value))
 	default:
 		fmt.Fprintln(out, result.Inspect())
 	}
+}
+
+// quoteForDisplay shows a string result the way it is written in code, so
+// it can be pasted back. Only the quote and the backslash are escaped: a new
+// line stays a new line, which a string literal can hold, so a string over
+// several lines still reads as several lines.
+func quoteForDisplay(text string) string {
+	text = strings.ReplaceAll(text, `\`, `\\`)
+	text = strings.ReplaceAll(text, `"`, `\"`)
+	return `"` + text + `"`
 }
 
 // Run runs a whole program with the Terrarium installed. puts writes to out,
@@ -164,9 +174,12 @@ func printErrors(out io.Writer, errors []string) {
 }
 
 // isIncomplete reports whether input looks like the start of something
-// longer: it has an open '(', '[' or '{', an open string, or it ends with an
-// operator, a ',' or a keyword that needs more after it, like else. It only decides when to keep reading. The parser still
-// judges what is read.
+// longer. A statement ends at the end of its line, the same rule as in a
+// file (lexer.ContinuesLine): the input goes on while a '(', '[' or '{' or a
+// string is open, or when it ends with an operator, a ',' or an opening
+// bracket. It also goes on after a keyword that needs more after it, like
+// else. It only decides when to keep reading: the parser still judges what
+// is read.
 func isIncomplete(input string) bool {
 	l := lexer.New(input)
 	depth := 0
@@ -186,16 +199,11 @@ func isIncomplete(input string) bool {
 		last = tok
 	}
 
-	if depth > 0 {
+	if depth > 0 || lexer.ContinuesLine(last.Type) {
 		return true
 	}
 	switch last.Type {
-	case token.ASSIGN, token.PLUS_ASSIGN, token.MINUS_ASSIGN, token.ASTERISK_ASSIGN,
-		token.SLASH_ASSIGN, token.PLUS, token.MINUS, token.ASTERISK, token.SLASH,
-		token.DOUBLE_SLASH, token.POW, token.MODULE, token.EQ, token.NOT_EQ,
-		token.EXACT, token.NOT_EXACT, token.LT, token.GT, token.LTE, token.GTE,
-		token.AND, token.OR, token.COMMA, token.BANG,
-		token.LET, token.FUNCTION, token.IF, token.ELIF, token.ELSE, token.WHILE, token.FOR:
+	case token.LET, token.FUNCTION, token.IF, token.ELIF, token.ELSE, token.WHILE, token.FOR:
 		return true
 	}
 	return false
@@ -265,9 +273,10 @@ func isOpenIf(expression ast.Expression) bool {
 		return false
 	}
 	for ifExpression.Alternative != nil {
-		// An elif is an if alone in the else block, with the elif token.
+		// An elif or an "else if" is an if alone in the else block, with
+		// the elif or if token. A plain else block has the '{' token.
 		alternative := ifExpression.Alternative
-		if alternative.Token.Type != token.ELIF {
+		if alternative.Token.Type != token.ELIF && alternative.Token.Type != token.IF {
 			return false
 		}
 		statement := alternative.Statements[0].(*ast.ExpressionStatement)

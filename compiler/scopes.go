@@ -140,6 +140,8 @@ func cellOpcode(op code.Opcode) code.Opcode {
 		return code.OpSetCell
 	case code.OpAssignLocal:
 		return code.OpAssignCell
+	case code.OpGetLocalField:
+		return code.OpGetCellField
 	}
 	return op
 }

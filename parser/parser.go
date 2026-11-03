@@ -83,8 +83,9 @@ type (
 
 // Parser holds the state of one parse.
 type Parser struct {
-	l      *lexer.Lexer
-	errors []string
+	l       *lexer.Lexer
+	errors  []string
+	changes []lineChange // see LineChanges
 
 	curToken  token.Token
 	peekToken token.Token
@@ -92,13 +93,14 @@ type Parser struct {
 	prefixParseFns map[token.TokenType]prefixParseFn
 	infixParseFns  map[token.TokenType]infixParseFn
 
-	recovering bool // an error was found and the statement is being abandoned
-	braceDepth int  // how many '{' are open, of blocks and hashes
-	blockBrace int  // braceDepth inside the innermost block, 0 at the top level
-	parenDepth int  // how many '(' are open
-	loopDepth  int  // how many loops are open in the current function
-	depth      int  // how many expressions and blocks are being parsed inside each other
-	abandoned  bool // the program nests too deeply and the rest of it was skipped
+	recovering bool   // an error was found and the statement is being abandoned
+	braceDepth int    // how many '{' are open, of blocks and hashes
+	blockBrace int    // braceDepth inside the innermost block, 0 at the top level
+	parenDepth int    // how many '(' are open
+	brackets   []bool // the open '(', '[' and '{', innermost last: true where a line break is just a space
+	loopDepth  int    // how many loops are open in the current function
+	depth      int    // how many expressions and blocks are being parsed inside each other
+	abandoned  bool   // the program nests too deeply and the rest of it was skipped
 }
 
 // New creates a Parser that reads its tokens from l.
@@ -179,8 +181,12 @@ func (p *Parser) errorAt(tok token.Token, format string, args ...any) {
 	if tok.Type == token.ILLEGAL {
 		kind, message = "lexical error", illegalMessage(tok)
 	}
-	p.errors = append(p.errors,
-		fmt.Sprintf("[line %d, column %d] %s: %s", tok.Line, tok.Column, kind, message))
+	p.errors = append(p.errors, at(tok, kind+": "+message))
+}
+
+// at writes message after the position of tok, the way errors show it.
+func at(tok token.Token, message string) string {
+	return fmt.Sprintf("[line %d, column %d] %s", tok.Line, tok.Column, message)
 }
 
 // illegalMessage explains why the lexer rejected tok.
@@ -265,7 +271,9 @@ func (p *Parser) leave() {
 	p.depth--
 }
 
-// nextToken moves one token forward and keeps the depth counters up to date.
+// nextToken moves one token forward and keeps the depth counters and the
+// stack of open brackets up to date. A '{' goes on the stack as a block;
+// parseHashLiteral marks the ones that open a hash.
 func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
 	p.peekToken = p.l.NextToken()
@@ -280,6 +288,62 @@ func (p *Parser) nextToken() {
 	case p.curTokenIs(token.RPAREN) && p.parenDepth > 0:
 		p.parenDepth--
 	}
+
+	switch p.curToken.Type {
+	case token.LPAREN, token.LBRACKET:
+		p.brackets = append(p.brackets, true)
+	case token.LBRACE:
+		p.brackets = append(p.brackets, false)
+	case token.RPAREN, token.RBRACKET, token.RBRACE:
+		if len(p.brackets) > 0 {
+			p.brackets = p.brackets[:len(p.brackets)-1]
+		}
+	}
+}
+
+// lineEnds reports whether the statement ends at a line break between
+// curToken and peekToken. That is the rule of LEP 0001: a statement ends at
+// the end of its line, unless the line ends with a token that continues it
+// (lexer.ContinuesLine) or a '(', '[' or hash is still open. A block's '{'
+// starts statements again, so inside "f(function() { ... })" lines end.
+func (p *Parser) lineEnds() bool {
+	open := len(p.brackets) > 0 && p.brackets[len(p.brackets)-1]
+	return p.peekToken.LineStart && !open && !lexer.ContinuesLine(p.curToken.Type)
+}
+
+// leadingOperatorMessage explains why a line can't start with tok, an
+// operator that only works between two values, like + or ==.
+func leadingOperatorMessage(tok token.Token) string {
+	return fmt.Sprintf("a line can't start with %s; put the %s at the end of the previous line",
+		tok.Literal, tok.Literal)
+}
+
+// LineChanges lists, as messages with a position, the lines that LEP 0001
+// changed: lines that went on with the line before, and now start their own
+// statement or are an error. A tool that helps move programs to the new rule
+// shows them. It is filled by ParseProgram.
+func (p *Parser) LineChanges() []string {
+	messages := []string{}
+	for _, change := range p.changes {
+		messages = append(messages, at(change.tok, change.message))
+	}
+	return messages
+}
+
+// lineChange is a line that LEP 0001 changed: tok starts it.
+type lineChange struct {
+	tok     token.Token
+	message string
+}
+
+// noteChange records that tok starts a line that LEP 0001 changed. Each
+// level of a nested expression stops at the same line break, so a line
+// already noted is skipped.
+func (p *Parser) noteChange(tok token.Token, message string) {
+	if n := len(p.changes); n > 0 && p.changes[n-1].tok == tok {
+		return
+	}
+	p.changes = append(p.changes, lineChange{tok, message})
 }
 
 func (p *Parser) curTokenIs(t token.TokenType) bool {
@@ -291,11 +355,16 @@ func (p *Parser) peekTokenIs(t token.TokenType) bool {
 }
 
 // expectPeek moves to the next token if it has type t. Otherwise it records
-// an error, stays where it is and returns false.
+// an error, stays where it is and returns false. A number that touches a
+// name (the 5 in "puts(5kg)") is the likely cause, so that is what it says.
 func (p *Parser) expectPeek(t token.TokenType) bool {
 	if p.peekTokenIs(t) {
 		p.nextToken()
 		return true
+	}
+	if p.numberTouchesName() {
+		p.errorAt(p.curToken, "unknown unit %q", p.peekToken.Literal)
+		return false
 	}
 	p.errorAt(p.peekToken, "expected %s, got %s", describeType(t), describeToken(p.peekToken))
 	return false
@@ -387,7 +456,7 @@ func (p *Parser) endStatement() {
 		p.nextToken()
 		return
 	}
-	if !p.peekEndsStatement() && p.peekToken.Line == p.curToken.Line {
+	if !p.peekEndsStatement() && !p.peekToken.LineStart {
 		if p.numberTouchesName() {
 			p.errorAt(p.curToken, "unknown unit %q", p.peekToken.Literal)
 			return
@@ -429,10 +498,19 @@ func (p *Parser) parseLetStatement() ast.Statement {
 }
 
 // parseReturnStatement parses: return ;   return <expression> ;
+// The value starts on the line of the return: a return at the end of its
+// line returns nothing.
 func (p *Parser) parseReturnStatement() ast.Statement {
 	stmt := &ast.ReturnStatement{Token: p.curToken}
 
-	if !p.peekEndsStatement() {
+	switch {
+	case p.peekEndsStatement():
+	case p.lineEnds():
+		if p.prefixParseFns[p.peekToken.Type] != nil {
+			p.noteChange(p.peekToken, "this line is no longer the value of the return before it; "+
+				"start the value on the return line")
+		}
+	default:
 		p.nextToken()
 		stmt.ReturnValue = p.parseExpression(LOWEST)
 		if stmt.ReturnValue == nil {
@@ -482,27 +560,23 @@ func (p *Parser) parseControlStatement() ast.Statement {
 }
 
 // startsContinue reports whether the statement that begins at curToken is a
-// continue: the name "continue" alone, inside a loop. That is, followed by a ';', a '}', the
-// end of the input, or a line that doesn't go on with an operator, a '(' or a
-// '[' (which would still read as part of an expression, as it always did).
-// Anything else, like "continue + 1", is an ordinary expression, and
-// "continue" is an ordinary name everywhere else.
+// continue: the name "continue" alone. That is, followed by a ';', a '}', the
+// end of the input or the end of its line. Anything else, like "continue + 1"
+// or "let continue = 1", is an ordinary expression or a use of an ordinary
+// name.
 func (p *Parser) startsContinue() bool {
-	if p.curToken.Literal != "continue" || p.loopDepth == 0 {
-		return false
-	}
-	if p.peekEndsStatement() {
-		return true
-	}
-	_, continues := precedences[p.peekToken.Type]
-	return p.peekToken.Line > p.curToken.Line && !continues
+	return p.curToken.Literal == "continue" && (p.peekEndsStatement() || p.lineEnds())
 }
 
 // parseContinueStatement parses: continue ;
-// startsContinue only says yes inside a loop body of the same function, so
-// outside of one "continue" stays the plain name it always was.
+// Like break, it is an error outside a loop body of the same function.
 func (p *Parser) parseContinueStatement() ast.Statement {
 	stmt := &ast.ContinueStatement{Token: p.curToken}
+
+	if p.loopDepth == 0 {
+		p.errorAt(p.curToken, "continue outside of a loop")
+		return nil
+	}
 
 	p.endStatement()
 	return stmt
@@ -700,6 +774,9 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	left := prefix()
 
 	for left != nil && precedence < p.peekPrecedence() {
+		if p.lineEnds() && !p.joinNextLine() {
+			return left
+		}
 		infix := p.infixParseFns[p.peekToken.Type]
 		if infix == nil {
 			return left
@@ -709,6 +786,32 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	}
 
 	return left
+}
+
+// joinNextLine decides what happens to the operator that starts the next
+// line, when the expression could go on with it but its line has ended. A
+// '-', '(' or '[' starts the next statement, since a statement can begin
+// with it, and joinNextLine returns false. Any other operator, like + or ==,
+// can't begin anything: that is an error, and joinNextLine returns true so
+// the line is read as part of this expression, which is surely what was
+// meant. That keeps the parse in step, so the lines after it are still
+// checked. Both cases are lines that LEP 0001 changed.
+func (p *Parser) joinNextLine() bool {
+	operator := p.peekToken
+	if p.prefixParseFns[operator.Type] != nil {
+		p.noteChange(operator, fmt.Sprintf("this line no longer goes on with the line before: "+
+			"%s starts a new statement; to go on, end the line before with an operator or join the lines",
+			operator.Literal))
+		return false
+	}
+
+	message := leadingOperatorMessage(operator)
+	p.noteChange(operator, message)
+	// Like errorAt, but without abandoning the statement.
+	if !p.recovering && !p.abandoned {
+		p.errors = append(p.errors, at(operator, "syntax error: "+message))
+	}
+	return true
 }
 
 // Prefix functions
@@ -876,28 +979,41 @@ func (p *Parser) parseIfExpression() ast.Expression {
 
 	if p.peekTokenIs(token.ELIF) {
 		p.nextToken()
-		elif := p.curToken
-
-		nested := p.parseIfExpression()
-		if nested == nil {
-			return nil
-		}
-
-		expression.Alternative = &ast.BlockStatement{
-			Token: elif,
-			Statements: []ast.Statement{
-				&ast.ExpressionStatement{Token: elif, Expression: nested},
-			},
-		}
-	} else if p.peekTokenIs(token.ELSE) {
+		return p.parseElseIf(expression)
+	}
+	if p.peekTokenIs(token.ELSE) {
 		p.nextToken()
 
+		// "else if" is the same as "elif".
+		if p.peekTokenIs(token.IF) {
+			p.nextToken()
+			return p.parseElseIf(expression)
+		}
 		if !p.expectPeek(token.LBRACE) {
 			return nil
 		}
 		expression.Alternative = p.parseBlockStatement()
 	}
 
+	return expression
+}
+
+// parseElseIf parses the if that follows an elif or an "else if", starting
+// on that keyword, and makes it the whole alternative of expression. It
+// returns expression, or nil on error.
+func (p *Parser) parseElseIf(expression *ast.IfExpression) ast.Expression {
+	keyword := p.curToken
+
+	nested := p.parseIfExpression()
+	if nested == nil {
+		return nil
+	}
+	expression.Alternative = &ast.BlockStatement{
+		Token: keyword,
+		Statements: []ast.Statement{
+			&ast.ExpressionStatement{Token: keyword, Expression: nested},
+		},
+	}
 	return expression
 }
 
@@ -1101,6 +1217,8 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 // of an if, loop or function.
 func (p *Parser) parseHashLiteral() ast.Expression {
 	hash := &ast.HashLiteral{Token: p.curToken, Pairs: []ast.HashPair{}}
+	// Inside a hash a line break is just a space, as inside '(' and '['.
+	p.brackets[len(p.brackets)-1] = true
 
 	for !p.peekTokenIs(token.RBRACE) {
 		p.nextToken()

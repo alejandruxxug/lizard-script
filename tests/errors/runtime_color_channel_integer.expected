@@ -1,0 +1,2 @@
+before
+[line 2, column 4] runtime error: rgb: red must be from 0 to 255, got 300

@@ -206,7 +206,7 @@ for (let i = 1; i <= 10; i += 1) {
 > 5
 > ```
 
-`continue` is only special inside a loop. Outside one, it's an ordinary name, so the error is a bit surprising:
+Like `break`, `continue` outside a loop is a syntax error, found before the program runs:
 
 ```
 if (true) { continue }
@@ -215,8 +215,10 @@ if (true) { continue }
 **Output:**
 
 ```text
-[line 1, column 13] runtime error: identifier not found: continue
+[line 1, column 13] syntax error: continue outside of a loop
 ```
+
+(`continue` is not a reserved word, so `let continue = 1` is still allowed. Only a `continue` alone on its line is the statement.)
 
 ## Nested loops
 

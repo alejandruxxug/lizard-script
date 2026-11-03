@@ -8,7 +8,7 @@ import (
 // newFuncState starts compiling a function inside parent (nil for the
 // program).
 func newFuncState(parent *funcState) *funcState {
-	return &funcState{parent: parent, freeIndex: map[*symbol]int{}}
+	return &funcState{parent: parent, freeIndex: map[*symbol]int{}, last: -1, landing: -1}
 }
 
 // compileProgram compiles the statements of the program, in the global
@@ -142,6 +142,7 @@ func (c *Compiler) finishFunction(lit *ast.FunctionLiteral, params, required int
 		Required:     required,
 		MaxStack:     fs.count + 2,
 		Literal:      lit,
+		Name:         c.names[lit],
 		Unit:         c.unit,
 	}
 }

@@ -2,7 +2,7 @@
 
 [← Previous: Operators](04-operators.md) · [Index](../README.md) · [Next: Loops →](06-loops.md) · [Español](../es/05-conditionals.md)
 
-A conditional lets a program choose what to do. lizard-script has `if`, `elif` (short for "else if") and `else`.
+A conditional lets a program choose what to do. lizard-script has `if`, `elif` (short for "else if", which also works written as two words) and `else`.
 
 ## `if`, `elif`, `else`
 
@@ -28,9 +28,9 @@ The conditions are checked from top to bottom, and only the **first** block whos
 
 The braces `{ }` are always required, even for a single statement. The parentheses around the condition are optional, so `if temperature < 15 { ... }` also works; this guide always writes them because it's easier to read.
 
-## Common mistake: `else if`
+## `else if` is the same as `elif`
 
-Many languages write `else if`. In lizard-script, `else` must be followed by `{`:
+Many languages write `else if`, and lizard-script accepts it too. These two programs do the same:
 
 ```
 let x = 3
@@ -44,10 +44,8 @@ if (x > 5) {
 **Output:**
 
 ```text
-[line 4, column 8] syntax error: expected "{", got "if"
+medium
 ```
-
-Write `elif` instead:
 
 ```
 let x = 3
@@ -63,6 +61,8 @@ if (x > 5) {
 ```text
 medium
 ```
+
+You can mix them in one chain. This guide mostly writes `elif` because it's shorter.
 
 ## Nesting
 
@@ -171,7 +171,7 @@ not huge
 ## Summary
 
 - `if (cond) { } elif (cond) { } else { }`: braces always, parentheses optional.
-- Use `elif`, not `else if`.
+- `elif` and `else if` mean the same.
 - Any value works as a condition.
 - An `if` has a value: the one of the block that ran, or `null`.
 

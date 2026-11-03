@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"lizardscript/ast"
 	"lizardscript/lexer"
 	"strings"
@@ -43,6 +44,12 @@ func TestStatements(t *testing.T) {
 		{"if (a) { 1 } elif (b) { 2 }", "if a { 1 } else { if b { 2 } }"},
 		{"if (a) { 1 } elif (b) { 2 } elif (c) { 3 } else { 4 }",
 			"if a { 1 } else { if b { 2 } else { if c { 3 } else { 4 } } }"},
+		{"if (a) { 1 } else if (b) { 2 }", "if a { 1 } else { if b { 2 } }"},
+		{"if (a) { 1 } else if (b) { 2 } else if (c) { 3 } else { 4 }",
+			"if a { 1 } else { if b { 2 } else { if c { 3 } else { 4 } } }"},
+		{"if (a) { 1 } elif (b) { 2 } else if (c) { 3 } else { 4 }",
+			"if a { 1 } else { if b { 2 } else { if c { 3 } else { 4 } } }"},
+		{"if (a) { 1 }\nelse\nif (b) { 2 }", "if a { 1 } else { if b { 2 } }"},
 		{"if (a) { if (b) { 1 } }", "if a { if b { 1 } }"},
 		{"let x = if (a) { 1 } else { 2 };", "let x = if a { 1 } else { 2 };"},
 
@@ -461,9 +468,9 @@ let hanoi = function(n, origen, destino, auxiliar) {
     if (n == 0) {
         return [];
     }
-    return hanoi(n - 1, origen, auxiliar, destino)
-        + [[origen, destino]]
-        + hanoi(n - 1, auxiliar, destino, origen);
+    return hanoi(n - 1, origen, auxiliar, destino) +
+        [[origen, destino]] +
+        hanoi(n - 1, auxiliar, destino, origen);
 };
 
 {"resultado": resultado, "ackermann": ackermann(2, 2), "fibonacci": fibonacci(34), "hanoi": hanoi(3, "A", "C", "B")};
@@ -597,6 +604,11 @@ func TestFloatLiterals(t *testing.T) {
 		{"1.5rad", 1.5},
 		{"0.25turn", 1.5707963267948966},
 		{"2.5px", 2.5},
+		{"1e3", 1000},
+		{"2.5e-4", 0.00025},
+		{"1E+6", 1000000},
+		{"3e0", 3},
+		{"1e3rad", 1000},
 	}
 	for _, tt := range tests {
 		statement := parse(t, tt.input).Statements[0].(*ast.ExpressionStatement)
@@ -637,7 +649,15 @@ func TestFloatErrors(t *testing.T) {
 		{"5kg", `[line 1, column 1] syntax error: unknown unit "kg"`},
 		{"let x = 1.5kg", `[line 1, column 9] syntax error: unknown unit "kg"`},
 		{"1x", `[line 1, column 1] syntax error: unknown unit "x"`},
-		{"1e5", `[line 1, column 1] syntax error: unknown unit "e5"`},
+		{"1e", `[line 1, column 1] syntax error: unknown unit "e"`},
+		{"1e5kg", `[line 1, column 1] syntax error: unknown unit "kg"`},
+		{"1e400", `[line 1, column 1] syntax error: number 1e400 is too large`},
+		{"puts(5kg)", `[line 1, column 6] syntax error: unknown unit "kg"`},
+		{"f(1, 2.5meters)", `[line 1, column 6] syntax error: unknown unit "meters"`},
+		{"[1, 2kg]", `[line 1, column 5] syntax error: unknown unit "kg"`},
+		{`{"a": 5kg}`, `[line 1, column 7] syntax error: unknown unit "kg"`},
+		{"(5kg)", `[line 1, column 2] syntax error: unknown unit "kg"`},
+		{"a[1x]", `[line 1, column 3] syntax error: unknown unit "x"`},
 		{"5degx", `[line 1, column 1] syntax error: unknown unit "degx"`},
 		{"5 kg", `[line 1, column 3] syntax error: expected end of statement, got identifier "kg"`},
 		{"1 + 2.5meters", `[line 1, column 5] syntax error: unknown unit "meters"`},
@@ -979,21 +999,16 @@ func TestContinueTrees(t *testing.T) {
 		{"while (a) { continue(1) }", "while a { continue(1) }"},
 		{"while (a) { continue[0] }", "while a { (continue[0]) }"},
 		{"while (a) { continue.x }", "while a { (continue[\"x\"]) }"},
-		{"while (a) { continue\n- 1 }", "while a { (continue - 1) }"},
+		{"while (a) { continue -\n1 }", "while a { (continue - 1) }"},
 		{"while (a) { f(continue) }", "while a { f(continue) }"},
 		{"while (a) { let continue = 1 }", "while a { let continue = 1; }"},
 		{"let continue = 1", "let continue = 1;"},
 		{"continue + 1", "(continue + 1)"},
 		{"f(continue)", "f(continue)"},
 		{"function continue() { }", "let continue = function() { };"},
-		// Outside a loop (or in a function inside one) it is the name.
-		{"continue", "continue"},
-		{"continue;", "continue"},
-		{"if (a) { continue }", "if a { continue }"},
-		{"while (a) { function f() { continue } }", "while a { let f = function() { continue }; }"},
-		{"while (a) { let f = function() { continue } }", "while a { let f = function() { continue }; }"},
-		{"function f() { continue }", "let f = function() { continue };"},
-		{"try { continue } catch { }", "try { continue } catch { }"},
+		// Outside a loop it is still a name, as long as it is not alone.
+		{"function f() { continue + 1 }", "let f = function() { (continue + 1) };"},
+		{"while (a) { function f() { let continue = 1\ncontinue + 1 } }", "while a { let f = function() { let continue = 1; (continue + 1) }; }"},
 	}
 	for _, tt := range tests {
 		if got := lines(parse(t, tt.input)); got != tt.expected {
@@ -1005,6 +1020,13 @@ func TestContinueTrees(t *testing.T) {
 func TestContinueErrors(t *testing.T) {
 	tests := []struct{ input, expected string }{
 		{"while (a) { continue 5 }", `[line 1, column 22] syntax error: expected end of statement, got "5"`},
+		{"continue", "[line 1, column 1] syntax error: continue outside of a loop"},
+		{"continue;", "[line 1, column 1] syntax error: continue outside of a loop"},
+		{"if (a) { continue }", "[line 1, column 10] syntax error: continue outside of a loop"},
+		{"function f() { continue }", "[line 1, column 16] syntax error: continue outside of a loop"},
+		{"while (a) { function f() { continue } }", "[line 1, column 28] syntax error: continue outside of a loop"},
+		{"while (a) { let f = function() { continue } }", "[line 1, column 34] syntax error: continue outside of a loop"},
+		{"try { continue } catch { }", "[line 1, column 7] syntax error: continue outside of a loop"},
 	}
 	for _, tt := range tests {
 		p := New(lexer.New(tt.input))
@@ -1063,6 +1085,169 @@ func TestCompoundAssignErrors(t *testing.T) {
 		p.ParseProgram()
 		if len(p.Errors()) == 0 || p.Errors()[0] != tt.expected {
 			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}
+
+// TestStatementsEndAtLineEnd checks LEP 0001: a statement ends at the end of
+// its line, unless the line ends with an operator, a ',' or an opening
+// bracket, or a '(', '[' or hash is still open.
+func TestStatementsEndAtLineEnd(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		// A new line ends the statement, even before a token that could go on.
+		{"let x = 10\n-1", "let x = 10;\n(-1)"},
+		{"let f = g\n(1)", "let f = g;\n1"},
+		{"let a = b\n[1, 2]", "let a = b;\n[1, 2]"},
+		{"a\n-b\nc", "a\n(-b)\nc"},
+		{"x = 1\n-2", "(x = 1)\n(-2)"},
+		{"f(1)\n(2, 3)", "f(1)\n(2, 3)"},
+		// An operator at the end of the line goes on to the next one.
+		{"let x = 10 -\n1", "let x = (10 - 1);"},
+		{"let t = a +\n  b +\n  c", "let t = ((a + b) + c);"},
+		{"a &&\nb ||\nc", "((a && b) || c)"},
+		{"a ==\nb", "(a == b)"},
+		{"a **\nb", "(a ** b)"},
+		{"x =\n5", "(x = 5)"},
+		{"x +=\n5", "(x += 5)"},
+		{"let x =\n  5", "let x = 5;"},
+		{"a.\nb", "(a[\"b\"])"},
+		{"!\na", "(!a)"},
+		// So do a ',' and an opening bracket.
+		{"f(1,\n2)", "f(1, 2)"},
+		{"f(\n1\n)", "f(1)"},
+		{"[\n1,\n2\n]", "[1, 2]"},
+		{"a[\n0\n]", "(a[0])"},
+		// Inside '(' and '[' a new line is just a space.
+		{"f(a\n+ b)", "f((a + b))"},
+		{"(a\n- b)", "(a - b)"},
+		{"[a\n- 1, b]", "[(a - 1), b]"},
+		{"if (a\n&& b) { c }", "if (a && b) { c }"},
+		{"(1\n, 2)", "(1, 2)"},
+		{"for (let i = 0; i < n\n; i += 1) { }", "for (let i = 0; (i < n); (i += 1)) { }"},
+		{"function f(a = 1\n+ 2) { a }", "let f = function(a = (1 + 2)) { a };"},
+		// So it is inside a hash.
+		{"let h = {\n\"a\": 1\n+ 2,\n\"b\": [3]\n}", "let h = {\"a\": (1 + 2), \"b\": [3]};"},
+		{"let h = {\"a\"\n: 1}", "let h = {\"a\": 1};"},
+		// A block inside brackets starts statements again, until its '}'.
+		{"f(function() {\nlet x = 1\n-2\n})", "f(function() { let x = 1; (-2) })"},
+		{"f(function() {\nx\n}\n+ 1)", "f((function() { x } + 1))"},
+		{"let h = {\"f\": function() {\na\n-1\n}}", "let h = {\"f\": function() { a (-1) }};"},
+		// A closed bracket doesn't keep the line going.
+		{"f(a)\n-1", "f(a)\n(-1)"},
+		// ';' still separates statements on one line, and blank lines and
+		// comments at the end of a line are only space.
+		{"a; -1", "a\n(-1)"},
+		{"let x = 1; let y = 2", "let x = 1;\nlet y = 2;"},
+		{"a +\n\n\nb", "(a + b)"},
+		{"a + -~> more below\nb", "(a + b)"},
+		{"a -~> done\n-1", "a\n(-1)"},
+		{"a +\n-~> a whole line of comment\nb", "(a + b)"},
+		// A string over several lines is one token: what follows it on its
+		// last line is on the same line.
+		{"let s = \"one\ntwo\" + \"!\"", "let s = (\"one\ntwo\" + \"!\");"},
+		// return takes a value that starts on its line.
+		{"function f() {\nreturn\n5\n}", "let f = function() { return; 5 };"},
+		{"function f() {\nreturn 5 +\n1\n}", "let f = function() { return (5 + 1); };"},
+		{"function f() {\nreturn (\n5)\n}", "let f = function() { return 5; };"},
+		// A continue alone on its line is a continue.
+		{"while (a) { continue\n- 1 }", "while a { continue; (-1) }"},
+		// An else, an elif and a catch still may start the line after the '}'.
+		{"if (a) { 1 }\nelse { 2 }", "if a { 1 } else { 2 }"},
+		{"if (a) { 1 }\nelif (b) { 2 }", "if a { 1 } else { if b { 2 } }"},
+		{"try { a }\ncatch (e) { b }", "try { a } catch (e) { b }"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+}
+
+// TestLeadingOperatorErrors checks the error for a line that starts with an
+// operator that can only go between two values. The line is still read as
+// part of the line before, so each one is reported and nothing else is.
+func TestLeadingOperatorErrors(t *testing.T) {
+	message := func(line, column int, operator string) string {
+		return fmt.Sprintf("[line %d, column %d] syntax error: a line can't start with %s; "+
+			"put the %s at the end of the previous line", line, column, operator, operator)
+	}
+	tests := []struct {
+		input    string
+		expected []string
+	}{
+		{"a\n+ b", []string{message(2, 1, "+")}},
+		{"let total = first\n  + second\n  * third", []string{message(2, 3, "+"), message(3, 3, "*")}},
+		{"a\n&& b", []string{message(2, 1, "&&")}},
+		{"a\n|| b", []string{message(2, 1, "||")}},
+		{"a\n== b", []string{message(2, 1, "==")}},
+		{"a\n!== b", []string{message(2, 1, "!==")}},
+		{"a\n<= b", []string{message(2, 1, "<=")}},
+		{"a\n// b", []string{message(2, 1, "//")}},
+		{"a\n% b", []string{message(2, 1, "%")}},
+		{"a\n** b", []string{message(2, 1, "**")}},
+		{"a\n.b", []string{message(2, 1, ".")}},
+		{"x\n= 5", []string{message(2, 1, "=")}},
+		{"x\n+= 5", []string{message(2, 1, "+=")}},
+		{"if a\n&& b { c }", []string{message(2, 1, "&&")}},
+		{"while (x) {\nlet y = a\n/ 2\n}", []string{message(3, 1, "/")}},
+		{"a -~> comment\n+ b", []string{message(2, 1, "+")}},
+		// The parse goes on, so a mistake after it is found too.
+		{"a\n+ b\nlet = 1", []string{message(2, 1, "+"),
+			`[line 3, column 5] syntax error: expected identifier, got "="`}},
+		// A statement that starts with an operator is still an ordinary
+		// error: no line before it went on.
+		{"* 2", []string{`[line 1, column 1] syntax error: expected an expression, got "*"`}},
+		{"if (a) { 1 }\n+ 2", []string{`[line 2, column 1] syntax error: expected an expression, got "+"`}},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if got := strings.Join(p.Errors(), "\n"); got != strings.Join(tt.expected, "\n") {
+			t.Errorf("input %q\nexpected: %s\n     got: %s", tt.input, strings.Join(tt.expected, "\n"), got)
+		}
+	}
+}
+
+// TestLineChanges checks the list of lines whose meaning LEP 0001 changed,
+// which a migration tool shows: each one once, and nothing for code that
+// meant the same before.
+func TestLineChanges(t *testing.T) {
+	newStatement := func(line, column int, operator string) string {
+		return fmt.Sprintf("[line %d, column %d] this line no longer goes on with the line before: "+
+			"%s starts a new statement; to go on, end the line before with an operator or join the lines",
+			line, column, operator)
+	}
+	leading := func(line, column int, operator string) string {
+		return fmt.Sprintf("[line %d, column %d] a line can't start with %s; "+
+			"put the %s at the end of the previous line", line, column, operator, operator)
+	}
+	tests := []struct {
+		input    string
+		expected []string
+	}{
+		{"let x = 10\n-1", []string{newStatement(2, 1, "-")}},
+		{"let x = a * b\n-1", []string{newStatement(2, 1, "-")}},
+		{"x = a + b\n(1)", []string{newStatement(2, 1, "(")}},
+		{"f\n[0]", []string{newStatement(2, 1, "[")}},
+		{"a\n+ b", []string{leading(2, 1, "+")}},
+		{"function f() {\nreturn\nx\n}", []string{"[line 3, column 1] this line is no longer the value of " +
+			"the return before it; start the value on the return line"}},
+		// The same before and after LEP 0001.
+		{"let x = 10 -\n1", nil},
+		{"f(a\n- b)", nil},
+		{"if (a) { 1 }\n-1", nil},
+		{"while (a) { b }\n(c)", nil},
+		{"function f() { }\n[1]", nil},
+		{"let x = 1;\n-1", nil},
+		{"while (a) { break\n-1 }", nil},
+		{"function f() {\nreturn\n}", nil},
+		{"let x = 1\nlet y = 2", nil},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if got := strings.Join(p.LineChanges(), "\n"); got != strings.Join(tt.expected, "\n") {
+			t.Errorf("input %q\nexpected: %s\n     got: %s", tt.input, strings.Join(tt.expected, "\n"), got)
 		}
 	}
 }

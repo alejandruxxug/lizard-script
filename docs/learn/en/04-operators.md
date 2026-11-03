@@ -350,6 +350,53 @@ When you're not sure, add parentheses. They cost nothing and make the code easie
 
 > **Try it.** Without running them, work out `17 // 5`, `17 % 5`, `-17 // 5`, `-17 % 5` and `2 * 3 ** 2`. Then check.
 
+## Surprises that stay
+
+These behaviours look odd at first. They are on purpose, so they won't change; learn them once.
+
+**A negative index is `null` with `[]`, but counts from the end in `text` and `list`.** The `[]` operator never wraps around, so a bug that goes below 0 shows up as `null` instead of quietly reading the last item:
+
+```
+let a = [10, 20, 30]
+puts(a[-1], "abc"[-1])
+puts(text.slice("hello", -3, 5), list.slice(a, -2, 3))
+```
+
+**Output:**
+
+```text
+null null
+llo [20, 30]
+```
+
+For the last item with `[]`, use `a[len(a) - 1]`.
+
+**`"5" * 2` is `"55"`.** `*` repeats a string. A string that looks like a number is not a number for arithmetic (`"5" + 5` is an error), but the loose `==` does convert it. Use `int("5")` to get the number:
+
+```
+puts("5" * 2, "5" == 5, int("5") * 2)
+puts("5" + 5)
+```
+
+**Output:**
+
+```text
+55 true 10
+[line 2, column 10] runtime error: type mismatch: STRING + INTEGER
+```
+
+**Strings are compared byte by byte,** not by alphabet. Uppercase comes before lowercase, digits are compared one at a time, and accented letters come after `z`:
+
+```
+puts("B" < "a", "10" < "9", "é" < "z")
+```
+
+**Output:**
+
+```text
+true true false
+```
+
 ## Summary
 
 - Two integers give an integer: `1 / 2` is `0`. Make one side a float for real division.
@@ -358,5 +405,6 @@ When you're not sure, add parentheses. They cost nothing and make the code easie
 - `===` is exact, `==` converts. Prefer `===`.
 - `&&` and `||` stop early and always give a boolean.
 - `+=`, `-=`, `*=`, `/=` exist; `**=`, `//=` and `%=` don't.
+- Surprises that stay: `a[-1]` is `null`, `"5" * 2` is `"55"`, strings compare byte by byte.
 
 [← Previous: Variables and scope](03-variables-and-scope.md) · [Index](../README.md) · [Next: Conditionals →](05-conditionals.md)

@@ -94,7 +94,7 @@ puts(rgb(300, 0, 0))
 **Salida:**
 
 ```text
-[line 1, column 9] runtime error: rgb: red must be from 0 to 255, got 300.0
+[line 1, column 9] runtime error: rgb: red must be from 0 to 255, got 300
 ```
 
 ### Los colores no se pueden cambiar

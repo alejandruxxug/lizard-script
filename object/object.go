@@ -278,6 +278,34 @@ func (h *Hash) Each(f func(pair HashPair)) {
 func (h *Hash) Type() ObjectType { return HASH_OBJ }
 func (h *Hash) Inspect() string  { return inspectNested(h) }
 
+// Quote writes text as a string literal that reads back as the same text:
+// in quotes, with the escapes \" \\ \n \t and \r, and \u{...} for any
+// other control character. Bytes of 0x80 and up are kept as they are.
+func Quote(text string) string {
+	var out strings.Builder
+	out.WriteByte('"')
+	for i := 0; i < len(text); i++ {
+		ch := text[i]
+		switch {
+		case ch == '"' || ch == '\\':
+			out.WriteByte('\\')
+			out.WriteByte(ch)
+		case ch == '\n':
+			out.WriteString(`\n`)
+		case ch == '\t':
+			out.WriteString(`\t`)
+		case ch == '\r':
+			out.WriteString(`\r`)
+		case ch < 0x20 || ch == 0x7f:
+			fmt.Fprintf(&out, `\u{%x}`, ch)
+		default:
+			out.WriteByte(ch)
+		}
+	}
+	out.WriteByte('"')
+	return out.String()
+}
+
 // inspectStep is one piece of output left to write: a value, or a text.
 // After the text of a step with close, close is no longer being written.
 type inspectStep struct {
@@ -318,7 +346,7 @@ func inspectNested(root Object) string {
 		// they come off in order.
 		switch o := step.value.(type) {
 		case *String:
-			out.WriteString("\"" + o.Value + "\"")
+			out.WriteString(Quote(o.Value))
 
 		case *Array:
 			if open[o] {
@@ -398,6 +426,12 @@ type Callable interface {
 
 // BuiltinFunction is the Go code behind a builtin. It returns an *Error
 // to report a problem.
+//
+// args belongs to the caller and is only lent for the call: the bytecode VM
+// passes a piece of its value stack, which it reuses as soon as the
+// builtin returns. A builtin may keep the values in it, but must not keep
+// the slice itself (or a slice of it), nor change it; to keep them all,
+// copy them (append([]Object{}, args...)).
 type BuiltinFunction func(args ...Object) Object
 
 // Builtin is a function written in Go, like len or puts.
@@ -455,6 +489,19 @@ func (e *Error) Inspect() string  { return e.Message }
 type Environment struct {
 	store map[string]Object
 	outer *Environment
+	// version counts the writes to store, for Version.
+	version uint64
+}
+
+// Version changes whenever a variable of this environment or the ones
+// around it is defined or assigned. An engine that remembers what a name
+// read (the VM's global reads) can trust it while the version stays.
+func (e *Environment) Version() uint64 {
+	var version uint64
+	for env := e; env != nil; env = env.outer {
+		version += env.version
+	}
+	return version
 }
 
 // NewEnvironment returns an empty top-level environment.
@@ -483,6 +530,7 @@ func (e *Environment) Get(name string) (Object, bool) {
 // same name in the ones around it. This is what let does.
 func (e *Environment) Define(name string, value Object) Object {
 	e.store[name] = value
+	e.version++
 	return value
 }
 
@@ -492,6 +540,7 @@ func (e *Environment) Assign(name string, value Object) bool {
 	for env := e; env != nil; env = env.outer {
 		if _, ok := env.store[name]; ok {
 			env.store[name] = value
+			env.version++
 			return true
 		}
 	}

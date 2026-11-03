@@ -163,3 +163,45 @@ func TestFunctionShape(t *testing.T) {
 		}
 	}
 }
+
+// TestQuickening checks the instructions made for speed: a dot access with
+// its name ready, fused with the read before it when nothing jumps between
+// them, and lets in a block that leave no null to drop.
+func TestQuickening(t *testing.T) {
+	tests := []struct {
+		input  string
+		has    []string
+		hasNot []string
+	}{
+		{"function f(p) { p.x }", []string{"OpGetLocalField 0 0"}, []string{"OpGetField", "OpIndex"}},
+		{"function f(p) { p[\"x\"] }", []string{"OpGetLocalField 0 0"}, []string{"OpIndex"}},
+		{"function f(p) { p[0] }", []string{"OpIndex"}, []string{"Field"}},
+		{"function f() { math.sin }", []string{"OpGetNameField"}, []string{"OpGetField"}},
+		{"function f(p) { p.a.b }", []string{"OpGetLocalField 0 0", "OpGetField 1"}, nil},
+		{"function f(p) { f(p).x }", []string{"OpCall", "OpGetField"}, []string{"OpGetLocalField"}},
+		// A local that a closure shares later becomes a cell, fused too.
+		{"function f() { let h = {}; h.a; function() { h } }", []string{"OpGetCellField"}, []string{"OpGetLocalField"}},
+		// The end of the if lands between the read and the field.
+		{"function f(a, b, c) { (if (c) { a } else { b }).x }", []string{"OpGetField"}, []string{"OpGetLocalField"}},
+		// A point of number literals is a constant.
+		{"function f() { (0.5, 1) }", []string{"OpConstant"}, []string{"OpPoint", "OpCheckCoord"}},
+		{"function f(a) { (a, 1) }", []string{"OpPoint"}, nil},
+		// The null of a let in the middle of a block is not made.
+		{"function f() { let a = 1; a }", nil, []string{"OpNull"}},
+		{"function f() { let a = 1 }", []string{"OpNull"}, nil},
+	}
+	for _, tt := range tests {
+		_, unit := compile(t, tt.input)
+		text := unit.Functions[len(unit.Functions)-1].Instructions.String()
+		for _, want := range tt.has {
+			if !strings.Contains(text, want) {
+				t.Errorf("input %q - expected %s in:\n%s", tt.input, want, text)
+			}
+		}
+		for _, unwanted := range tt.hasNot {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("input %q - did not expect %s in:\n%s", tt.input, unwanted, text)
+			}
+		}
+	}
+}

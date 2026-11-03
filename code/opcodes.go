@@ -100,7 +100,12 @@ const (
 	OpCheckCoord // tok: fail if the top value is not a number
 	OpIndex      // tok: pop the index and the container, push container[index]
 	OpIndexKeep  // tok: push container[index], keeping both
-	OpSetIndex   // tok: pop value, index, container; container[index] = value; push value
+	OpGetField   // field, tok: replace the top value with value.name, Unit.Fields[field] is the name
+	// Two common instructions fused into one, with the operands of both.
+	OpGetLocalField // slot, field, tok: OpGetLocal then OpGetField
+	OpGetCellField  // slot, field, tok: OpGetCell then OpGetField
+	OpGetNameField  // name, field, tok: OpGetName then OpGetField
+	OpSetIndex      // tok: pop value, index, container; container[index] = value; push value
 )
 
 // Definition is the name of an opcode and the width of its operands.
@@ -181,7 +186,12 @@ var definitions = map[Opcode]*Definition{
 	OpCheckCoord: {"OpCheckCoord", []int{4}},
 	OpIndex:      {"OpIndex", []int{4}},
 	OpIndexKeep:  {"OpIndexKeep", []int{4}},
+	OpGetField:   {"OpGetField", []int{4, 4}},
 	OpSetIndex:   {"OpSetIndex", []int{4}},
+
+	OpGetLocalField: {"OpGetLocalField", []int{4, 4, 4}},
+	OpGetCellField:  {"OpGetCellField", []int{4, 4, 4}},
+	OpGetNameField:  {"OpGetNameField", []int{4, 4, 4}},
 }
 
 // Lookup returns the definition of op, or an error for an unknown opcode.

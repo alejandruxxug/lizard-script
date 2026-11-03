@@ -350,6 +350,53 @@ Si no estás seguro, agrega paréntesis. No cuestan nada y hacen el código más
 
 > **Pruébalo.** Sin ejecutarlos, calcula `17 // 5`, `17 % 5`, `-17 // 5`, `-17 % 5` y `2 * 3 ** 2`. Luego compruébalo.
 
+## Sorpresas que se quedan
+
+Estos comportamientos parecen raros al principio. Son a propósito, así que no van a cambiar; aprende cada uno una vez.
+
+**Un índice negativo da `null` con `[]`, pero cuenta desde el final en `text` y `list`.** El operador `[]` nunca da la vuelta, así que un error que se pase por debajo de 0 se ve como `null` en vez de leer en silencio el último elemento:
+
+```
+let a = [10, 20, 30]
+puts(a[-1], "abc"[-1])
+puts(text.slice("hello", -3, 5), list.slice(a, -2, 3))
+```
+
+**Salida:**
+
+```text
+null null
+llo [20, 30]
+```
+
+Para el último elemento con `[]`, usa `a[len(a) - 1]`.
+
+**`"5" * 2` es `"55"`.** `*` repite una cadena. Una cadena que parece un número no es un número para la aritmética (`"5" + 5` es un error), pero el `==` flexible sí la convierte. Usa `int("5")` para obtener el número:
+
+```
+puts("5" * 2, "5" == 5, int("5") * 2)
+puts("5" + 5)
+```
+
+**Salida:**
+
+```text
+55 true 10
+[line 2, column 10] runtime error: type mismatch: STRING + INTEGER
+```
+
+**Las cadenas se comparan byte por byte,** no por orden alfabético. Las mayúsculas van antes que las minúsculas, los dígitos se comparan uno por uno y las letras con tilde van después de la `z`:
+
+```
+puts("B" < "a", "10" < "9", "é" < "z")
+```
+
+**Salida:**
+
+```text
+true true false
+```
+
 ## Resumen
 
 - Dos enteros dan un entero: `1 / 2` es `0`. Haz flotante uno de los lados para la división real.
@@ -358,5 +405,6 @@ Si no estás seguro, agrega paréntesis. No cuestan nada y hacen el código más
 - `===` es exacta, `==` convierte. Prefiere `===`.
 - `&&` y `||` se detienen antes y siempre dan un booleano.
 - Existen `+=`, `-=`, `*=`, `/=`; no existen `**=`, `//=` ni `%=`.
+- Sorpresas que se quedan: `a[-1]` es `null`, `"5" * 2` es `"55"`, las cadenas se comparan byte por byte.
 
 [← Anterior: Variables y alcance](03-variables-and-scope.md) · [Índice](../README.md) · [Siguiente: Condicionales →](05-conditionals.md)

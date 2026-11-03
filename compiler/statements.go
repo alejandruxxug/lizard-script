@@ -7,7 +7,8 @@ import (
 
 // Every statement and expression leaves exactly one value on the stack,
 // like Eval returns one. A block pops the values of all its statements but
-// the last.
+// the last; a let before the last leaves none, since its value (null)
+// would only be popped.
 
 // compileStatements compiles the statements of a block, a function body or
 // a layer, each announced to the OnStatement hook, keeping the last value.
@@ -19,8 +20,14 @@ func (c *Compiler) compileStatements(statements []ast.Statement) {
 	}
 	for i, st := range statements {
 		c.emit(code.OpStatement, c.statementIndex(st))
+		last := i == len(statements)-1
+		if let, ok := st.(*ast.LetStatement); ok && !last {
+			// Its value, null, would only be dropped.
+			c.compileLet(let)
+			continue
+		}
 		c.compileStatement(st)
-		if i < len(statements)-1 {
+		if !last {
 			c.emit(code.OpPop)
 		}
 	}
@@ -33,13 +40,22 @@ func (c *Compiler) compileBlock(block *ast.BlockStatement) {
 	c.closeScope()
 }
 
+// compileLet runs the value of a let and stores it, leaving nothing on the
+// stack.
+func (c *Compiler) compileLet(st *ast.LetStatement) {
+	if lit, ok := st.Value.(*ast.FunctionLiteral); ok {
+		c.names[lit] = st.Name.Value
+	}
+	c.compileExpression(st.Value, false)
+	c.define(st.Name.Value)
+}
+
 // compileStatement compiles a statement in a statement's place: in a block,
 // a function body, a layer or the program.
 func (c *Compiler) compileStatement(st ast.Statement) {
 	switch st := st.(type) {
 	case *ast.LetStatement:
-		c.compileExpression(st.Value, false)
-		c.define(st.Name.Value)
+		c.compileLet(st)
 		c.emit(code.OpNull)
 
 	case *ast.ReturnStatement:

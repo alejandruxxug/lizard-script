@@ -26,7 +26,9 @@ func Compile(program *ast.Program) (unit *code.Unit, err error) {
 		integers:  map[int64]int{},
 		strings:   map[string]int{},
 		floats:    map[uint64]int{},
+		fields:    map[string]int{},
 		statement: map[ast.Statement]int{},
+		names:     map[*ast.FunctionLiteral]string{},
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -55,7 +57,11 @@ type Compiler struct {
 	integers  map[int64]int
 	strings   map[string]int
 	floats    map[uint64]int
+	fields    map[string]int
 	statement map[ast.Statement]int
+
+	// names are the functions a let names, for code.Function.Name.
+	names map[*ast.FunctionLiteral]string
 }
 
 // funcState is one function being compiled (the program is one too).
@@ -63,6 +69,10 @@ type funcState struct {
 	parent *funcState
 	ins    []byte
 	count  int // instructions emitted, a bound for MaxStack
+	// last is where the last instruction starts, and landing the last
+	// place a jump goes to, for fusing two instructions into one (-1 when
+	// there is none).
+	last, landing int
 
 	scope     *scope
 	nextSlot  int
@@ -101,7 +111,25 @@ func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	at := len(fs.ins)
 	fs.ins = append(fs.ins, code.Make(op, operands...)...)
 	fs.count++
+	fs.last = at
 	return at
+}
+
+// lastIs reports whether the last instruction is op and the next one can
+// be fused with it: no jump goes between them. It returns where it starts.
+func (c *Compiler) lastIs(op code.Opcode) (int, bool) {
+	fs := c.fs
+	if fs.last < 0 || fs.landing == len(fs.ins) || code.Opcode(fs.ins[fs.last]) != op {
+		return 0, false
+	}
+	return fs.last, true
+}
+
+// replaceLast puts op in the place of the last instruction, which starts
+// at `at`, so it stays where the instructions that point at it expect.
+func (c *Compiler) replaceLast(at int, op code.Opcode, operands ...int) {
+	c.fs.ins = c.fs.ins[:at]
+	c.emit(op, operands...)
 }
 
 // operandAt is where operand i of the instruction at `at` starts. All
@@ -117,6 +145,7 @@ func (c *Compiler) newLabel() *label {
 // place puts l here and fills the jumps that were waiting for it.
 func (c *Compiler) place(l *label) {
 	l.at = len(c.fs.ins)
+	c.fs.landing = l.at
 	for _, use := range l.uses {
 		c.patch(use, l.at)
 	}
@@ -125,6 +154,9 @@ func (c *Compiler) place(l *label) {
 
 func (c *Compiler) patch(operand, value int) {
 	ins := c.fs.ins
+	if value == len(ins) {
+		c.fs.landing = value
+	}
 	ins[operand] = byte(value >> 24)
 	ins[operand+1] = byte(value >> 16)
 	ins[operand+2] = byte(value >> 8)
@@ -200,6 +232,25 @@ func (c *Compiler) float(value float64) int {
 	i := c.constant(&object.Float{Value: value})
 	c.floats[bits] = i
 	return i
+}
+
+// pointCoords are the names of a point's coordinates, in order, like the
+// evaluator's.
+var pointCoords = map[string]int{"x": 0, "y": 1, "z": 2}
+
+// field is the entry of the name of a dot access in the unit's fields.
+func (c *Compiler) field(name string) int {
+	if i, ok := c.fields[name]; ok {
+		return i
+	}
+	key := &object.String{Value: name}
+	coord, ok := pointCoords[name]
+	if !ok {
+		coord = -1
+	}
+	c.unit.Fields = append(c.unit.Fields, code.Field{Name: key, Key: key.HashKey(), Coord: coord})
+	c.fields[name] = len(c.unit.Fields) - 1
+	return len(c.unit.Fields) - 1
 }
 
 func (c *Compiler) name(n code.Name) int {

@@ -309,6 +309,52 @@ puts(reduce(evens, function(a, b) { a + b }, 0))
 
 > **Pruébalo.** Escribe `compose(f, g)`, que devuelva una función que calcule `f(g(x))`. Pruébala con `compose(addTen, square)(3)`, que debería dar `19`.
 
+## ¿En qué se va el tiempo?
+
+Cuando un programa es lento, mide antes de cambiarlo. Córrelo con `--profile` (corre en el motor de bytecode, el más rápido) y, después de la salida del programa, lizard-script muestra cada función con cuántas veces se llamó y el tiempo que pasó en ella. **total** es el tiempo desde la llamada hasta que devuelve; **self** deja por fuera el tiempo de las funciones que llamó. Las funciones anónimas aparecen como `function@línea`. Los tiempos cambian de una corrida a otra; las llamadas no.
+
+Guarda esto como `slow.liz` y corre `lizardscript --profile slow.liz`:
+
+```
+function fib(n) {
+  if (n < 2) { return n }
+  fib(n - 1) + fib(n - 2)
+}
+let square = function(x) { x * x }
+let total = 0
+for (let i = 0; i < 1000; i += 1) { total += square(i) + len(str(i)) }
+puts(fib(20), total)
+```
+
+**Salida** (el perfil va a la salida de errores, después de la del programa):
+
+```text
+6765 332836390
+profile: 3.363ms
+
+functions by self time
+        self        total      calls  name
+     2.528ms      2.528ms      21891  fib (slow.liz:1)
+     0.290ms      3.011ms          1  program (slow.liz:1)
+     0.040ms      0.040ms       1000  square (slow.liz:5)
+
+functions by total time
+        self        total      calls  name
+     0.290ms      3.011ms          1  program (slow.liz:1)
+     2.528ms      2.528ms      21891  fib (slow.liz:1)
+     0.040ms      0.040ms       1000  square (slow.liz:5)
+
+builtins by self time
+        self        total      calls  name
+     0.077ms      0.077ms       1000  str
+     0.046ms      0.046ms          1  puts
+     0.031ms      0.031ms       1000  len
+```
+
+`fib` se llama 21891 veces para calcular `fib(20)`: casi todo el tiempo está ahí, y es la función que conviene hacer más rápida (calcula los mismos valores una y otra vez). `square` se llamó 1000 veces pero no cuesta nada.
+
+> **Pruébalo.** Escribe un `fib` que guarde en un hash los valores que ya calculó, y vuelve a perfilarlo. ¿Cuántas llamadas quedan?
+
 ## Resumen
 
 - `function nombre(params) { cuerpo }` o `let nombre = function(params) { cuerpo }`.
@@ -316,5 +362,6 @@ puts(reduce(evens, function(a, b) { a + b }, 0))
 - Valores por defecto: `function f(a, b = 2)`. Van al final.
 - Una función recursiva necesita un caso base.
 - Una clausura recuerda las variables del alcance donde fue creada.
+- `lizardscript --profile archivo.liz` muestra en qué se va el tiempo: llamadas, tiempo propio (self) y total de cada función.
 
 [← Anterior: Ciclos](06-loops.md) · [Índice](../README.md) · [Siguiente: Arreglos →](08-arrays.md)

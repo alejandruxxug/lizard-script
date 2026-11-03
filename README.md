@@ -75,6 +75,8 @@ let lizard = {"name": "Liz", "toes": [5, 5, 5, 5]};
 
 The lexer always takes the longest operator it can, so `====` lexes as `===` followed by `=`.
 
+**Lines:** a statement ends at the end of its line. It goes on to the next line only when the line ends with an operator, a comma or an opening bracket, or while a `(`, `[` or hash is still open; `;` separates statements on one line. Programs written before this rule can be checked with `go run ./tools/checknewlines file.liz...`.
+
 ## Project structure
 
 ```
@@ -94,6 +96,7 @@ lizard-script/
 ├── tests/     # valid and failing programs with their expected output
 ├── docs/      # design, grammar, semantics, the Terrarium, and the teaching guide (docs/learn)
 ├── proposals/ # Lizard Enhancement Proposals (LEPs)
+├── tools/     # checknewlines: lists lines whose meaning changed with LEP 0001
 └── main.go    # the lizardscript command
 ```
 

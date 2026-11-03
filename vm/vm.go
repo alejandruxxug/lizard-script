@@ -87,7 +87,10 @@ func (vm *VM) start(cl *Closure, args []object.Object) {
 	copy(vm.stack, args)
 	clear(vm.stack[len(args):fn.NumLocals])
 	vm.sp = fn.NumLocals
-	vm.frames = append(vm.frames[:0], frame{cl: cl, given: len(args)})
+	vm.frames = append(vm.frames[:0], frame{cl: cl, given: len(args), profile: profiler})
+	if profiler != nil {
+		profiler.enterFunction(fn)
+	}
 }
 
 // ensure grows the stack to at least size slots.

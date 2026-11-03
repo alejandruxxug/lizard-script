@@ -262,11 +262,30 @@ puts(len)
 
 Después de esa línea, `len("abc")` fallaría, porque ahora `len` es un número. Evita usar nombres de funciones integradas para tus variables (`len`, `type`, `str`, `list`, `text`, `math`...).
 
-## Error común: una línea que empieza con `-`
+## Error común: empezar una línea con un operador
 
-Un salto de línea termina una instrucción solo cuando la instrucción no puede continuar. Una línea que empieza con un operador, `(` o `[` **continúa** la línea anterior:
+Una instrucción termina al final de su línea (capítulo 1), así que una línea no puede seguir donde quedó la anterior empezando con un operador:
 
 ```
+let price = 10
+let total = price
+  + 2
+puts(total)
+```
+
+**Salida:**
+
+```text
+[line 3, column 3] syntax error: a line can't start with +; put the + at the end of the previous line
+```
+
+Haz lo que dice el mensaje ("una línea no puede empezar con +; pon el + al final de la línea anterior"): termina la línea con el `+` y la instrucción sigue. Una línea que empieza con `-` no es un error sino una instrucción nueva, un número negativo solo:
+
+```
+let price = 10
+let total = price +
+  2
+puts(total)
 let x = 10
 -1
 puts(x)
@@ -275,10 +294,11 @@ puts(x)
 **Salida:**
 
 ```text
-9
+12
+10
 ```
 
-Eso fue `let x = 10 - 1`. Si de verdad quieres una instrucción aparte, termina la primera línea con `;`. En cambio, dos valores uno al lado del otro en la misma línea son un error:
+En cambio, dos valores uno al lado del otro en la misma línea son un error:
 
 ```
 let x = 5 6
@@ -295,6 +315,6 @@ let x = 5 6
 - `let` crea, `=` cambia. Asignar a un nombre que nunca se creó es un error.
 - Cada bloque `{ }` es un alcance; el `let` de adentro se queda adentro.
 - Sin `let`, un bloque cambia la variable de afuera.
-- Una línea que empieza con un operador, `(` o `[` continúa la anterior.
+- Una instrucción termina al final de su línea. Para partirla, termina la línea con el operador.
 
 [← Anterior: Valores y tipos](02-values-and-types.md) · [Índice](../README.md) · [Siguiente: Operadores →](04-operators.md)

@@ -35,6 +35,19 @@ parameter  = IDENT [ "=" expression ] ;
 
 `end` is not a token. It is a `;`, or nothing when the next token is `}`, the end of the input, or on a later line. That is why `let x = 5 6` is an error while two statements on separate lines are fine.
 
+### Where a statement ends
+
+**A statement ends at the end of its line. It goes on to the next line only when the line ends with an operator, a `,` or an opening bracket, or while a `(`, `[` or hash `{` is still open.** ([LEP 0001](../proposals/0001-statement-ends-at-newline.md))
+
+- The tokens that let a line go on are the binary operators (`+ - * / // % ** == != === !== < > <= >= && ||`), `=` and the compound assignments, `!`, `.`, `,`, `(`, `[` and `{` (`lexer.ContinuesLine`, which the REPL uses too). A comment at the end of the line doesn't count, so `a + -~> note` still goes on, and blank lines in between are skipped.
+- Inside `(`, `[` and the `{` of a hash a line break is just a space, so calls, arrays, points, hashes and conditions in parentheses can be split anywhere. The `{` of a block (the body of an `if`, a loop or a function) starts statements again, even when the block is inside brackets, as in `f(function() { ... })`.
+- So `let x = 10` followed by a line `-1` is two statements, and so are `f` and a line `(1)`. A line that starts with an operator that only goes between two values (`+`, `*`, `==`, `&&`, `.`, `=`, ...) right after a finished line is the syntax error `a line can't start with +; put the + at the end of the previous line`. The parser then reads that line as part of the one before, so the next mistakes are still found.
+- `return` takes a value only when it starts on the same line: a `return` at the end of its line returns `null`. A lone `continue` on its line is always a continue.
+- A statement that is not finished yet reads the next line as before: `let x` followed by a line `= 1`, an `if (a)` or `function f()` with its `{` on the next line, and the `else`, `elif` or `catch` that starts the line after a `}`.
+- `;` still separates statements on one line.
+
+The command `go run ./tools/checknewlines file.liz...` lists the lines of older programs whose meaning changed with this rule.
+
 ## Expressions
 
 The grammar is written by levels, one per row of the precedence table below. The parser doesn't have one function per level: the Pratt algorithm covers them all with `parseExpression` and the `precedences` table.
@@ -70,7 +83,7 @@ hashLiteral     = "{" [ pair { "," pair } [ "," ] ] "}" ;
 pair            = expression ":" expression ;
 functionLiteral = "function" "(" [ parameters ] ")" block ;
 
-ifExpression    = "if" expression block { "elif" expression block } [ "else" block ] ;
+ifExpression    = "if" expression block { ( "elif" | "else" "if" ) expression block } [ "else" block ] ;
 whileExpression = "while" expression block ;
 forExpression   = "for" "(" [ forInit ] ";" [ expression ] ";" [ expression ] ")" block ;
 forInit         = letStatement | expressionStatement ;
@@ -103,8 +116,10 @@ From weakest to strongest:
 ```ebnf
 IDENT   = ( letter | "_" ) { letter | digit | "_" } ;
 INT     = digit { digit } [ "px" ] ;
-FLOAT   = digit { digit } "." digit { digit } [ unit ]
+FLOAT   = digit { digit } [ "." digit { digit } ] exponent [ unit ]
+        | digit { digit } "." digit { digit } [ unit ]
         | digit { digit } ( "deg" | "rad" | "turn" ) ;
+exponent = ( "e" | "E" ) [ "+" | "-" ] digit { digit } ;
 unit    = "deg" | "rad" | "turn" | "px" ;
 STRING  = '"' { any character except '"' and '\' | escape } '"' ;
 escape  = "\\" ( '"' | "\\" | "n" | "t" | "r" | unicode ) ;
@@ -120,7 +135,9 @@ Whitespace and comments are skipped between tokens. Numbers are always decimal, 
 
 A float needs digits on both sides of the `.`: `1.5` and `10.0` are floats, `.5` is a `.` and an integer, and `1.` is an integer and a `.`, so `1.x` is dot access on an integer (an error when it runs). `1.5.x` is the float `1.5` and then dot access.
 
-A unit must come right after the number, with no space: `45deg`, `1.5rad`, `0.25turn`, `10px`. `deg`, `rad` and `turn` make a FLOAT in radians (`45deg` is 0.785..., `1turn` is 2π), and `px` leaves the number as it is. The unit is only taken when the whole word is one of the four, so `5degx` is not a unit: it is the integer `5` and then the name `degx`, as before. When a number is directly followed by a name like that and a statement should end there, the parser says `unknown unit "kg"` instead of the plain "expected end of statement" (a syntax error, not a lexical one). A number too big for a float is the syntax error `number ... is too large`.
+An exponent makes a float: `1e3` is `1000.0`, `2.5e-4` is `0.00025`, `1E+6` is `1000000.0` (a number written with an exponent is never an integer). The `e` only starts an exponent when digits follow it, or a sign and digits: in `5e`, `1else` and `2ex` the number ends before the `e`, which is a name, as it always was. A unit can follow an exponent, and a number too big for a float (`1e400`) is `number 1e400 is too large`.
+
+A unit must come right after the number, with no space: `45deg`, `1.5rad`, `0.25turn`, `10px`. `deg`, `rad` and `turn` make a FLOAT in radians (`45deg` is 0.785..., `1turn` is 2π), and `px` leaves the number as it is. The unit is only taken when the whole word is one of the four, so `5degx` is not a unit: it is the integer `5` and then the name `degx`, as before. When a number is directly followed by a name like that and a statement should end there, the parser says `unknown unit "kg"` instead of the plain "expected end of statement" or `expected ")"`, wherever it happens: after a `let`, inside a call (`puts(5kg)`), an array, a hash, an index or parentheses (a syntax error, not a lexical one). A number too big for a float is the syntax error `number ... is too large`.
 
 A color is `#` and then exactly 3, 6 or 8 hex digits: `#rgb`, `#rrggbb`, `#rrggbbaa`, in any case. The lexer takes the whole word after the `#`, so `#12`, `#1234`, `#12345` and `#12ab_z` are the lexical error `bad color #12` (with the text as written) and not a color followed by a name. A `#` with no word after it is still `unexpected character "#"`.
 
@@ -149,13 +166,13 @@ A parameter can have a default value, `function t(key, values = null)`, also in 
 
 ## continue
 
-`continue` is not a reserved word either: a new keyword would stop `let continue = 1` from working. A statement is a continue when it is the identifier `continue` alone, inside the body of a `while` or `for` of the same function: followed by `;`, a `}`, the end of the input, or a new line that does not go on with an operator, `(` or `[` (the same lines that always continued an expression). So `continue + 1`, `continue = 5`, `continue(1)`, `continue.x` and `f(continue)` still use the name. Outside a loop (or in a function defined inside one) a lone `continue` is not special: it is the identifier expression it always was, which reads a variable named `continue` or gives the usual `identifier not found` runtime error. The only changed meaning is a lone `continue` statement inside a loop, which used to be a variable read with no visible effect.
+`continue` is not a reserved word either: a new keyword would stop `let continue = 1` from working. A statement is a continue when it is the identifier `continue` alone: followed by `;`, a `}`, the end of the input, or the end of its line. So `continue + 1`, `continue = 5`, `continue(1)`, `continue.x` and `f(continue)` still use the name. Like `break`, a continue must be inside the body of a `while` or `for` of the same function: anywhere else (outside a loop, or in a function defined inside one) it is the syntax error `continue outside of a loop`. Before, a lone `continue` inside a loop was a read of a variable with no visible effect, and outside a loop it failed with `identifier not found: continue` when it ran.
 
 ## Rules that are not in the grammar
 
-- `break` must be inside a `while` or `for` of the same function. Otherwise it is a syntax error. `continue` is only a statement there; elsewhere it is an ordinary name.
+- `break` and a lone `continue` must be inside a `while` or `for` of the same function. Otherwise it is a syntax error. (`continue` inside a larger expression is still an ordinary name.)
 - `return` is allowed outside of a function, where it ends the program. What programs do when they run is in [SEMANTICS.md](SEMANTICS.md).
-- `elif` has no node of its own: it is an `if` inside the `else` block of the previous one.
+- `elif` has no node of its own: it is an `if` inside the `else` block of the previous one. `else if` is the same thing, written with two words.
 - `function add(x) { ... }` builds the same tree as `let add = function(x) { ... };`
 - An `if`, `while` or `for` that starts a statement ends at its closing `}`, so the next line is a new statement. As part of a larger expression they do produce a value: `let x = if (a) { 1 } else { 2 };`
 - `x += e` is `x = x + e` (same for `-`, `*` and `/`) with the target evaluated once; the tree is an assignment with an operator, not a rewritten one.
@@ -166,8 +183,6 @@ A parameter can have a default value, `function t(key, values = null)`, also in 
 
 - Strings can span several lines. Inside a string, `\"` is a quote, `\\` a backslash, `\n` a line break, `\t` a tab and `\r` a carriage return. `\uXXXX` (exactly 4 hex digits) and `\u{X...}` (1 to 6 hex digits) are that code point, so `"\u00e9"` and `"\u{E9}"` are `é` and `"\u{1F98E}"` is a lizard. A `\u` that is malformed, a surrogate half (D800 to DFFF) or a value above 10FFFF is the lexical error `invalid unicode escape \u12: ...` with the reason. Any other backslash sequence, like `\q`, is the lexical error `unknown escape \q in string`, and a string that ends in a lone `\` is unterminated.
 - Identifiers and comments are ASCII. A non-ASCII character in code is a lexical error, although strings and comments can contain it.
-- `;` is optional at the end of a line, but a line break doesn't end an expression that can continue. A line starting with an operator, `(` or `[` continues the previous expression, so `x` followed by a line with `-1` is a subtraction.
-- For the same reason, `return` takes the expression on the next line as its value, unless a `;` or `}` comes first.
 - A layer's body is closed by indentation, the only place the language looks at columns. The REPL runs line by line, so a `layer` typed there is an empty layer and the indented lines after it run on their own; layers are meant for files and for hosts.
 - The smallest 64-bit integer can't be written as a literal: `-9223372036854775808` is a `-` applied to a number that is too large.
 - After a syntax error the rest of that statement is skipped, so a second mistake in the same statement shows up only after fixing the first. Recovery is a best effort: with a badly broken `for` header, like one with no `)`, the first error is right but a second one can follow it.

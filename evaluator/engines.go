@@ -91,6 +91,12 @@ func Builtin(name string) (object.Object, bool) {
 	return nil, false
 }
 
+// LibraryResets changes each time ResetMath drops the libraries, the only
+// time what Builtin finds for a name can change.
+func LibraryResets() uint64 {
+	return libraryResets
+}
+
 // NewError builds a runtime error at the position of tok.
 func NewError(tok token.Token, format string, args ...any) *object.Error {
 	return newError(tok, format, args...)

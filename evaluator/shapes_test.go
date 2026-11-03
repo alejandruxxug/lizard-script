@@ -66,10 +66,12 @@ func TestColorBuilders(t *testing.T) {
 
 func TestColorErrors(t *testing.T) {
 	checkErrors(t, []expectation{
-		{"rgb(256, 0, 0)", "[line 1, column 4] runtime error: rgb: red must be from 0 to 255, got 256.0"},
-		{"rgb(0, -1, 0)", "[line 1, column 4] runtime error: rgb: green must be from 0 to 255, got -1.0"},
+		{"rgb(256, 0, 0)", "[line 1, column 4] runtime error: rgb: red must be from 0 to 255, got 256"},
+		{"rgb(0, -1, 0)", "[line 1, column 4] runtime error: rgb: green must be from 0 to 255, got -1"},
+		{"rgb(300, 0, 0)", "[line 1, column 4] runtime error: rgb: red must be from 0 to 255, got 300"},
+		{"rgb(300.0, 0, 0)", "[line 1, column 4] runtime error: rgb: red must be from 0 to 255, got 300.0"},
 		{"rgb(0, 0, 255.6)", "[line 1, column 4] runtime error: rgb: blue must be from 0 to 255, got 255.6"},
-		{"rgba(0, 0, 0, 300)", "[line 1, column 5] runtime error: rgba: alpha must be from 0 to 255, got 300.0"},
+		{"rgba(0, 0, 0, 300)", "[line 1, column 5] runtime error: rgba: alpha must be from 0 to 255, got 300"},
 		{"rgb(1, 2)", "[line 1, column 4] runtime error: rgb: wrong number of arguments: want 3, got 2"},
 		{"rgba(1, 2, 3)", "[line 1, column 5] runtime error: rgba: wrong number of arguments: want 4, got 3"},
 		{"rgb(\"a\", 0, 0)", "[line 1, column 4] runtime error: rgb: arguments must be INTEGER or FLOAT, got STRING"},

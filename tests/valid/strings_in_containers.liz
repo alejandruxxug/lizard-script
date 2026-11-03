@@ -1,0 +1,10 @@
+-~> puts of a string is plain; strings inside arrays and hashes are shown
+-~> as code, with escapes, so the text can be pasted back.
+puts("say \"hi\"")
+puts(["say \"hi\"", 1, "a\\b"])
+puts({"k": "line\nbreak", "t": "tab\there"})
+puts([["deep \"x\""]])
+puts(str(["a", "b"]))
+puts(str("plain"))
+puts(len(str(["a"])))
+puts(["ñandú"])

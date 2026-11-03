@@ -1,0 +1,2 @@
+puts("before")
+rgb(300, 0, 0)

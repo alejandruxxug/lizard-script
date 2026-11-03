@@ -24,6 +24,13 @@ func TestREPL(t *testing.T) {
 		expected string
 	}{
 		{"1 + 2\n", "3\n\n"},
+		{"[1, \"a\"]\n", "[1, \"a\"]\n\n"},
+		{"[\"say \\\"hi\\\"\\n\"]\n", "[\"say \\\"hi\\\"\\n\"]\n\n"},
+		{"{\"k\": \"v\"}\n", "{\"k\": \"v\"}\n\n"},
+		{"str([1, \"a\"])\n", "\"[1, \\\"a\\\"]\"\n\n"},
+		{"\"a\\\\b\"\n", "\"a\\\\b\"\n\n"},
+		{"if (false) { 1 }\nelse if (true) { 2 }\n\n", "2\n\n"},
+		{"let x = 1\nif (x > 3) { 1 }\nelse if (x > 0) { 2 }\nelse { 3 }\n", "2\n\n"},
 		{"let x = 5\nx * 2\n", "10\n\n"},
 		{"\"liz\"\n", "\"liz\"\n\n"},
 		{"puts(\"hi\")\n", "hi\n\n"},
@@ -45,6 +52,11 @@ func TestREPL(t *testing.T) {
 		{"let list = [\n1,\n2]\nlist\n", "[1, 2]\n\n"},
 		{"let s = \"two\nlines\"\ns\n", "\"two\nlines\"\n\n"},
 		{"1 +\n2\n", "3\n\n"},
+		{"let x = 10\n-1\nx\n", "-1\n10\n\n"},
+		{"let x = 10 -\n1\nx\n", "9\n\n"},
+		{"let x = (10\n- 1)\nx\n", "9\n\n"},
+		{"let x = 1\nx\n+ 1\n", "1\n[line 1, column 1] syntax error: expected an expression, got \"+\"\n\n"},
+		{"let x = 1; x + 1\n", "2\n\n"},
 		{"foo\n1\n", "[line 1, column 1] runtime error: identifier not found: foo\n1\n\n"},
 		{"let = 1\n2\n", "[line 1, column 5] syntax error: expected identifier, got \"=\"\n2\n\n"},
 		{"(1 +\n\n", "[line 3, column 1] syntax error: expected an expression, got end of input\n\n"},
@@ -83,6 +95,22 @@ func TestIsIncomplete(t *testing.T) {
 		{"x /=", true},
 		{"x += 1", false},
 		{"try { 1 } catch (e) {", true},
+		// The same rule as in a file: a statement ends at the end of its
+		// line unless the line ends with an operator, a ',' or an opening
+		// bracket, or a bracket is still open.
+		{"let x = 10", false},
+		{"let x = 10 -", true},
+		{"a ||", true},
+		{"a ==", true},
+		{"a **", true},
+		{"a.", true},
+		{"!", true},
+		{"(", true},
+		{"f(a\n+ b", true},
+		{"f(a\n+ b)", false},
+		{"let h = {\"a\": 1", true},
+		{"1 + -~> more on the next line", true},
+		{"return", false},
 	}
 
 	for _, tt := range tests {
@@ -124,6 +152,8 @@ func TestEndsWithOpenIf(t *testing.T) {
 		{"if (a) { 1 }", true},
 		{"if (a) { 1 } elif (b) { 2 }", true},
 		{"if (a) { 1 } else { 2 }", false},
+		{"if (a) { 1 } else if (b) { 2 }", true},
+		{"if (a) { 1 } else if (b) { 2 } else { 3 }", false},
 		{"if (a) { 1 } elif (b) { 2 } else { 3 }", false},
 		{"if (a) { if (b) { 1 } }", true},
 		{"if (a) { 1 } else { if (b) { 2 } }", false},

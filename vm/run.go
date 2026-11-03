@@ -171,10 +171,13 @@ func (vm *VM) run() object.Object {
 					}
 				}
 			}
-			result := evaluator.Infix(unit.Tokens[operand(ins, ip+1)], operators[op], left, right)
-			if e, ok := result.(*object.Error); ok {
-				err = e
-				break
+			result, ok := fastInfix(op, left, right)
+			if !ok {
+				result = evaluator.Infix(unit.Tokens[operand(ins, ip+1)], operators[op], left, right)
+				if e, ok := result.(*object.Error); ok {
+					err = e
+					break
+				}
 			}
 			sp--
 			stack[sp] = nil
@@ -271,6 +274,9 @@ func (vm *VM) run() object.Object {
 
 		case code.OpReturnValue:
 			value := stack[sp-1]
+			if fr.profile != nil {
+				vm.leaveFrames(len(vm.frames) - 1)
+			}
 			vm.closeLayers(fr.layers)
 			vm.handlers = vm.handlers[:fr.handlers]
 			if len(vm.frames) == 1 {
@@ -321,9 +327,9 @@ func (vm *VM) run() object.Object {
 			callee := stack[sp-1-count]
 			next, ok := callee.(*Closure)
 			if !ok {
-				args := make([]object.Object, count)
-				copy(args, stack[sp-count:sp])
-				result := vm.callForeign(tok, unit, callee, args)
+				// The arguments are lent from the stack, without a copy (see
+				// object.BuiltinFunction); the cap keeps an append off it.
+				result := vm.callForeign(tok, unit, callee, stack[sp-count:sp:sp])
 				if e, ok := result.(*object.Error); ok {
 					err = e
 					break
@@ -371,11 +377,10 @@ func (vm *VM) run() object.Object {
 
 		case code.OpArray:
 			count := operand(ins, ip+1)
-			elements := make([]object.Object, count)
-			copy(elements, stack[sp-count:sp])
+			array := arrayOf(stack[sp-count : sp])
 			clear(stack[sp-count : sp])
 			sp -= count
-			stack[sp] = &object.Array{Elements: elements}
+			stack[sp] = array
 			sp++
 			ip += 5
 
@@ -397,11 +402,10 @@ func (vm *VM) run() object.Object {
 
 		case code.OpPoint:
 			count := int(ins[ip+1])
-			coords := make([]object.Object, count)
-			copy(coords, stack[sp-count:sp])
+			point := pointOf(stack[sp-count : sp])
 			clear(stack[sp-count : sp])
 			sp -= count
-			stack[sp] = &object.Point{Coords: coords}
+			stack[sp] = point
 			sp++
 			ip += 2
 
@@ -445,6 +449,44 @@ func (vm *VM) run() object.Object {
 			stack[sp] = result
 			sp++
 			ip += 5
+
+		case code.OpGetField:
+			result := getField(&unit.Fields[operand(ins, ip+1)], operand(ins, ip+5), unit, stack[sp-1])
+			if e, ok := result.(*object.Error); ok {
+				err = e
+				break
+			}
+			stack[sp-1] = result
+			ip += 9
+
+		case code.OpGetLocalField, code.OpGetCellField:
+			value := stack[bp+operand(ins, ip+1)]
+			if op == code.OpGetCellField {
+				value = value.(*Cell).Value
+			}
+			result := getField(&unit.Fields[operand(ins, ip+5)], operand(ins, ip+9), unit, value)
+			if e, ok := result.(*object.Error); ok {
+				err = e
+				break
+			}
+			stack[sp] = result
+			sp++
+			ip += 13
+
+		case code.OpGetNameField:
+			value, e := lookup(&unit.Names[operand(ins, ip+1)], free, cl.Globals)
+			if e != nil {
+				err = e
+				break
+			}
+			result := getField(&unit.Fields[operand(ins, ip+5)], operand(ins, ip+9), unit, value)
+			if e, ok := result.(*object.Error); ok {
+				err = e
+				break
+			}
+			stack[sp] = result
+			sp++
+			ip += 13
 
 		case code.OpSetIndex:
 			container, index, value := stack[sp-3], stack[sp-2], stack[sp-1]

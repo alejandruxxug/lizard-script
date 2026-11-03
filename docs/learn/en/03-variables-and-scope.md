@@ -262,11 +262,30 @@ puts(len)
 
 After that line, `len("abc")` would fail, because `len` is now a number. Avoid builtin names for your variables (`len`, `type`, `str`, `list`, `text`, `math`...).
 
-## Common mistake: a line that starts with `-`
+## Common mistake: starting a line with an operator
 
-A line break ends a statement only when the statement can't go on. A line that starts with an operator, `(` or `[` **continues** the previous line:
+A statement ends at the end of its line (chapter 1), so a line can't pick up where the one before left off by starting with an operator:
 
 ```
+let price = 10
+let total = price
+  + 2
+puts(total)
+```
+
+**Output:**
+
+```text
+[line 3, column 3] syntax error: a line can't start with +; put the + at the end of the previous line
+```
+
+Do what the message says: end the line with the `+` and the statement goes on. A line that starts with `-` is not an error but a new statement, a negative number on its own:
+
+```
+let price = 10
+let total = price +
+  2
+puts(total)
 let x = 10
 -1
 puts(x)
@@ -275,10 +294,11 @@ puts(x)
 **Output:**
 
 ```text
-9
+12
+10
 ```
 
-That was `let x = 10 - 1`. If you really want a separate statement, end the first line with `;`. Two values side by side on the same line, on the other hand, are an error:
+Two values side by side on the same line, on the other hand, are an error:
 
 ```
 let x = 5 6
@@ -295,6 +315,6 @@ let x = 5 6
 - `let` creates, `=` changes. Assigning to a name that was never created is an error.
 - Every `{ }` block is a scope; `let` inside it stays inside.
 - Without `let`, a block changes the outer variable.
-- A line starting with an operator, `(` or `[` continues the line before.
+- A statement ends at the end of its line. To split one, end the line with the operator.
 
 [← Previous: Values and types](02-values-and-types.md) · [Index](../README.md) · [Next: Operators →](04-operators.md)

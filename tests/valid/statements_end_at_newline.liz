@@ -1,0 +1,52 @@
+-~> A statement ends at the end of its line.
+let x = 10
+-1
+puts(x)
+
+-~> It goes on when the line ends with an operator, a comma or an
+-~> opening bracket.
+let total = 1 +
+  2 *
+  3
+puts(total)
+let ok = total > 5 &&
+  x == 10
+puts(ok)
+let list = [
+  1,
+  2
+]
+puts(list)
+
+-~> Inside an open ( or [ or a hash, a new line is just a space.
+puts((1
+  - 1))
+let both = (x > 5
+  && total > 5)
+puts(both)
+let h = {
+  "sum": 1
+    + 2,
+  "list": [3
+    - 1],
+}
+puts(h["sum"], h["list"])
+
+-~> A function body inside brackets is a block again: lines end there.
+let results = [function() {
+  let y = 1
+  -2
+  y
+}]
+puts(results[0]())
+
+-~> ; still separates statements on one line.
+let a = 1; let b = a - 1
+puts(a, b)
+
+-~> A return at the end of its line returns nothing.
+function nothing() {
+  return
+  5
+}
+puts(nothing())

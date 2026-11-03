@@ -9,6 +9,10 @@ type Token struct {
 	Literal string
 	Line    int // 1-based line where the token starts
 	Column  int // 1-based column where the token starts
+	// LineStart is true when the token is the first one on its line: a line
+	// break (or the start of the input) comes before it. A string that spans
+	// lines doesn't count, since its line break is inside the token.
+	LineStart bool
 	// Source is the name of the source the token was read from, given to
 	// lexer.NewNamed. It is "" for an unnamed source. It never appears in
 	// messages; it is for hosts that load several sources.

@@ -22,6 +22,21 @@ puts(type(toes))
 ARRAY
 ```
 
+Strings inside an array are shown the way you write them in code, in quotes and with escapes, so you can paste the output back into a program. A string on its own is shown plain:
+
+```
+let quotes = ["say \"hi\"", "two\nlines", "back\\slash"]
+puts(quotes)
+puts("say \"hi\"")
+```
+
+**Output:**
+
+```text
+["say \"hi\"", "two\nlines", "back\\slash"]
+say "hi"
+```
+
 Items are numbered from **0**. `a[i]` reads item `i`:
 
 ```

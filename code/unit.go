@@ -21,7 +21,11 @@ type Function struct {
 	MaxStack int
 	// Literal is the source of the function, nil for the program.
 	Literal *ast.FunctionLiteral
-	Unit    *Unit
+	// Name is the variable a let gave the function when it was made
+	// (function f() {} or let f = function...), "" otherwise. Only the
+	// profiler shows it.
+	Name string
+	Unit *Unit
 }
 
 // Unit is one compiled program: its functions and the tables their
@@ -37,6 +41,7 @@ type Unit struct {
 	Scopes     []Scope
 	Captures   [][]Capture
 	Failures   []Failure
+	Fields     []Field
 }
 
 // Name is how a variable that is not a plain local is found. The captured
@@ -48,6 +53,31 @@ type Name struct {
 	Token   token.Token
 	Checked []int
 	Final   int
+	// Global is the VM's memory of this name's last read in the global
+	// environment and the builtins.
+	Global Global
+}
+
+// Global remembers that a name read Value in Env, so the VM doesn't look it
+// up again while Env keeps its Version and the libraries their Resets (see
+// object.Environment.Version and evaluator.LibraryResets). Env is nil until
+// the first read.
+type Global struct {
+	Env     *object.Environment
+	Version uint64
+	Resets  uint64
+	Value   object.Object
+	// Misses counts the reads in a row that found Env changed.
+	Misses uint32
+}
+
+// Field is the constant name of a dot access (a.b, or a["b"]), ready for
+// the kinds of values it reads the most: Key for a hash, and Coord, the
+// coordinate of x, y or z for a point (-1 for any other name).
+type Field struct {
+	Name  *object.String
+	Key   object.HashKey
+	Coord int
 }
 
 // Scope lists the locals of a scope that closures capture: each gets a new

@@ -51,6 +51,11 @@ func (c *Compiler) compileExpression(node ast.Expression, transparent bool) {
 		}
 
 	case *ast.PointLiteral:
+		if point, ok := constantPoint(node); ok {
+			// Made once: points can't change, so every run can share it.
+			c.emit(code.OpConstant, c.constant(point))
+			return
+		}
 		for _, coord := range node.Coords {
 			c.compileExpression(coord, false)
 			c.emit(code.OpCheckCoord, c.token(node.Token))
@@ -104,6 +109,10 @@ func (c *Compiler) compileExpression(node ast.Expression, transparent bool) {
 
 	case *ast.IndexExpression:
 		c.compileExpression(node.Left, false)
+		if name, ok := node.Index.(*ast.StringLiteral); ok {
+			c.getField(c.field(name.Value), c.token(node.Token))
+			return
+		}
 		c.compileExpression(node.Index, false)
 		c.emit(code.OpIndex, c.token(node.Token))
 
@@ -182,4 +191,41 @@ func (c *Compiler) compileAssign(node *ast.AssignExpression) {
 	default:
 		c.fail(node.Token, "can't assign to %s", node.Left.String())
 	}
+}
+
+// getField emits a dot access with a constant name on the value just
+// compiled. A local or a name read right before it is fused with it into
+// one instruction, the commonest pairs in drawing code (p.x, math.sin).
+func (c *Compiler) getField(field, tok int) {
+	if at, ok := c.lastIs(code.OpGetLocal); ok {
+		c.replaceLast(at, code.OpGetLocalField, operandOf(c.fs.ins, at), field, tok)
+		return
+	}
+	if at, ok := c.lastIs(code.OpGetName); ok {
+		c.replaceLast(at, code.OpGetNameField, operandOf(c.fs.ins, at), field, tok)
+		return
+	}
+	c.emit(code.OpGetField, field, tok)
+}
+
+// operandOf reads the first operand of the instruction at `at`.
+func operandOf(ins []byte, at int) int {
+	return int(code.ReadUint32(ins[at+1:]))
+}
+
+// constantPoint is the value of a point literal whose coordinates are all
+// number literals, like (0.5, 0.5).
+func constantPoint(node *ast.PointLiteral) (*object.Point, bool) {
+	coords := make([]object.Object, len(node.Coords))
+	for i, coord := range node.Coords {
+		switch coord := coord.(type) {
+		case *ast.IntegerLiteral:
+			coords[i] = &object.Integer{Value: coord.Value}
+		case *ast.FloatLiteral:
+			coords[i] = &object.Float{Value: coord.Value}
+		default:
+			return nil, false
+		}
+	}
+	return &object.Point{Coords: coords}, true
 }

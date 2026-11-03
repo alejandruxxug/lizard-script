@@ -86,7 +86,14 @@ func overflow(tok token.Token) *object.Error {
 func (vm *VM) callForeign(tok int, unit *code.Unit, function object.Object, args []object.Object) object.Object {
 	saved := evaluator.CallDepth()
 	evaluator.SetCallDepth(vm.depthBase + len(vm.frames))
-	result := evaluator.ApplyFunction(unit.Tokens[tok], function, args)
+	var result object.Object
+	if p := profiler; p != nil {
+		p.enterForeign(function)
+		result = evaluator.ApplyFunction(unit.Tokens[tok], function, args)
+		p.leave()
+	} else {
+		result = evaluator.ApplyFunction(unit.Tokens[tok], function, args)
+	}
 	evaluator.SetCallDepth(saved)
 	return result
 }

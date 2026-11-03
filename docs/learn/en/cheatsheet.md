@@ -9,8 +9,8 @@
 | comment | `-~> to the end of the line` |
 | create a variable | `let x = 5` |
 | change a variable | `x = 6`, `x += 1`, `-=`, `*=`, `/=` (no `**=`, `//=`, `%=`) |
-| statement end | a new line or `;` (a line starting with an operator, `(` or `[` continues the one before) |
-| condition | `if (a) { } elif (b) { } else { }` (not `else if`) |
+| statement end | the end of the line or `;`; a line that ends with an operator, `,` or an open bracket goes on to the next |
+| condition | `if (a) { } elif (b) { } else { }` (`else if` also works) |
 | `if` as a value | `let s = if (n > 0) { "+" } else { "-" }` |
 | while loop | `while (cond) { }` |
 | for loop | `for (let i = 0; i < n; i += 1) { }` (don't forget `let`) |
@@ -25,7 +25,7 @@
 | Type | Literals | Notes |
 | --- | --- | --- |
 | `INTEGER` | `42`, `-7`, `10px` | 64-bit |
-| `FLOAT` | `3.5`, `2.0`, `90deg`, `0.5turn`, `1rad` | no `.5`, no `1e3` |
+| `FLOAT` | `3.5`, `2.0`, `90deg`, `0.5turn`, `1rad` | `1e3`, `2.5e-4` are floats; no `.5` |
 | `STRING` | `"Liz"`, `"a\n\t\"\\"`, `"\u{1F98E}"` | double quotes only; can't be changed |
 | `BOOLEAN` | `true`, `false` | |
 | `NULL` | `null` | missing index or key, no result |
@@ -94,8 +94,9 @@ Errors read `fs.read: can't read x.txt: ...` and `try` catches them. Events: `e.
 | `identifier not found: x` | typo, or `x` is out of scope |
 | `type mismatch: STRING + INTEGER` | `str(n)` |
 | `type mismatch: NULL + INTEGER` | a missing index or key; check `=== null` |
-| `expected "{", got "if"` | `elif`, not `else if` |
+| `continue outside of a loop` | `continue` (like `break`) only works inside `while` or `for` |
 | `expected end of statement, got identifier ...` | `//` is a comment? Use `-~>` |
+| `unknown unit "kg"` | only `deg`, `rad`, `turn` and `px` can follow a number directly; write `5 * kg` or rename |
 | `negative exponent` | use a float: `2.0 ** -1` |
 | `index out of range` | `push` to add items |
 | `wrong number of arguments: want 2, got 1` | check the call, or add a default |

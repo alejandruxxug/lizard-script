@@ -90,7 +90,7 @@ func floatToInteger(value float64) (*object.Integer, bool) {
 	if value < -(1<<63) || value >= 1<<63 {
 		return nil, false
 	}
-	return &object.Integer{Value: int64(value)}, true
+	return object.IntegerOf(int64(value)), true
 }
 
 // looseFloat is the conversion of == when one side is a float: integers,

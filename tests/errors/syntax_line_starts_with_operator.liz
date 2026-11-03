@@ -1,0 +1,7 @@
+let price = 10
+let total = price
+  + 2
+  * 3
+let ok = total > 5
+  && price < 20
+puts(total, ok)

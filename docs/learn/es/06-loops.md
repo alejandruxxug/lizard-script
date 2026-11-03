@@ -206,7 +206,7 @@ for (let i = 1; i <= 10; i += 1) {
 > 5
 > ```
 
-`continue` solo es especial dentro de un ciclo. Fuera de uno es un nombre cualquiera, por eso el error sorprende un poco:
+Igual que `break`, `continue` fuera de un ciclo es un error de sintaxis, que se encuentra antes de ejecutar el programa:
 
 ```
 if (true) { continue }
@@ -215,8 +215,10 @@ if (true) { continue }
 **Salida:**
 
 ```text
-[line 1, column 13] runtime error: identifier not found: continue
+[line 1, column 13] syntax error: continue outside of a loop
 ```
+
+(`continue` no es una palabra reservada, así que `let continue = 1` sigue permitido. Solo un `continue` solo en su línea es la instrucción.)
 
 ## Ciclos anidados
 
