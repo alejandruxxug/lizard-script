@@ -124,3 +124,10 @@ How we verified the generated code:
 - Every behavior has unit tests, and the output of each program in `tests/` was checked by hand before saving it as the expected result.
 - The runner was confirmed to fail when an expected output is wrong.
 - For the stack limits, the frame sizes of the evaluator functions were measured. The limits were tested with programs that try every recursive path, right at the limit and past it.
+
+## 7. Extensions beyond the course design
+
+Phases 1 to 4 follow the course's reference interpreter, and that foundation stays: the Go lexer, parser, AST and evaluator. Everything after commit `cc9dc0d` is added on top of it, so programs that worked before keep working the same way. Each extension is recorded here: what was added, why, and what it adds to the original tokens, AST, evaluator or builtins.
+
+| Date | Extension | Why | What it adds to the course design |
+| --- | --- | --- | --- |
