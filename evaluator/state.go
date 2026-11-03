@@ -9,7 +9,8 @@ import (
 )
 
 // RunState is what the evaluator keeps for the program that is running:
-// where puts writes, the step limit and count, the hooks, the random
+// where puts writes, the step limit and count, the hooks (and the function
+// bodies running, for HookFunctions), the random
 // numbers, the libraries and the modules (both engines share all of it). A
 // host that runs a program inside another one, like a sandbox, saves it,
 // starts the inner run from scratch, and restores it after, so the outer
@@ -20,6 +21,8 @@ type RunState struct {
 	steps       int
 	onStatement func(node ast.Statement)
 	onLayer     func(name string, enter bool, tok token.Token)
+	hookBodies  bool
+	bodies      int
 	random      *rand.Rand
 	libraries   [4]*object.Hash
 	modules     *moduleState
@@ -34,6 +37,8 @@ func SaveRunState() RunState {
 		steps:       steps,
 		onStatement: OnStatement,
 		onLayer:     OnLayer,
+		hookBodies:  HookFunctions,
+		bodies:      functionBodies,
 		random:      random,
 		libraries:   [4]*object.Hash{mathHash, textHash, listHash, hashLibraryHash},
 		modules:     modules,
@@ -45,6 +50,7 @@ func SaveRunState() RunState {
 func (s RunState) Restore() {
 	Output, MaxSteps, steps = s.output, s.maxSteps, s.steps
 	OnStatement, OnLayer = s.onStatement, s.onLayer
+	HookFunctions, functionBodies = s.hookBodies, s.bodies
 	random = s.random
 	mathHash, textHash, listHash, hashLibraryHash = s.libraries[0], s.libraries[1], s.libraries[2], s.libraries[3]
 	modules, ModulePrelude = s.modules, s.prelude
@@ -54,10 +60,11 @@ func (s RunState) Restore() {
 }
 
 // StartRun starts a run from scratch, like a program on its own: no steps
-// taken, the default random seed, new libraries and no modules loaded.
-// Output, the step limit, the hooks and the module prelude stay as they
-// are, for the host to set.
+// taken, no function running, the default random seed, new libraries and
+// no modules loaded. Output, the step limit, the hooks and the module
+// prelude stay as they are, for the host to set.
 func StartRun() {
+	functionBodies = 0
 	ResetSteps()
 	ResetMath()
 	ResetModules()

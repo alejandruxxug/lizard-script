@@ -185,6 +185,7 @@ func TestModules(t *testing.T) {
 		{"a module's function arguments", "use \"shapes\"\nputs(square(1, 2))",
 			[]string{"2:6 error arguments: wrong number of arguments to square: want 1, got 2"}},
 		{"assign a module's name", "use \"shapes\"\nsides = 5\nputs(sides)", nil},
+		{"a module only assigned", "use \"shapes\"\nsides = 5", nil},
 		{"unused module", "use \"shapes\"\nputs(1)",
 			[]string{"1:1 warning unused-module: none of the names of \"shapes\" are used"}},
 		{"as", "use \"shapes\" as s\nputs(s.square(s.sides))", nil},

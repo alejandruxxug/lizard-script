@@ -22,6 +22,7 @@ type runOptions struct {
 	onStatement object.Object
 	onLayer     object.Object
 	hookSource  *string  // on_statement only for statements of this source
+	hookBodies  bool     // on_statement for the statements of function bodies too
 	uses        []string // modules the code sees alive, as if it used them
 }
 
@@ -29,16 +30,20 @@ type runOptions struct {
 // with only the builtins, the libraries and what options.globals gives,
 // from a fresh start (its own steps, random numbers and modules), and the
 // program that called it goes on as before. It gives {"value", "error",
-// "output", "steps", "globals"}: the code's value (null when it failed), its
-// error {"kind", "message", "line", "column", "source"} or null, what it
-// printed, the steps it took and its top-level names after the run.
+// "errors", "output", "steps", "globals"}: the code's value (null when it
+// failed), its error {"kind", "message", "line", "column", "source"} or
+// null, every error (each syntax error of a code that doesn't parse, or the
+// one error that stopped it, or none), what it printed, the steps it took
+// and its top-level names after the run.
 //
 // Options: "globals" (a hash of names to define), "steps" (the most steps
 // it may take, 0 for no limit), "name" (its source name, where its use
 // statements look for modules), "engine" ("evaluator" or "vm"),
 // "on_statement" (a function called with line, column and source before
 // each statement), "hook_source" (a source name: on_statement is called only
-// for the statements of that source, not the ones of the modules), "on_layer"
+// for the statements of that source, not the ones of the modules),
+// "hook_functions" (false: on_statement is not called for the statements of
+// function bodies, only for the ones outside every function), "on_layer"
 // (called with the name, true or false and the line when a layer starts and
 // ends) and "use" (a list of module paths the code sees alive before its
 // first line, as if it started with use "path" for each one, so writing a
@@ -52,7 +57,7 @@ func lizardRun(args ...object.Object) object.Object {
 	if err != nil {
 		return err
 	}
-	options := runOptions{globals: object.NewHash()}
+	options := runOptions{globals: object.NewHash(), hookBodies: true}
 	if len(args) == 2 {
 		hash, err := arg.Hash(args, 1, "options")
 		if err != nil {
@@ -67,9 +72,11 @@ func lizardRun(args ...object.Object) object.Object {
 	p := parser.New(lexer.NewNamed(code, options.name))
 	program := p.ParseProgram()
 	if len(p.Errors()) != 0 {
-		first := parseErrors(p.Errors()[:1]).Elements[0].(*object.Hash)
-		arg.Set(first, "source", arg.Str(options.name))
-		fillRunResult(result, arg.Null, first, "", 0, object.NewEnvironment())
+		errors := parseErrors(p.Errors())
+		for _, e := range errors.Elements {
+			arg.Set(e.(*object.Hash), "source", arg.Str(options.name))
+		}
+		fillRunResult(result, arg.Null, errors, "", 0, object.NewEnvironment())
 		return result
 	}
 	return sandbox(program, options, result)
@@ -122,6 +129,13 @@ func readRunOptions(hash *object.Hash, o *runOptions) *object.Error {
 				return
 			}
 			o.hookSource = &s.Value
+		case "hook_functions":
+			b, ok := value.(*object.Boolean)
+			if !ok {
+				wrong("true or false")
+				return
+			}
+			o.hookBodies = b.Value
 		case "use":
 			list, ok := value.(*object.Array)
 			if !ok {
@@ -149,7 +163,7 @@ func readRunOptions(hash *object.Hash, o *runOptions) *object.Error {
 				o.onLayer = value
 			}
 		default:
-			bad = arg.Errorf("unknown option %s, the options are globals, steps, name, engine, use, on_statement, hook_source and on_layer",
+			bad = arg.Errorf("unknown option %s, the options are globals, steps, name, engine, use, on_statement, hook_source, hook_functions and on_layer",
 				object.Quote(key))
 		}
 	})
@@ -186,6 +200,7 @@ func sandbox(program *ast.Program, o runOptions, result *object.Hash) object.Obj
 		})
 	}
 	evaluator.OnStatement, evaluator.OnLayer = nil, nil
+	evaluator.HookFunctions = o.hookBodies
 	if o.onStatement != nil && o.onStatement != arg.Null {
 		evaluator.OnStatement = func(node ast.Statement) {
 			source := statementSource(node)
@@ -220,14 +235,14 @@ func sandbox(program *ast.Program, o runOptions, result *object.Hash) object.Obj
 		// error of lizard.run, at the program's call.
 		return &object.Error{Message: "a hook failed: " + stripPosition(hookErr), Uncatchable: hookErr.Uncatchable}
 	}
-	errValue := object.Object(arg.Null)
+	errors := &object.Array{}
 	if err, ok := value.(*object.Error); ok {
-		errValue, value = runError(err), arg.Null
+		errors.Elements, value = []object.Object{runError(err)}, arg.Null
 	}
 	if value == nil {
 		value = arg.Null
 	}
-	fillRunResult(result, value, errValue, printed.String(), steps, env)
+	fillRunResult(result, value, errors, printed.String(), steps, env)
 	return result
 }
 
@@ -251,15 +266,21 @@ func useModules(o runOptions, env *object.Environment, run evaluator.Runner) obj
 	return nil
 }
 
-// fillRunResult puts the parts of the result of lizard.run in h.
-func fillRunResult(h *object.Hash, value, err object.Object, output string, steps int, env *object.Environment) {
+// fillRunResult puts the parts of the result of lizard.run in h: its
+// error is the first of errors, or null.
+func fillRunResult(h *object.Hash, value object.Object, errors *object.Array, output string, steps int, env *object.Environment) {
 	globals := object.NewHash()
 	for _, name := range env.Names() {
 		v, _ := env.Get(name)
 		arg.Set(globals, name, v)
 	}
+	first := object.Object(arg.Null)
+	if len(errors.Elements) != 0 {
+		first = errors.Elements[0]
+	}
 	arg.Set(h, "value", value)
-	arg.Set(h, "error", err)
+	arg.Set(h, "error", first)
+	arg.Set(h, "errors", errors)
 	arg.Set(h, "output", arg.Str(output))
 	arg.Set(h, "steps", arg.Int64(int64(steps)))
 	arg.Set(h, "globals", globals)

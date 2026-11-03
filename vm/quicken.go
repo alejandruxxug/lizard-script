@@ -20,6 +20,10 @@ import (
 //     local or a captured variable, two locals pushed together (f(a, b)),
 //     an assignment and the pop that drops its value, and a loop's jump
 //     back with the step counted at its top.
+//   - An index (container[key]) gets a cache of its own, for the hashes
+//     with string keys it reads (code.IndexCache): a table of constants
+//     read with a token's type or a name is two comparisons, not a map
+//     lookup.
 //   - The instructions with nothing left to do go: OpSkipScope; OpFormula,
 //     whose usual instructions make no objects either now that numbers are
 //     unboxed, and quicken like any other; OpCheckKey after a constant that
@@ -84,6 +88,9 @@ const (
 	opJumpUnlessGreaterEqualX
 	opJumpUnlessEqualX
 	opJumpUnlessNotEqualX
+
+	// tok, index: OpIndex with its own code.IndexCache, fn.Indexes[index].
+	opIndexHash
 )
 
 // quickNames are the names of the opcodes above, for messages and tests.
@@ -125,6 +132,7 @@ var quickNames = map[code.Opcode]string{
 	opJumpUnlessGreaterEqualX: "opJumpUnlessGreaterEqualX",
 	opJumpUnlessEqualX:        "opJumpUnlessEqualX",
 	opJumpUnlessNotEqualX:     "opJumpUnlessNotEqualX",
+	opIndexHash:               "opIndexHash",
 }
 
 // opName is the name of any opcode of quickened code.
@@ -174,7 +182,8 @@ type instruction struct {
 }
 
 // quick is the quickened code a call of fn runs now: with the OnStatement
-// hook's instructions while a hook is set, without them (Bare) otherwise.
+// hook's instructions while a hook is set for it (see hooked), without them
+// (Bare) otherwise.
 // Each is made the first time it is needed.
 //
 // A frame keeps the code it started with, so a hook set in the middle of
@@ -182,22 +191,30 @@ type instruction struct {
 // before a run (and lizard.run around the program it runs), when no frame
 // of that run has started yet.
 func quick(fn *code.Function) []uint32 {
-	if evaluator.OnStatement != nil {
+	if hooked(fn) {
 		if fn.Quick == nil {
-			fn.Quick = quicken(fn.Instructions, fn.Unit.Constants, true)
+			fn.Quick = quicken(fn, true)
 		}
 		return fn.Quick
 	}
 	if fn.Bare == nil {
-		fn.Bare = quicken(fn.Instructions, fn.Unit.Constants, false)
+		fn.Bare = quicken(fn, false)
 	}
 	return fn.Bare
 }
 
-// quicken rewrites the compiler's instructions into the VM's, with or
+// hooked says whether a call of fn starting now calls the OnStatement
+// hook: while one is set, unless fn is a function (not a program) and
+// evaluator.HookFunctions leaves function bodies out.
+func hooked(fn *code.Function) bool {
+	return evaluator.OnStatement != nil && (evaluator.HookFunctions || fn.Literal == nil)
+}
+
+// quicken rewrites the compiler's instructions of fn into the VM's, with or
 // without the instructions of the OnStatement hook.
-func quicken(ins code.Instructions, constants []object.Object, hooks bool) []uint32 {
-	q := &quickener{constants: constants, targets: map[int]bool{}, hooks: hooks}
+func quicken(fn *code.Function, hooks bool) []uint32 {
+	ins := fn.Instructions
+	q := &quickener{fn: fn, constants: fn.Unit.Constants, targets: map[int]bool{}, hooks: hooks}
 	q.decode(ins)
 	var out []instruction
 	moved := make(map[int]int, len(q.list)+1) // compiler offset -> index in out
@@ -219,6 +236,7 @@ func quicken(ins code.Instructions, constants []object.Object, hooks bool) []uin
 
 // quickener holds the instructions of one function being quickened.
 type quickener struct {
+	fn        *code.Function
 	hooks     bool // whether OpStatement stays
 	list      []instruction
 	targets   map[int]bool // where jumps land, by compiler offset
@@ -374,6 +392,10 @@ func (q *quickener) alone(i int) (instruction, bool) {
 			_, hashable := q.constants[prev.operands[0]].(object.Hashable)
 			return in, !hashable
 		}
+	case code.OpIndex:
+		// With a cache of its own, for the hashes it reads.
+		q.fn.Indexes = append(q.fn.Indexes, nil)
+		return instruction{op: opIndexHash, operands: []int{in.operands[0], len(q.fn.Indexes) - 1}}, true
 	case code.OpJump:
 		if tok, ok := q.steps[in.operands[0]]; ok {
 			return instruction{op: opLoop, operands: []int{tok, in.operands[0] + 5}}, true

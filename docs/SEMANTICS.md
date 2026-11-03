@@ -277,13 +277,15 @@ A host that embeds the interpreter can watch a program run. Both hooks are packa
 
 A host that tags what a program makes keeps a stack of names in `OnLayer` and reads the current top whenever a builtin it provides is called.
 
+`evaluator.HookFunctions` (`true` by default) says whether `OnStatement` is called for the statements of function bodies too. With `false` it is called only for the statements outside every function: the program's and a module's, with their blocks, loops and layers, but not the ones that run inside a call (a host that tags a shape with the line of the statement that drew it wants the line of the call, not a line of the helper function). The run state keeps it (see *Run state*), and `lizard.run`'s option `hook_functions` sets it.
+
 ### Source names (for hosts)
 
 A host that loads several sources (libraries and the user's program) into one environment can name each one: `lexer.NewNamed(input, name)` is `lexer.New(input)` whose tokens all carry `Source: name` (`lexer.New` leaves it `""`). The name is copied into the tree, so the token of any statement a hook receives (`LetStatement.Token.Source`, and so on) tells which source it came from, even when a function defined in `"lib.liz"` runs because of a call in `"user"`. A runtime error gets the same in `object.Error.Source`, next to `Line` and `Column`: those are positions inside that source. Names never appear in messages, so output is the same with or without them. The name is also where a `use` looks for modules, and `repl.RunFile(name, ...)` (what `lizardscript file.liz` calls) names the program with its path; only an error from another source than the program, a module's, is shown with that source in front.
 
 ### Run state (for hosts)
 
-A host that runs a program inside another one, like a sandbox, keeps the outer program's state with `state := evaluator.SaveRunState()` (where puts writes, the step limit and count, the hooks, the random numbers, the libraries, the modules and the module prelude), starts the inner run with `evaluator.StartRun()` (no steps, the default seed, new libraries, no modules), and puts it all back with `state.Restore()`. `state.Outside(f)` runs `f` as the outer program in the middle of the inner run, for hooks. The Terrarium's `lizard.run` is built this way.
+A host that runs a program inside another one, like a sandbox, keeps the outer program's state with `state := evaluator.SaveRunState()` (where puts writes, the step limit and count, the hooks and `HookFunctions`, the random numbers, the libraries, the modules and the module prelude), starts the inner run with `evaluator.StartRun()` (no steps, the default seed, new libraries, no modules), and puts it all back with `state.Restore()`. `state.Outside(f)` runs `f` as the outer program in the middle of the inner run, for hooks. The Terrarium's `lizard.run` is built this way.
 
 ## Errors
 

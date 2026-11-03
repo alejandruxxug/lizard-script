@@ -4,6 +4,7 @@ import (
 	"lizardscript/code"
 	"lizardscript/evaluator"
 	"lizardscript/object"
+	"unsafe"
 )
 
 // run runs the frames until the first one returns, and returns its value,
@@ -229,22 +230,53 @@ load:
 			ip++
 			continue
 
-		case code.OpIndex:
-			array, ok := stack[sp-2].Ref().(*object.Array)
+		case opIndexHash:
+			// An element of an array, or a string key that this index read
+			// in the same hash before, unchanged since (see code.IndexCache).
 			index := stack[sp-1]
-			if !ok || !index.IsInt() || index.Int() < 0 || index.Int() >= int64(len(array.Elements)) {
-				break
-			}
-			switch e := array.Elements[index.Int()].(type) {
-			case *object.Integer:
-				stack[sp-2] = object.ValueOfInteger(e)
-			case *object.Float:
-				stack[sp-2] = object.ValueOfFloat(e)
-			default:
-				stack[sp-2] = object.ObjectValue(e)
+			if array, ok := stack[sp-2].Ref().(*object.Array); ok {
+				if !index.IsInt() || index.Int() < 0 || index.Int() >= int64(len(array.Elements)) {
+					break
+				}
+				switch e := array.Elements[index.Int()].(type) {
+				case *object.Integer:
+					stack[sp-2] = object.ValueOfInteger(e)
+				case *object.Float:
+					stack[sp-2] = object.ValueOfFloat(e)
+				default:
+					stack[sp-2] = object.ObjectValue(e)
+				}
+			} else {
+				h, ok := stack[sp-2].Ref().(*object.Hash)
+				key, isString := index.Ref().(*object.String)
+				cache := fr.cl.Fn.Indexes[int(ins[ip+2])]
+				if !ok || !isString || cache == nil {
+					break
+				}
+				hash := key.KnownHash()
+				if hash == 0 {
+					break
+				}
+				e := &cache[indexSlot(hash)]
+				if e.Hash != h || e.Version != h.Version() || e.KeyHash != hash || len(e.Key) != len(key.Value) {
+					break
+				}
+				// The same text: the same bytes, or equal ones.
+				same := unsafe.StringData(e.Key) == unsafe.StringData(key.Value)
+				if !same {
+					same = true
+					for i := 0; same && i < len(e.Key); i++ {
+						same = e.Key[i] == key.Value[i]
+					}
+				}
+				if !same {
+					break
+				}
+				stack[sp-2] = e.Value
 			}
 			sp--
-			ip += 2
+			stack[sp] = object.Value{}
+			ip += 3
 			continue
 
 		case code.OpJump:
@@ -829,6 +861,18 @@ load:
 				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
 				holds = ((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
 					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else if x, ok := a.Ref().(*object.String); ok {
+				// Two strings, byte by byte: a call would cost more than
+				// the short strings compared the most.
+				y, ok := b.Ref().(*object.String)
+				if !ok {
+					break
+				}
+				same := len(x.Value) == len(y.Value)
+				for i := 0; same && i < len(x.Value); i++ {
+					same = x.Value[i] == y.Value[i]
+				}
+				holds = same
 			} else {
 				break
 			}
@@ -849,6 +893,18 @@ load:
 				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
 				holds = !((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
 					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else if x, ok := a.Ref().(*object.String); ok {
+				// Two strings, byte by byte: a call would cost more than
+				// the short strings compared the most.
+				y, ok := b.Ref().(*object.String)
+				if !ok {
+					break
+				}
+				same := len(x.Value) == len(y.Value)
+				for i := 0; same && i < len(x.Value); i++ {
+					same = x.Value[i] == y.Value[i]
+				}
+				holds = !same
 			} else {
 				break
 			}
@@ -941,6 +997,18 @@ load:
 				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
 				holds = ((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
 					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else if x, ok := a.Ref().(*object.String); ok {
+				// Two strings, byte by byte: a call would cost more than
+				// the short strings compared the most.
+				y, ok := b.Ref().(*object.String)
+				if !ok {
+					break
+				}
+				same := len(x.Value) == len(y.Value)
+				for i := 0; same && i < len(x.Value); i++ {
+					same = x.Value[i] == y.Value[i]
+				}
+				holds = same
 			} else {
 				break
 			}
@@ -964,6 +1032,18 @@ load:
 				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
 				holds = !((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
 					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else if x, ok := a.Ref().(*object.String); ok {
+				// Two strings, byte by byte: a call would cost more than
+				// the short strings compared the most.
+				y, ok := b.Ref().(*object.String)
+				if !ok {
+					break
+				}
+				same := len(x.Value) == len(y.Value)
+				for i := 0; same && i < len(x.Value); i++ {
+					same = x.Value[i] == y.Value[i]
+				}
+				holds = !same
 			} else {
 				break
 			}
@@ -1055,6 +1135,18 @@ load:
 				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
 				holds = ((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
 					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else if x, ok := a.Ref().(*object.String); ok {
+				// Two strings, byte by byte: a call would cost more than
+				// the short strings compared the most.
+				y, ok := b.Ref().(*object.String)
+				if !ok {
+					break
+				}
+				same := len(x.Value) == len(y.Value)
+				for i := 0; same && i < len(x.Value); i++ {
+					same = x.Value[i] == y.Value[i]
+				}
+				holds = same
 			} else {
 				break
 			}
@@ -1077,6 +1169,18 @@ load:
 				(y == evaluator.NULL || y == evaluator.TRUE || y == evaluator.FALSE) {
 				holds = !((x == evaluator.NULL && y == evaluator.NULL) || (x == evaluator.TRUE && y == evaluator.TRUE) ||
 					(x == evaluator.FALSE && y == evaluator.FALSE))
+			} else if x, ok := a.Ref().(*object.String); ok {
+				// Two strings, byte by byte: a call would cost more than
+				// the short strings compared the most.
+				y, ok := b.Ref().(*object.String)
+				if !ok {
+					break
+				}
+				same := len(x.Value) == len(y.Value)
+				for i := 0; same && i < len(x.Value); i++ {
+					same = x.Value[i] == y.Value[i]
+				}
+				holds = !same
 			} else {
 				break
 			}
@@ -1100,7 +1204,8 @@ load:
 			continue
 
 		// Calls of closures and returns, when nothing special is going on:
-		// no step limit, no profiler, room on the stacks, no layer to close.
+		// no step limit, no profiler, no statement hook for function bodies,
+		// room on the stacks, no layer to close.
 
 		case code.OpCall:
 			count := int(ins[ip+1])
@@ -1125,7 +1230,7 @@ load:
 				}
 			}
 			next, ok := callee.(*Closure)
-			if !ok || evaluator.MaxSteps != 0 || profiler != nil || evaluator.OnStatement != nil || next.Fn.Bare == nil {
+			if !ok || evaluator.MaxSteps != 0 || profiler != nil || evaluator.OnStatement != nil && evaluator.HookFunctions || next.Fn.Bare == nil {
 				break
 			}
 			fn := next.Fn

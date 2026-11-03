@@ -278,3 +278,22 @@ func TestFieldsFollowTheHost(t *testing.T) {
 		}
 	}
 }
+
+// TestFastCallsWithoutLimit runs the builtins the VM runs itself (len, and
+// push, in step), which it only does without a step limit, on both engines.
+func TestFastCallsWithoutLimit(t *testing.T) {
+	for _, input := range []string{
+		"let a = []; push(a, 1); push(a, (1, 2)); push(a, 2.5); push(push(a, \"x\"), null); [a, len(a)]",
+		"function f() { let a = []; for (let i = 0; i < 300; i += 1) { push(a, i * 2) } [len(a), a[299], type(a[3])] } f()",
+		"push(1, 2)",
+		"push([], 1, 2)",
+		"let push = function(a, b) { 7 }; push([], 1)",
+		"let a = [1]; let b = push(a, 2); [b, len(a)]",
+	} {
+		program := parse(t, input)
+		want := evaluator.Eval(program, object.NewEnvironment()).Inspect()
+		if got := Run(program, object.NewEnvironment()).Inspect(); got != want {
+			t.Errorf("%q: the VM gives %s, the evaluator %s", input, got, want)
+		}
+	}
+}

@@ -16,8 +16,12 @@
 //	lizardscript fmt [-w] [--check] path...
 //	                                       lays out the code of files and folders
 //	                                       one way (see docs/STYLE.md)
-//	lizardscript check [--json] path...    finds mistakes in them without running
-//	                                       them (see package check)
+//	lizardscript check [--json] [--names a,b] path...
+//	                                       finds mistakes in them without running
+//	                                       them (see package check); --names are
+//	                                       names the host gives them, and so are
+//	                                       the ones of a lizard-check.liz in their
+//	                                       folder or above
 //	lizardscript lsp                       the language server, for an editor, on
 //	                                       the standard input and output (see package lsp)
 //
@@ -111,7 +115,7 @@ func usage() {
        lizardscript build [--vm] [--os OS] [--arch ARCH] [--runtime FILE] dir -o FILE
        lizardscript drive [--pid N] Command [args...]
        lizardscript fmt [-w] [--check] path...
-       lizardscript check [--json] path...
+       lizardscript check [--json] [--names a,b,...] path...
        lizardscript lsp`)
 	os.Exit(2)
 }
@@ -267,11 +271,14 @@ func fmtCommand(args []string) int {
 }
 
 // checkCommand is lizardscript check: the findings of each file, one per
-// line, or as JSON with --json. It ends with 1 when there is an error (a
-// warning is not one), 2 when a file can't be read.
+// line, or as JSON with --json. The files know the Terrarium's names, the
+// ones of --names and the ones of their project file (check.ProjectFile).
+// It ends with 1 when there is an error (a warning is not one), 2 when a
+// file or its project file can't be read.
 func checkCommand(args []string) int {
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
 	asJSON := flags.Bool("json", false, "write the findings as a JSON array")
+	names := flags.String("names", "", "names the host gives the files, with commas between them")
 	if err := flags.Parse(args); err != nil || flags.NArg() == 0 {
 		usage()
 	}
@@ -280,7 +287,13 @@ func checkCommand(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	check.Globals = terrarium.CheckGlobals()
+	var given []string
+	for _, name := range strings.Split(*names, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			given = append(given, name)
+		}
+	}
+	check.Globals = check.WithNames(terrarium.CheckGlobals(), given)
 
 	type finding struct {
 		File string `json:"file"`
@@ -288,10 +301,15 @@ func checkCommand(args []string) int {
 	}
 	findings := []finding{}
 	status := 0
+	reported := map[string]bool{}
 	for _, file := range files {
 		diagnostics, err := check.File(file)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			// A broken project file is said once, not for each of its files.
+			if !reported[err.Error()] {
+				fmt.Fprintln(os.Stderr, err)
+			}
+			reported[err.Error()] = true
 			status = 2
 			continue
 		}

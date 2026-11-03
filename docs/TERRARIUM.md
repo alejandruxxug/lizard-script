@@ -337,7 +337,7 @@ In Go, `terrarium.Stdin` and `terrarium.Stderr` are where they read and write (`
 
 The language itself, as data: an editor colors and checks code with it, a tool runs a user's code in a sandbox, and a help panel reads the doc comments of a library. Positions are a `line` and `column` from 1, counted in characters (a tab is one), and an `end_line` and `end_column` just after the last character.
 
-### lizard.tokens(code)
+### lizard.tokens(code, options = {})
 The tokens of `code`, comments included, in order. Each one is a hash:
 
 | Key | What it is |
@@ -351,6 +351,12 @@ The tokens of `code`, comments included, in order. Each one is a hash:
 ```
 puts(lizard.tokens("x = 45deg")[2])
 -~> {"kind": "number", "type": "FLOAT", "text": "45deg", "value": "0.7853981633974483", "line": 1, "column": 5, "end_line": 1, "end_column": 10}
+```
+
+With `{"columns": true}` it is one hash of those keys instead, each a list with one element per token: `kind[i]`, `text[i]`, `line[i]` and the rest are token `i`. No hash is made per token, so a program that walks the tokens of a big text (an editor's scanner) gets them about four times faster (220,000 tokens: about 30 ms against 125 ms on an M4); the strings that repeat, like each kind and type and the text of each operator, are one object each. An unknown option is an error.
+```
+let t = lizard.tokens("x = 45deg", {"columns": true})
+puts(t.kind, t.column)   -~> ["name", "operator", "number"] [1, 3, 5]
 ```
 
 ### lizard.parse(code, name = "")
@@ -397,6 +403,7 @@ Runs `code` in a sandbox: a new top scope with only the builtins, the libraries 
 | --- | --- |
 | `value` | the code's value, `null` when it failed |
 | `error` | `null`, or `{"kind": "syntax", "lexical" or "runtime", "message", "line", "column", "source"}`, the message without its position (for a syntax error, the first one) |
+| `errors` | every error: each syntax error of a code that doesn't parse, in order (so a host doesn't parse it again to list them), the one that stopped a code that ran, or none; `error` is the first |
 | `output` | what the code printed, with `puts` or `io.write` |
 | `steps` | the steps it took, while a limit was set |
 | `globals` | a hash of its top-level names after the run, the given ones included |
@@ -412,6 +419,7 @@ The options:
 | `use` | a list of module paths, like `["draw/shapes", "draw/colors"]`: the code sees them alive before its first line, as if it started with `use "draw/shapes"` for each one, found from its `name`. Writing a module's variable (`cache_limit = 4`) changes the module itself, which a copy in `globals` can't. They load once per run, on the code's engine; a module that fails is the run's `error` |
 | `on_statement` | a function called with the line, the column and the source name before each statement runs |
 | `hook_source` | a source name: `on_statement` is called only for the statements of that source, usually the code's own `name`, not for the ones of its modules. Much cheaper than leaving the filter to the hook |
+| `hook_functions` | `true` (the default) or `false`: with `false`, `on_statement` is not called for the statements of function bodies, only for the ones outside every function (a module's too, and the ones in layers, blocks and loops). On the VM, the functions then run without the hook's instructions |
 | `on_layer` | a function called with the layer's name, `true` or `false` and its line when a layer starts and ends |
 
 The two hooks run as the calling program: their steps count in its limit, and what they print is its output. An error in a hook stops the run and is the error of `lizard.run` (`lizard.run: a hook failed: ...`). Modules the code uses see the same `globals` around them. A module's file is parsed (and, on the VM, compiled) once while its text stays the same, so many runs with the same libraries don't pay for them again; their code runs once in each run.

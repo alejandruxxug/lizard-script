@@ -99,7 +99,8 @@ lizard-script/
 ├── proposals/ # Lizard Enhancement Proposals (LEPs)
 ├── lsp/       # the language server, lizardscript lsp (+ tests)
 ├── editors/   # the VS Code and Zed extensions and the syntax grammars
-├── tools/     # checknewlines: lists lines whose meaning changed with LEP 0001
+├── tools/     # checknewlines: lists lines whose meaning changed with LEP 0001; ebitencopy: makes third_party/ebiten
+├── third_party/ # a copy of Ebitengine with its Metal device made on the first window (see its README)
 └── main.go    # the lizardscript command
 ```
 
@@ -107,7 +108,7 @@ lizard-script/
 
 ### Install
 
-You need [Go](https://go.dev/dl/) 1.27 or newer. Check it with `go version`. The first build downloads the Go modules the Terrarium's window uses; on Linux the window also needs the X11/OpenGL development packages (see [Ebitengine's install guide](https://ebitengine.org/en/documents/install.html)).
+You need [Go](https://go.dev/dl/) 1.27 or newer. Check it with `go version`. The first build downloads the Go modules the Terrarium's window uses (Ebitengine itself is in `third_party/ebiten`, with one change, see [its README](third_party/README.md)); on Linux the window also needs the X11/OpenGL development packages (see [Ebitengine's install guide](https://ebitengine.org/en/documents/install.html)).
 
 ```sh
 git clone https://github.com/alejandruxxug/lizard-script.git

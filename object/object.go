@@ -134,6 +134,8 @@ type String struct {
 	// buffer is where Value's bytes live when Concat made it, so another
 	// piece can be added to it in place (see strings.go).
 	buffer *strings.Builder
+
+	hash uint64 // HashKey's value once it was computed, 0 before
 }
 
 // scan looks at Value once.
@@ -225,15 +227,25 @@ func (b *Boolean) HashKey() HashKey {
 }
 
 // HashKey of a string is its 64-bit FNV-1a hash, computed right here (the
-// same as hash/fnv's New64a) so it makes no garbage.
+// same as hash/fnv's New64a) so it makes no garbage, once: the string
+// keeps it, since its bytes never change.
 func (s *String) HashKey() HashKey {
-	const offset, prime = 14695981039346656037, 1099511628211
-	h := uint64(offset)
-	for i := 0; i < len(s.Value); i++ {
-		h ^= uint64(s.Value[i])
-		h *= prime
+	if s.hash == 0 {
+		const offset, prime = 14695981039346656037, 1099511628211
+		h := uint64(offset)
+		for i := 0; i < len(s.Value); i++ {
+			h ^= uint64(s.Value[i])
+			h *= prime
+		}
+		s.hash = h
 	}
-	return HashKey{Type: s.Type(), Value: h}
+	return HashKey{Type: STRING_OBJ, Value: s.hash}
+}
+
+// KnownHash is the value of s.HashKey() when it was computed before, else 0:
+// for an engine's fast path, which can't stop to compute it.
+func (s *String) KnownHash() uint64 {
+	return s.hash
 }
 
 // HashPair keeps the original key next to the value, so the hash can show

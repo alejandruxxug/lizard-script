@@ -31,6 +31,28 @@ type Function struct {
 	// operand (see vm/quicken.go). Bare leaves out the OnStatement hook's
 	// instructions, for the calls made while no hook is set.
 	Quick, Bare []uint32
+	// Indexes are the VM's memory of the index expressions of Quick and
+	// Bare (container[key]), one for each: nil until one reads a hash with
+	// a string key.
+	Indexes []*IndexCache
+}
+
+// IndexCache remembers what one index expression read in hashes with
+// string keys, so the VM doesn't look a key up again while the hash keeps
+// its Version (see object.Hash.Version). Each entry is for the keys whose
+// hash (object.String.HashKey) leads to it, the last one read; a key
+// is found by its text, so equal strings that are different objects find
+// it too. It keeps the hashes it read alive while the function is.
+type IndexCache [32]IndexEntry
+
+// IndexEntry is one key read in Hash at Version, and the Value found
+// (null when the key is not there).
+type IndexEntry struct {
+	Hash    *object.Hash
+	Version uint64
+	KeyHash uint64
+	Key     string
+	Value   object.Value
 }
 
 // Unit is one compiled program: its functions and the tables their

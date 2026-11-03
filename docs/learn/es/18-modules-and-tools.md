@@ -479,6 +479,25 @@ bugs.liz: [line 11, column 24] error: can't assign to total: it was never declar
 - Lee los módulos que usa el programa, así que conoce sus nombres: `use "plants/flowers"` y luego `flowr("rose")` es un nombre desconocido con la pista `` did you mean `flower`? ``.
 - Que no haya errores no quiere decir que el programa no pueda fallar: check no lo ejecuta, así que un tipo equivocado o un archivo que falta solo aparecen al correr.
 
+Un programa que corre dentro de otro (una app que corre los bocetos de sus usuarios, por ejemplo) usa nombres que le da la app, y check no puede conocerlos:
+
+```text
+$ lizardscript check sketches
+sketches/sky.liz: [line 1, column 1] error: identifier not found: canvas (unknown-name)
+sketches/sky.liz: [line 1, column 13] error: identifier not found: brush (unknown-name)
+    hint: did you mean `push`?
+$ lizardscript check --names canvas,brush sketches
+```
+
+`--names` los da para una sola vez. Para decirlo una vez para toda una carpeta, pon en ella un `lizard-check.liz`: un solo hash, que check lee y nunca ejecuta, y que vale para los archivos de esa carpeta y de todas las carpetas que tiene adentro (gana el más cercano):
+
+```
+-~> Los nombres que la app de pintura le da a cada programa de esta carpeta.
+{"names": ["canvas", "brush"]}
+```
+
+El editor (`lizardscript lsp`) también lo lee.
+
 ## Editores: `lizardscript lsp`
 
 `lizardscript lsp` es un servidor de lenguaje: un editor lo inicia y le pregunta por el código mientras escribes. Muestra subrayado lo que encuentra `lizardscript check`, mientras escribes; formatea el archivo con `lizardscript fmt` (al guardar, si quieres); completa nombres, con lo que es cada uno (después de `math.` las funciones de `math`, después de `lily2d.` las del módulo, después de `config.` las llaves de tu hash); muestra la firma de una función y su comentario de documentación cuando el mouse está sobre su nombre, y cuánto vale un literal (`90deg` es `1.5708 rad`); salta a donde se declara un nombre, también en otro archivo; cambia el nombre de algo en todas partes donde significa lo mismo; y pone un selector de color en cada color.
@@ -526,6 +545,21 @@ comment -~> big 19
 ```
 
 Cada token también tiene su `type` (como `"IDENT"`), su `value` y dónde termina (`end_line`, `end_column`). El `kind` es lo que usa un resaltador de sintaxis para colorear.
+
+Un programa que recorre los tokens de un archivo grande los pide en columnas: un solo hash de listas, con las mismas claves y un elemento por token. Así no se hace un hash por cada token, lo que es unas cuatro veces más rápido en un archivo de 200.000 tokens:
+
+```
+let columns = lizard.tokens("let size = 10 * 2", {"columns": true})
+puts(columns.kind)
+puts(columns.text[1], columns.column[1], len(columns.type))
+```
+
+**Salida:**
+
+```text
+["keyword", "name", "operator", "number", "operator", "number"]
+size 5 6
+```
 
 ### El árbol de sintaxis
 
@@ -616,6 +650,33 @@ a pot of size 5
 - `hook_source` llama a `on_statement` solo para las instrucciones de esa fuente: las dos líneas del código, no la línea de adentro de `pot`. Un editor que corre un dibujo en cada cambio se ahorra una llamada por cada instrucción de las bibliotecas.
 - Correr las mismas bibliotecas una y otra vez es barato: un archivo de módulo se analiza (y se compila, en la VM) una sola vez mientras no cambie.
 
+Un editor necesita dos cosas más: todos los errores de un texto que no se puede analizar, y las instrucciones del código mismo, no las de las funciones que llama:
+
+```
+let typos = lizard.run("let = 1\nlet ok = 2\nlet y = 5kg", {"name": "sketch"})
+puts(typos.error.line, len(typos.errors))
+for (let i = 0; i < len(typos.errors); i += 1) {
+  puts(typos.errors[i].line, typos.errors[i].message)
+}
+
+let lines = []
+let code = "function twice(n) {\n  return n * 2\n}\nlet a = twice(1)\nlet b = twice(a)"
+lizard.run(code, {"hook_functions": false, "on_statement": function(line, _column, _source) { lines = lines + [line] }})
+puts(lines)
+```
+
+**Salida:**
+
+```text
+1 2
+1 let needs a name before the "=", like let x = 1
+3 unknown unit "kg"
+[1, 4, 5]
+```
+
+- `errors` tiene todos los errores de sintaxis, en orden; `error` es el primero. Cuando el código corrió y falló, `errors` tiene ese único error, y cuando funcionó, ninguno.
+- Con `"hook_functions": false`, `on_statement` se llama solo para las instrucciones que están fuera de toda función: la línea 2, dentro de `twice`, corre dos veces pero nunca se avisa. Las instrucciones de una capa sí se avisan.
+
 ### Revisar código
 
 `lizard.check(code)` encuentra errores en el código igual que `lizardscript check`, y los da como hashes, para un editor que los subraya:
@@ -691,7 +752,7 @@ done
 - Las rutas son relativas al archivo que dice el `use`, luego a las carpetas de `LIZARD_PATH` y al final a los módulos estándar (`flower/lily2d`). Un `use` va en el nivel superior de un archivo.
 - `lizardscript test carpeta` ejecuta cada programa que tiene un archivo `.expected` y compara; `--update`, `--vm`, `--bench`.
 - `lizardscript build carpeta -o archivo` hace un ejecutable con los módulos y los archivos de `bundle.txt`; encuentra tus archivos con `os.program_dir()`. `--os` y `--arch` construyen para otros sistemas.
-- `lizardscript fmt` acomoda el código de una sola forma (`-w` lo escribe, `--check` lista lo que cambiaría); `lizardscript check` encuentra errores y advertencias sin ejecutar el programa (`--json` para editores).
+- `lizardscript fmt` acomoda el código de una sola forma (`-w` lo escribe, `--check` lista lo que cambiaría); `lizardscript check` encuentra errores y advertencias sin ejecutar el programa (`--json` para editores; `--names` o un `lizard-check.liz` para los nombres que da un anfitrión).
 - `lizardscript lsp` es el servidor de lenguaje: lo inician las extensiones de VS Code y Zed de `editors/`, para diagnósticos, formato, completado, información al pasar el mouse, ir a la definición y un selector de color.
 - `lizard.tokens`, `lizard.parse`, `lizard.check`, `lizard.run` y `lizard.docs` leen, revisan y ejecutan código; `io` lee líneas y escribe en la salida y en la salida de errores.
 

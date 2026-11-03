@@ -240,7 +240,9 @@ func (c *checker) assign(name *ast.Identifier, s *scope) {
 		d.assigned = true
 	}
 	if f.module != nil {
+		// Writing a module's variable is a use of the module.
 		f.module.exports[name.Value].assigned = true
+		f.module.used = true
 	}
 	_, host := c.host[name.Value]
 	if len(f.decls) > 0 || f.module != nil || host || c.opaque || c.broken {

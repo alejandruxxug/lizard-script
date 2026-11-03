@@ -11,7 +11,7 @@ The script checks that lizard (on both engines), Python and Lua print the same a
 
 To add a benchmark, add a pair of files whose first line is a comment saying what they measure, and that print one answer.
 
-Startup is part of every time: about 28 ms for `lizardscript` and 16 ms for Python on an M4, which matters for the short benchmarks. About 24 ms of lizard's is not lizard's: it is the `init` of Ebitengine's Metal driver, which creates the GPU device when any program starts, because the command links the `window` module in. Installing the Terrarium takes about 1 ms; the same command built without `terrarium/window` starts in 3.4 ms (see DESIGN.md section 8).
+Startup is part of every time: about 9 ms for `lizardscript` and 16 ms for Python on an M4. It was 26 ms until the copy of Ebitengine in `third_party/ebiten` made its Metal device when the first window opens instead of when any program starts (see DESIGN.md section 8); the same command built without `terrarium/window` starts in 3.4 ms, the rest being the other `init`s of Ebitengine.
 
 ## Results
 
@@ -39,6 +39,18 @@ The same, with the command built without the window package, so lizard starts in
 | points | 0.077 s | 0.667 s | 0.077 s | 0.099 s | lizard 1.0× faster | lizard 1.3× faster |
 | strings | 0.015 s | 0.117 s | 0.024 s | 0.205 s | lizard 1.6× faster | lizard 13.6× faster |
 
+With the device made on the first window (M4, best of 5, 2026-11-03; before is commit `f34d1ac`, which started in 26 ms):
+
+| Benchmark | VM before | VM after | tree after | Python | Lua | VM vs Python | VM vs Lua |
+|---|---|---|---|---|---|---|---|
+| closures | 0.041 s | 0.023 s | 0.394 s | 0.046 s | 0.014 s | lizard 2.0× faster | Lua 1.7× faster |
+| fib | 0.036 s | 0.019 s | 0.237 s | 0.027 s | 0.007 s | lizard 1.5× faster | Lua 2.6× faster |
+| float | 0.106 s | 0.089 s | 1.553 s | 0.110 s | 0.023 s | lizard 1.2× faster | Lua 3.8× faster |
+| hashes | 0.089 s | 0.069 s | 0.232 s | 0.048 s | 0.023 s | Python 1.4× faster | Lua 3.0× faster |
+| loop | 0.104 s | 0.093 s | 2.989 s | 0.222 s | 0.052 s | lizard 2.4× faster | Lua 1.8× faster |
+| points | 0.108 s | 0.093 s | 0.719 s | 0.077 s | 0.097 s | Python 1.2× faster | lizard 1.1× faster |
+| strings | 0.039 s | 0.019 s | 0.127 s | 0.023 s | 0.203 s | lizard 1.2× faster | lizard 10.6× faster |
+
 What is left behind CPython is startup (above) and hashes, whose Go maps are large for a few keys; DESIGN.md section 8 has both.
 
 The Go benchmarks of the VM (`go test ./vm -bench . -benchmem`, best of 3, each run compiling its program), before and after, with the tree-walker's for comparison:
@@ -61,6 +73,8 @@ The Go benchmarks of the VM (`go test ./vm -bench . -benchmem`, best of 3, each 
 | Hashes10k | 14.09 ms | 10.65 ms | 1.3× | 231786 → 108465 | 50.17 ms | 49.66 ms |
 | Hashes10kLib | 7.11 ms | 6.12 ms | 1.2× | 121672 → 78274 | 22.67 ms | 22.21 ms |
 | Geometry | 6.57 ms | 6.37 ms | 1.0× | 142272 → 110953 | 41.45 ms | 41.80 ms |
+
+`TokenScan` came later, with the index caches, the string comparisons and `push` of DESIGN.md section 2 (*Index caches*): an editor's scanner over 22,000 tokens, 9.60 ms before them (commit `f34d1ac`) and 6.37 ms after, 13822 allocations (tree: 73.2 ms). The others stayed within 2%, or got faster where they push or index (`ArrayPushIndex` 2.89 → 2.57 ms, `BuiltinLoop` 2.96 → 2.64 ms, `Hashes10kLib` 6.16 → 5.78 ms).
 
 
 ## Why not compare with Go?

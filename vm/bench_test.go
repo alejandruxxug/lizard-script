@@ -143,6 +143,7 @@ function run() {
 }
 run()`},
 	{"Geometry", geometryBenchmark},
+	{"TokenScan", tokenScanBenchmark},
 }
 
 // geometryBenchmark is the drawing code of examples/terrarium/clock.liz
@@ -189,6 +190,100 @@ line(center, hand_end(0.3, 75), 9)
 line(center, hand_end(0.7, 115), 6)
 line(center, hand_end(0.1, 125), 2)
 len(runs)`
+
+// tokenScanBenchmark is the work of an editor that reads code as tokens:
+// 22,000 tokens in arrays of types, lines and texts (what lizard.tokens
+// gives with columns), cut in statements the way an editor sees them,
+// with the arguments of each call. It indexes arrays with int locals,
+// reads small tables of constants with a token's type, compares short
+// strings and builds small hashes and arrays.
+const tokenScanBenchmark = `
+let opens = {"(": true, "[": true, "{": true}
+let closes = {")": true, "]": true, "}": true}
+let carry = {"+": true, "-": true, "*": true, "/": true, "=": true, ",": true, ".": true, "&&": true, "||": true}
+let line_types = [["IDENT", "(", "(", "INT", ",", "INT", ")", ",", "INT", ",", "{", "STRING", ":", "COLOR", ",", "STRING", ":", "INT", "}", ")"],
+  ["LET", "IDENT", "=", "IDENT", "(", "(", "INT", ",", "INT", ")", ",", "INT", ",", "FLOAT", ")"],
+  ["IDENT", "(", "[", "(", "INT", ",", "INT", ")", ",", "(", "INT", ",", "INT", ")", "]", ",", "{", "STRING", ":", "FLOAT", "}", ")"]]
+let line_texts = [["circle", "(", "(", "120", ",", "45", ")", ",", "30", ",", "{", "fill", ":", "#ff8800", ",", "stroke", ":", "2", "}", ")"],
+  ["let", "s", "=", "petal", "(", "(", "10", ",", "20", ")", ",", "5", ",", "0.5", ")"],
+  ["path", "(", "[", "(", "1", ",", "2", ")", ",", "(", "3", ",", "4", ")", "]", ",", "{", "width", ":", "1.5", "}", ")"]]
+
+function tokens(lines) {
+  let p = {"ty": [], "ln": [], "tx": [], "n": 0, "pos": 0}
+  for (let l = 0; l < lines; l += 1) {
+    let types = line_types[l % 3]
+    let texts = line_texts[l % 3]
+    for (let i = 0; i < len(types); i += 1) {
+      push(p.ty, types[i])
+      push(p.ln, l + 1)
+      push(p.tx, texts[i])
+    }
+  }
+  p.n = len(p.ty)
+  p
+}
+
+function extent(p, i) {
+  let ty = p.ty
+  let ln = p.ln
+  let n = p.n
+  let depth = 0
+  for (let j = i; j < n; j += 1) {
+    let k = ty[j]
+    if (opens[k] == true) {
+      depth += 1
+    } elif (closes[k] == true) {
+      if (depth == 0) { return j }
+      depth -= 1
+    } elif (k == ";" && depth == 0) {
+      return j + 1
+    }
+    if (depth == 0 && j + 1 < n && ln[j + 1] > ln[j] && carry[k] != true) { return j + 1 }
+  }
+  n
+}
+
+function args_of(p, from, to) {
+  let out = []
+  let start = from + 1
+  let depth = 0
+  for (let k = from + 1; k < to; k += 1) {
+    let t = p.ty[k]
+    if (opens[t] == true) {
+      depth += 1
+    } elif (closes[t] == true) {
+      depth -= 1
+    } elif (t == "," && depth == 0) {
+      push(out, [start, k])
+      start = k + 1
+    }
+  }
+  out
+}
+
+function statements(p) {
+  let out = []
+  while (p.pos < p.n) {
+    let i = p.pos
+    let end = math.max(extent(p, i), i + 1)
+    let kind = "other"
+    let name = ""
+    let t = p.ty[i]
+    if (t == "LET") {
+      kind = "let"
+      name = p.tx[i + 1]
+    } elif (t == "IDENT" && i + 1 < end && p.ty[i + 1] == "(") {
+      kind = "call"
+      name = p.tx[i]
+    }
+    push(out, {"kind": kind, "name": name, "line": p.ln[i], "end_line": p.ln[end - 1], "args": args_of(p, i + 1, end)})
+    p.pos = end
+  }
+  out
+}
+
+let found = statements(tokens(1200))
+[len(found), found[1].name, len(found[2].args)]`
 
 func parseBenchmark(b *testing.B, source string) *ast.Program {
 	p := parser.New(lexer.New(source))

@@ -313,6 +313,17 @@ func (vm *VM) step() (object.Value, bool) {
 		tok := int(ins[ip+2])
 		callee := stack[sp-1-count]
 		next, ok := callee.Ref().(*Closure)
+		if !ok && count == 2 && callee.Ref() == pushBuiltin && evaluator.MaxSteps == 0 && profiler == nil {
+			// push(list, x), the builtin's work without the call.
+			if array, isArray := stack[sp-2].Ref().(*object.Array); isArray {
+				array.Elements = append(array.Elements, stack[sp-1].Object())
+				clear(stack[sp-count : sp])
+				sp -= count
+				stack[sp-1] = object.ObjectValue(array)
+				ip += 3
+				break
+			}
+		}
 		if !ok {
 			result, e := vm.callForeign(tok, unit, callee.Object(), stack[sp-count:sp])
 			if e != nil {
@@ -411,6 +422,24 @@ func (vm *VM) step() (object.Value, bool) {
 			sp++
 		}
 		ip += 2
+
+	case opIndexHash:
+		left, key := stack[sp-2], stack[sp-1]
+		found := index(unit.Tokens[int(ins[ip+1])], left, key)
+		if e, ok := found.(*object.Error); ok {
+			err = e
+			break
+		}
+		value := object.ValueOf(found)
+		if h, ok := left.Ref().(*object.Hash); ok {
+			if s, ok := key.Ref().(*object.String); ok {
+				remember(&cl.Fn.Indexes[int(ins[ip+2])], h, s, value)
+			}
+		}
+		sp--
+		stack[sp] = object.Value{}
+		stack[sp-1] = value
+		ip += 3
 
 	case code.OpGetField:
 		result, e := getField(&unit.Fields[int(ins[ip+1])], int(ins[ip+2]), unit, stack[sp-1])
@@ -611,6 +640,22 @@ func index(tok token.Token, left, index object.Value) object.Object {
 		}
 	}
 	return evaluator.Index(tok, left.Object(), index.Object())
+}
+
+// remember keeps in an index's cache that key read value in h (see
+// code.IndexCache), making the cache on its first hash.
+func remember(cache **code.IndexCache, h *object.Hash, key *object.String, value object.Value) {
+	if *cache == nil {
+		*cache = &code.IndexCache{}
+	}
+	hash := key.HashKey().Value
+	(*cache)[indexSlot(hash)] = code.IndexEntry{Hash: h, Version: h.Version(), KeyHash: hash, Key: key.Value, Value: value}
+}
+
+// indexSlot is the entry of a code.IndexCache for a key's hash: its bits
+// mixed, since the hashes of one-letter keys differ in a few bits only.
+func indexSlot(hash uint64) uint64 {
+	return (hash ^ hash>>33) * 0xff51afd7ed558ccd >> (64 - 5)
 }
 
 // enterScope gives the shared locals of a scope that starts their cells:

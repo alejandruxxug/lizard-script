@@ -101,14 +101,19 @@ func members(value object.Object) []string {
 	return keys
 }
 
-// File checks the file at path. Its use statements look for modules the
-// way a run does, next to it and in evaluator.ModulePath.
+// File checks the file at path, with Globals and the names of its project
+// file (see ProjectNames). Its use statements look for modules the way a
+// run does, next to it and in evaluator.ModulePath.
 func File(path string) ([]Diagnostic, error) {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	return Source(path, string(source)), nil
+	names, _, err := ProjectNames(path)
+	if err != nil {
+		return nil, err
+	}
+	return SourceWith(path, string(source), WithNames(Globals, names)), nil
 }
 
 // Source checks text, the code of the source called name (a file name, so

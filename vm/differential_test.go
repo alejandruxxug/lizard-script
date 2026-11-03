@@ -164,6 +164,19 @@ func TestDifferentialCorpus(t *testing.T) {
 	t.Logf("%d programs compared", ran)
 }
 
+// TestDifferentialTopStatements runs the corpus and the hand-written
+// programs on both engines with the statement hook left out of function
+// bodies (evaluator.HookFunctions false): the hook calls must be the same.
+func TestDifferentialTopStatements(t *testing.T) {
+	evaluator.HookFunctions = false
+	defer func() { evaluator.HookFunctions = true }()
+	for _, input := range append(testStrings(t), handWritten...) {
+		if !knownDifferences[input] {
+			compareEngines(t, input, true)
+		}
+	}
+}
+
 // TestDifferentialHandWritten covers the corners of scopes, signals and
 // errors that the corpus may miss. Each runs on both engines and must give
 // the same result.
@@ -320,6 +333,20 @@ var handWritten = []string{
 	"let len = 1; len += 1; len",
 	"len += 1",
 	"function f() { let a = 1; let g = function() { a += 1 }; g(); g(); a } f()",
+	// An index remembers what it read in hashes with string keys: a
+	// change, another hash, an equal string made apart, a missing key.
+	"function f(h, k) { h[k] } let h = {\"a\": 1}; let r = [f(h, \"a\"), f(h, \"a\")]; h[\"a\"] = 2; push(r, f(h, \"a\")); delete(h, \"a\"); push(r, f(h, \"a\")); r",
+	"function f(h, k) { h[k] } let a = {\"k\": 1}; let b = {\"k\": 2}; [f(a, \"k\"), f(b, \"k\"), f(a, \"k\"), f(a, \"x\"), f(a, \"x\")]",
+	"function f(h, k) { h[k] } let h = {\"ab\": 1, \"\": 2}; [f(h, \"a\" + \"b\"), f(h, text.slice(\"xab\", 1, 3)), f(h, \"\"), f(h, \"\")]",
+	"function f(h, k) { h[k] } let h = {1: \"one\", true: \"yes\", \"1\": \"text\"}; [f(h, 1), f(h, true), f(h, \"1\"), f(h, 1)]",
+	"function f(h, k) { h[k] } f(5, \"a\")",
+	"function f(h, k) { h[k] } let h = {\"a\": []}; push(f(h, \"a\"), 1); push(f(h, \"a\"), 2); f(h, \"a\")",
+	"let t = {}; for (let i = 0; i < 40; i += 1) { t[str(i)] = i } let s = 0; for (let r = 0; r < 3; r += 1) { for (let i = 0; i < 40; i += 1) { s += t[str(i)] } } s",
+	"let ks = [\"(\", \")\", \"IDENT\", \"é\", \"\"]; let n = 0; for (let i = 0; i < 50; i += 1) { let k = ks[i % 5]; if (k == \"(\" || k == \"é\") { n += 1 } elif (k != \"\") { n += 10 } } n",
+	"[\"ab\" == \"ab\", \"ab\" == \"abc\", \"é\" == \"e\", \"\" != \"\", \"a\" == 1, null == \"\"]",
+	"let a = []; push(a, 1); push(a, (1, 2)); push(a, \"x\"); push(push(a, 4), 5); a",
+	"push(1, 2)",
+	"push([], 1, 2)",
 	// Hashes and points check as they go.
 	"puts({[1]: puts(\"value\")})",
 	"{puts(\"k\"): 1}",

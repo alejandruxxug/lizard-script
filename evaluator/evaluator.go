@@ -91,6 +91,21 @@ func countStep(tok token.Token) *object.Error {
 // in the source. The REPL and Run leave it nil.
 var OnStatement func(node ast.Statement)
 
+// HookFunctions says whether OnStatement is called for the statements of
+// function bodies too, as it is by default. A host that sets it false gets
+// only the statements outside every function: the program's, a module's,
+// and the ones in their blocks and layers.
+var HookFunctions = true
+
+// functionBodies counts the bodies of lizard functions running now, for
+// HookFunctions.
+var functionBodies int
+
+// hooked says whether OnStatement is called for a statement now.
+func hooked() bool {
+	return OnStatement != nil && (HookFunctions || functionBodies == 0)
+}
+
 // OnLayer is a hook for a host. When it is not nil, it is called with enter
 // true when the body of a layer starts and with enter false when it ends,
 // also when it ends by an error, a return or a break. tok is the "layer"
@@ -269,7 +284,7 @@ func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 	var result object.Object = NULL
 
 	for _, statement := range program.Statements {
-		if OnStatement != nil {
+		if hooked() {
 			OnStatement(statement)
 		}
 		result = Eval(statement, env)
@@ -292,7 +307,7 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) obje
 	var result object.Object = NULL
 
 	for _, statement := range block.Statements {
-		if OnStatement != nil {
+		if hooked() {
 			OnStatement(statement)
 		}
 		result = Eval(statement, env)
@@ -1022,7 +1037,8 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 		}
 
 		callDepth++
-		defer func() { callDepth-- }()
+		functionBodies++
+		defer func() { callDepth--; functionBodies-- }()
 		if err := bindDefaults(function, env, len(args)); err != nil {
 			return err
 		}

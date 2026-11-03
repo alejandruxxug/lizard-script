@@ -3,6 +3,8 @@ package terrarium
 import (
 	"bytes"
 	"lizardscript/evaluator"
+	"lizardscript/lexer"
+	"lizardscript/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +25,55 @@ func TestLizardTokens(t *testing.T) {
 		{"empty", `lizard.tokens("")`, "[]", false},
 		{"a number", `lizard.tokens(5)`, "want a STRING code, got INTEGER", true},
 	})
+}
+
+func TestLizardTokenColumns(t *testing.T) {
+	code := `let s = \"é\nü\" -~> hi\nif (x >= 45deg) { f(x, 12) }`
+	check(t, []testCase{
+		{"the columns", `let c = lizard.tokens("x = 1", {"columns": true}); c`,
+			`{"kind": ["name", "operator", "number"], "type": ["IDENT", "=", "INT"], "text": ["x", "=", "1"], "value": ["x", "=", "1"], "line": [1, 1, 1], "column": [1, 3, 5], "end_line": [1, 1, 1], "end_column": [2, 4, 6]}`, false},
+		{"the same tokens", `let h = lizard.tokens("` + code + `"); let c = lizard.tokens("` + code + `", {"columns": true})
+let same = len(h) == len(c.kind)
+for (let i = 0; i < len(h); i += 1) {
+  for (let k = 0; k < len(keys(c)); k += 1) { let key = keys(c)[k]; same = same && h[i][key] == c[key][i] }
+}
+same`, "true", false},
+		{"off is the hashes", `lizard.tokens("x", {"columns": false})[0].kind`, "name", false},
+		{"empty", `lizard.tokens("", {"columns": true}).text`, "[]", false},
+		{"unknown option", `lizard.tokens("x", {"rows": true})`, `unknown option "rows", the only option is columns`, true},
+		{"bad columns", `lizard.tokens("x", {"columns": 1})`, "the option columns must be true or false, got INTEGER", true},
+		{"bad options", `lizard.tokens("x", 1)`, "want a HASH options, got INTEGER", true},
+	})
+}
+
+// TestTokenTexts checks that the texts found by walking the code are the
+// ones cut from its lines, on every program of the tests and the examples.
+func TestTokenTexts(t *testing.T) {
+	codes := []string{"x = \"é\nü\"\r\nlet y = 2 -~> c", "a \xff b \"\xfe\n\" c", "\"open", "", "\n\n  x"}
+	for _, pattern := range []string{"../tests/valid/*.liz", "../tests/errors/*.liz", "../examples/*.liz", "lib/*.liz"} {
+		files, _ := filepath.Glob(pattern)
+		for _, file := range files {
+			source, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			codes = append(codes, string(source))
+		}
+	}
+	for _, code := range codes {
+		lines, texts := newSource(code), newTokenTexts(code)
+		l := lexer.New(code)
+		l.KeepComments()
+		for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
+			want := lines.text(tok.Line, tok.Column, tok.EndLine, tok.EndColumn)
+			if got := texts.of(tok); got != want {
+				t.Fatalf("token %v of %.40q: got %q, want %q", tok, code, got, want)
+			}
+		}
+	}
+	if len(codes) < 50 {
+		t.Fatalf("only %d codes", len(codes))
+	}
 }
 
 func TestLizardParse(t *testing.T) {
@@ -91,6 +142,35 @@ seen`, `[["sun", true, 1], ["sun", false, 1]]`, false},
 	})
 }
 
+// TestLizardRunErrorsAndHooks checks the errors of the result and the
+// option hook_functions, on both engines inside.
+func TestLizardRunErrorsAndHooks(t *testing.T) {
+	var cases []testCase
+	for _, engine := range []string{"evaluator", "vm"} {
+		options := func(more string) string { return `{"engine": "` + engine + `", "name": "d"` + more + `}` }
+		top := `let seen = []
+lizard.run("function f(n) {\n  let m = n * 2\n  m + 1\n}\nlet a = f(1)\nlayer l\n  f(2)\n  let g = function() { 1 }\n  g()", ` + options(`, "hook_functions": false, "on_statement": function(l, c, s) { seen = seen + [l] }`) + `)
+seen`
+		cases = append(cases,
+			testCase{engine + "/every syntax error", `lizard.run("let = 1\nlet x = 2\nlet y = 5kg\nlet = 3", ` + options("") + `).errors`,
+				`[{"kind": "syntax", "message": "let needs a name before the \"=\", like let x = 1", "line": 1, "column": 5, "source": "d"}, ` +
+					`{"kind": "syntax", "message": "unknown unit \"kg\"", "line": 3, "column": 9, "source": "d"}, ` +
+					`{"kind": "syntax", "message": "let needs a name before the \"=\", like let x = 1", "line": 4, "column": 5, "source": "d"}]`, false},
+			testCase{engine + "/error is the first", `let r = lizard.run("let = 1\nlet = 2", ` + options("") + `); r.error == r.errors[0]`, "true", false},
+			testCase{engine + "/a runtime error", `let r = lizard.run("1 + true", ` + options("") + `); [len(r.errors), r.errors[0].kind, r.errors[0] == r.error]`,
+				`[1, "runtime", true]`, false},
+			testCase{engine + "/no errors", `lizard.run("1", ` + options("") + `).errors`, "[]", false},
+			testCase{engine + "/hooks outside functions", top, "[1, 5, 6, 7, 8, 9]", false},
+			testCase{engine + "/hooks everywhere", strings.Replace(top, `"hook_functions": false`, `"hook_functions": true`, 1),
+				"[1, 5, 2, 3, 6, 7, 2, 3, 8, 9, 8]", false},
+		)
+	}
+	cases = append(cases,
+		testCase{"bad hook_functions", `lizard.run("1", {"hook_functions": 0})`, "the option hook_functions must be true or false, got INTEGER", true},
+	)
+	check(t, cases)
+}
+
 // TestLizardRunModules checks the options use and hook_source, on both
 // engines inside.
 func TestLizardRunModules(t *testing.T) {
@@ -117,6 +197,9 @@ func TestLizardRunModules(t *testing.T) {
 			testCase{engine + "/the hook sees every source", `let seen = []
 lizard.run("use \"twice\"\ntwice(2)", ` + options(`, "on_statement": function(l, c, s) { seen = seen + [s] }`) + `)
 len(seen)`, "4", false},
+			testCase{engine + "/a module's statements are outside functions", `let seen = []
+lizard.run("use \"counter\"\nbump()", ` + options(`, "hook_functions": false, "on_statement": function(l, c, s) { seen = seen + [l] }`) + `)
+seen`, "[1, 1, 2, 2]", false},
 			testCase{engine + "/hook_source keeps the run's own", `let seen = []
 lizard.run("use \"twice\"\ntwice(2)", ` + options(`, "hook_source": "`+dir+`/drawing.liz", "on_statement": function(l, c, s) { seen = seen + [l] }`) + `)
 seen`, "[1, 2]", false},

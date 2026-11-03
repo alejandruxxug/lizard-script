@@ -87,6 +87,12 @@ var lenBuiltin = func() *object.Builtin {
 	return builtin.(*object.Builtin)
 }()
 
+// pushBuiltin is the builtin push, which step runs itself (see OpCall).
+var pushBuiltin = func() object.Object {
+	builtin, _ := evaluator.Builtin("push")
+	return builtin
+}()
+
 // callForeign calls anything that is not a closure of the VM (a builtin, a
 // function of the evaluator) through the evaluator, which counts the open
 // calls of this run too. The arguments are boxed into the VM's own buffer

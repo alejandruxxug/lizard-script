@@ -397,10 +397,18 @@ func (s *Server) publish(key string) {
 	s.notify("textDocument/publishDiagnostics", params)
 }
 
-// diagnostics are what package check finds in d.
+// diagnostics are what package check finds in d, with the names of its
+// project file (check.ProjectNames; one with mistakes is left out here,
+// lizardscript check reports them).
 func (s *Server) diagnostics(d *document) []Diagnostic {
 	out := []Diagnostic{}
-	for _, found := range check.SourceWith(d.path, d.text, s.opts.Globals) {
+	globals := s.opts.Globals
+	if d.path != "" {
+		if names, _, err := check.ProjectNames(d.path); err == nil {
+			globals = check.WithNames(globals, names)
+		}
+	}
+	for _, found := range check.SourceWith(d.path, d.text, globals) {
 		severity := 1
 		if found.Severity == check.Warning {
 			severity = 2

@@ -479,6 +479,25 @@ bugs.liz: [line 11, column 24] error: can't assign to total: it was never declar
 - It reads the modules a program uses, so it knows their names: `use "plants/flowers"` and then `flowr("rose")` is an unknown name with the hint `` did you mean `flower`? ``.
 - No error doesn't mean the program can't fail: check doesn't run it, so a wrong type or a missing file shows up only when it runs.
 
+A program that runs inside another one (an app that runs its users' sketches, say) uses names the app gives it, which check can't know about:
+
+```text
+$ lizardscript check sketches
+sketches/sky.liz: [line 1, column 1] error: identifier not found: canvas (unknown-name)
+sketches/sky.liz: [line 1, column 13] error: identifier not found: brush (unknown-name)
+    hint: did you mean `push`?
+$ lizardscript check --names canvas,brush sketches
+```
+
+`--names` lists them for one run. To say it once for a whole folder, put a `lizard-check.liz` in it: one hash, which check reads and never runs, and which counts for the files of that folder and every folder inside it (the nearest one wins):
+
+```
+-~> The names the painting app gives every program of this folder.
+{"names": ["canvas", "brush"]}
+```
+
+The editor (`lizardscript lsp`) reads it too.
+
 ## Editors: `lizardscript lsp`
 
 `lizardscript lsp` is a language server: an editor starts it and asks it about the code while you write. It shows what `lizardscript check` finds, underlined, as you type; formats the file with `lizardscript fmt` (on save, if you like); completes names, with what each one is (after `math.` the functions of `math`, after `lily2d.` the ones of the module, after `config.` the keys of your hash); shows a function's signature and its doc comment when the mouse is over its name, and what a literal is worth (`90deg` is `1.5708 rad`); jumps to where a name is declared, also in another file; renames a name everywhere it means the same thing; and puts a color picker on every color.
@@ -526,6 +545,21 @@ comment -~> big 19
 ```
 
 Each token also has its `type` (like `"IDENT"`), its `value`, and where it ends (`end_line`, `end_column`). The `kind` is what a syntax highlighter colors by.
+
+A program that walks the tokens of a big file asks for them as columns: one hash of lists, the same keys, one element per token. It skips making a hash for every token, which is about four times faster on a file of 200,000 tokens:
+
+```
+let columns = lizard.tokens("let size = 10 * 2", {"columns": true})
+puts(columns.kind)
+puts(columns.text[1], columns.column[1], len(columns.type))
+```
+
+**Output:**
+
+```text
+["keyword", "name", "operator", "number", "operator", "number"]
+size 5 6
+```
 
 ### The syntax tree
 
@@ -616,6 +650,33 @@ a pot of size 5
 - `hook_source` calls `on_statement` only for the statements of that source: the code's own two lines, not the line inside `pot`. An editor that runs a drawing on every change saves a call per library statement.
 - Running the same libraries again and again is cheap: a module file is parsed (and compiled, on the VM) once while it doesn't change.
 
+Two more things an editor needs: every mistake of a text that doesn't parse, and the statements of the code itself, not of the functions it calls:
+
+```
+let typos = lizard.run("let = 1\nlet ok = 2\nlet y = 5kg", {"name": "sketch"})
+puts(typos.error.line, len(typos.errors))
+for (let i = 0; i < len(typos.errors); i += 1) {
+  puts(typos.errors[i].line, typos.errors[i].message)
+}
+
+let lines = []
+let code = "function twice(n) {\n  return n * 2\n}\nlet a = twice(1)\nlet b = twice(a)"
+lizard.run(code, {"hook_functions": false, "on_statement": function(line, _column, _source) { lines = lines + [line] }})
+puts(lines)
+```
+
+**Output:**
+
+```text
+1 2
+1 let needs a name before the "=", like let x = 1
+3 unknown unit "kg"
+[1, 4, 5]
+```
+
+- `errors` lists every syntax error, in order; `error` is the first of them. When the code ran and failed, `errors` has that one error, and when it worked, none.
+- With `"hook_functions": false`, `on_statement` is called only for the statements outside every function: line 2, inside `twice`, runs twice but is never reported. The statements in a layer still are.
+
 ### Checking code
 
 `lizard.check(code)` finds mistakes in code the way `lizardscript check` does, and gives them as hashes, for an editor that underlines them:
@@ -691,7 +752,7 @@ done
 - Paths are relative to the file that says the `use`, then the folders of `LIZARD_PATH`, then the standard modules (`flower/lily2d`). A `use` goes at the top level of a file.
 - `lizardscript test dir` runs every program with a `.expected` file and compares; `--update`, `--vm`, `--bench`.
 - `lizardscript build dir -o file` makes one executable with the modules and the files of `bundle.txt`; find your files with `os.program_dir()`. `--os` and `--arch` build for other systems.
-- `lizardscript fmt` lays code out one way (`-w` writes it, `--check` lists what would change); `lizardscript check` finds errors and warnings without running the program (`--json` for editors).
+- `lizardscript fmt` lays code out one way (`-w` writes it, `--check` lists what would change); `lizardscript check` finds errors and warnings without running the program (`--json` for editors; `--names` or a `lizard-check.liz` for the names a host gives).
 - `lizardscript lsp` is the language server: the VS Code and Zed extensions of `editors/` start it, for diagnostics, formatting, completion, hover, go to definition and a color picker.
 - `lizard.tokens`, `lizard.parse`, `lizard.check`, `lizard.run` and `lizard.docs` read, check and run code; `io` reads lines and writes to the output and the error output.
 
