@@ -98,12 +98,18 @@ func (l *Lexer) readToken() token.Token {
 		tok = l.oneOrTwoCharToken('=', token.GT, token.GTE)
 	case '*':
 		tok = l.oneOrTwoCharToken('*', token.ASTERISK, token.POW)
+		if tok.Type == token.ASTERISK {
+			tok = l.extendToken(tok, '=', token.ASTERISK_ASSIGN)
+		}
 	case '+':
-		tok = newToken(token.PLUS, l.ch)
+		tok = l.oneOrTwoCharToken('=', token.PLUS, token.PLUS_ASSIGN)
 	case '-':
-		tok = newToken(token.MINUS, l.ch)
+		tok = l.oneOrTwoCharToken('=', token.MINUS, token.MINUS_ASSIGN)
 	case '/':
 		tok = l.oneOrTwoCharToken('/', token.SLASH, token.DOUBLE_SLASH)
+		if tok.Type == token.SLASH {
+			tok = l.extendToken(tok, '=', token.SLASH_ASSIGN)
+		}
 	case '%':
 		tok = newToken(token.MODULE, l.ch)
 	case '&':

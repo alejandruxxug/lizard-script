@@ -1,0 +1,1 @@
+try { nope } catch (e) { puts("caught " + e.message); missing }

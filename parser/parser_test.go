@@ -835,3 +835,229 @@ func TestLayerErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultParameterTrees(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"function f(a, b = 2) { a }", "let f = function(a, b = 2) { a };"},
+		{"function f(a = 1, b = a * 2) { b }", "let f = function(a = 1, b = (a * 2)) { b };"},
+		{"function f(t = null, v = [1, 2], h = {\"a\": 1}) { }", "let f = function(t = null, v = [1, 2], h = {\"a\": 1}) { };"},
+		{"function f(a = function(x) { x }) { }", "let f = function(a = function(x) { x }) { };"},
+		{"function f(a = g(1, 2)) { }", "let f = function(a = g(1, 2)) { };"},
+		{"function f(a = (1, 2)) { }", "let f = function(a = (1, 2)) { };"},
+		{"function f(a = -1) { }", "let f = function(a = (-1)) { };"},
+		{"let f = function(k, v = 0) { v }", "let f = function(k, v = 0) { v };"},
+		{"function(a = 1) { a }(5)", "function(a = 1) { a }(5)"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+
+	// The tree keeps one default per parameter.
+	literal := parse(t, "let f = function(a, b = 1, c = 2) { }").Statements[0].(*ast.LetStatement).Value.(*ast.FunctionLiteral)
+	if len(literal.Parameters) != 3 || len(literal.Defaults) != 3 ||
+		literal.Defaults[0] != nil || literal.Defaults[1] == nil || literal.Defaults[2] == nil {
+		t.Errorf("wrong defaults: %v", literal.Defaults)
+	}
+	plain := parse(t, "let f = function(a, b) { }").Statements[0].(*ast.LetStatement).Value.(*ast.FunctionLiteral)
+	if plain.Defaults != nil {
+		t.Errorf("a function without defaults should have none, got %v", plain.Defaults)
+	}
+}
+
+func TestDefaultParameterErrors(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"function f(a = 1, b) { }", `[line 1, column 19] syntax error: parameter b needs a default value, it comes after one that has it`},
+		{"function f(a, b = 1, c) { }", `[line 1, column 22] syntax error: parameter c needs a default value, it comes after one that has it`},
+		{"let f = function(a = 1, b) { }", `[line 1, column 25] syntax error: parameter b needs a default value, it comes after one that has it`},
+		{"function f(a = ) { }", `[line 1, column 16] syntax error: expected an expression, got ")"`},
+		{"function f(= 1) { }", `[line 1, column 12] syntax error: expected identifier, got "="`},
+		{"function f(a = 1 b = 2) { }", `[line 1, column 18] syntax error: expected ")", got identifier "b"`},
+		{"function f(a == 1) { }", `[line 1, column 14] syntax error: expected ")", got "=="`},
+		{"function f(1 = 1) { }", `[line 1, column 12] syntax error: expected identifier, got "1"`},
+		{"while (true) { function f(a = break) { } }", `[line 1, column 31] syntax error: expected an expression, got "break"`},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if len(p.Errors()) == 0 || p.Errors()[0] != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}
+
+func TestTryTrees(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"try { f() } catch (e) { g(e) }", "try { f() } catch (e) { g(e) }"},
+		{"try { f() } catch { g() }", "try { f() } catch { g() }"},
+		{"try { } catch (e) { }", "try { } catch (e) { }"},
+		{"try { f() }\ncatch (e) { g() }", "try { f() } catch (e) { g() }"},
+		{"try { f() } catch (e) { g() };", "try { f() } catch (e) { g() }"},
+		{"try { f() } catch (e) { g() }\nh()", "try { f() } catch (e) { g() }\nh()"},
+		{"try { try { f() } catch (a) { g() } } catch (b) { h() }", "try { try { f() } catch (a) { g() } } catch (b) { h() }"},
+		{"while (a) { try { break } catch (e) { continue } }", "while a { try { break; } catch (e) { continue; } }"},
+		{"function f() { try { return 1 } catch (e) { return 2 } }", "let f = function() { try { return 1; } catch (e) { return 2; } };"},
+		{"if (a) { try { 1 } catch { 2 } }", "if a { try { 1 } catch { 2 } }"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+}
+
+// try and catch are only special in the shapes above: everywhere else they
+// are ordinary names.
+func TestTryAsAnIdentifier(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"let try = 1", "let try = 1;"},
+		{"try + 1", "(try + 1)"},
+		{"try = 2", "(try = 2)"},
+		{"try", "try"},
+		{"try(1)", "try(1)"},
+		{"try[0]", "(try[0])"},
+		{"try.x", "(try[\"x\"])"},
+		{"f(try)", "f(try)"},
+		{"if try { 1 }", "if try { 1 }"},
+		{"if (try) { 1 }", "if try { 1 }"},
+		{"while try { break }", "while try { break; }"},
+		{"let catch = 1", "let catch = 1;"},
+		{"catch + 1", "(catch + 1)"},
+		{"catch(1)", "catch(1)"},
+		{"try\n{ \"a\": 1 }", "try\n{\"a\": 1}"},
+		{"function try(catch) { catch }", "let try = function(catch) { catch };"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+}
+
+func TestTryErrors(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"try { 1 }", `[line 1, column 10] syntax error: expected "catch" after the try block, got end of input`},
+		{"try { 1 } 5", `[line 1, column 11] syntax error: expected "catch" after the try block, got "5"`},
+		{"try { 1 } finally { 2 }", `[line 1, column 11] syntax error: expected "catch" after the try block, got identifier "finally"`},
+		{"try { 1 } catch", `[line 1, column 16] syntax error: expected "{", got end of input`},
+		{"try { 1 } catch () { 2 }", `[line 1, column 18] syntax error: expected identifier, got ")"`},
+		{"try { 1 } catch (e, f) { 2 }", `[line 1, column 19] syntax error: expected ")", got ","`},
+		{"try { 1 } catch (e) 2", `[line 1, column 21] syntax error: expected "{", got "2"`},
+		{"try { 1 } catch e { 2 }", `[line 1, column 17] syntax error: expected "{", got identifier "e"`},
+		{"try { 1 catch (e) { 2 }", `[line 1, column 9] syntax error: expected end of statement, got identifier "catch"`},
+		{"try { 1 } catch (e) { 2", `[line 1, column 21] syntax error: block is never closed: expected "}"`},
+		{"try { break } catch { }", `[line 1, column 7] syntax error: break outside of a loop`},
+		{"try { 1 } catch (e) { break }", `[line 1, column 23] syntax error: break outside of a loop`},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if len(p.Errors()) == 0 || p.Errors()[0] != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}
+
+func TestContinueTrees(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"while (a) { continue }", "while a { continue; }"},
+		{"while (a) { continue; }", "while a { continue; }"},
+		{"for (;;) { continue }", "for (; ; ) { continue; }"},
+		{"while (a) { continue\nb() }", "while a { continue; b() }"},
+		{"while (a) { if (b) { continue } }", "while a { if b { continue; } }"},
+		{"while (a) { for (;;) { continue } }", "while a { for (; ; ) { continue; } }"},
+		{"while (a) { layer x\n    continue }", "while a { layer x continue; }"},
+		// Still names.
+		{"while (a) { continue + 1 }", "while a { (continue + 1) }"},
+		{"while (a) { continue = 1 }", "while a { (continue = 1) }"},
+		{"while (a) { continue(1) }", "while a { continue(1) }"},
+		{"while (a) { continue[0] }", "while a { (continue[0]) }"},
+		{"while (a) { continue.x }", "while a { (continue[\"x\"]) }"},
+		{"while (a) { continue\n- 1 }", "while a { (continue - 1) }"},
+		{"while (a) { f(continue) }", "while a { f(continue) }"},
+		{"while (a) { let continue = 1 }", "while a { let continue = 1; }"},
+		{"let continue = 1", "let continue = 1;"},
+		{"continue + 1", "(continue + 1)"},
+		{"f(continue)", "f(continue)"},
+		{"function continue() { }", "let continue = function() { };"},
+		// Outside a loop (or in a function inside one) it is the name.
+		{"continue", "continue"},
+		{"continue;", "continue"},
+		{"if (a) { continue }", "if a { continue }"},
+		{"while (a) { function f() { continue } }", "while a { let f = function() { continue }; }"},
+		{"while (a) { let f = function() { continue } }", "while a { let f = function() { continue }; }"},
+		{"function f() { continue }", "let f = function() { continue };"},
+		{"try { continue } catch { }", "try { continue } catch { }"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+}
+
+func TestContinueErrors(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"while (a) { continue 5 }", `[line 1, column 22] syntax error: expected end of statement, got "5"`},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if len(p.Errors()) == 0 || p.Errors()[0] != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}
+
+func TestCompoundAssignTrees(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"x += 1", "(x += 1)"},
+		{"x -= 1", "(x -= 1)"},
+		{"x *= 2", "(x *= 2)"},
+		{"x /= 2", "(x /= 2)"},
+		{"x+=1", "(x += 1)"},
+		{"x += 1 + 2", "(x += (1 + 2))"},
+		{"x *= a + b", "(x *= (a + b))"},
+		{"x += y -= 1", "(x += (y -= 1))"},
+		{"x = y += 1", "(x = (y += 1))"},
+		{"a[i] += 1", "((a[i]) += 1)"},
+		{"a.b += 1", "((a[\"b\"]) += 1)"},
+		{"a.b.c -= f(1)", "(((a[\"b\"])[\"c\"]) -= f(1))"},
+		{"a[i + 1] *= 2", "((a[(i + 1)]) *= 2)"},
+		{"x = 1", "(x = 1)"},
+		{"for (let i = 0; i < 3; i += 1) { }", "for (let i = 0; (i < 3); (i += 1)) { }"},
+		{"for (i += 1;;) { }", "for ((i += 1); ; ) { }"},
+		{"x += 1\ny -= 2", "(x += 1)\n(y -= 2)"},
+		{"x -= -1", "(x -= (-1))"},
+		{"x - -1", "(x - (-1))"},
+		{"x / y", "(x / y)"},
+		{"x // y", "(x // y)"},
+		{"x ** y", "(x ** y)"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+}
+
+func TestCompoundAssignErrors(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"1 += 2", `[line 1, column 3] syntax error: cannot assign to 1`},
+		{"f() -= 2", `[line 1, column 5] syntax error: cannot assign to f()`},
+		{"(a + b) *= 2", `[line 1, column 9] syntax error: cannot assign to (a + b)`},
+		{"x += ", `[line 1, column 6] syntax error: expected an expression, got end of input`},
+		{"let x += 1", `[line 1, column 7] syntax error: expected "=", got "+="`},
+		{"+= 1", `[line 1, column 1] syntax error: expected an expression, got "+="`},
+		{"x **= 2", `[line 1, column 5] syntax error: expected an expression, got "="`},
+		{"x %= 2", `[line 1, column 4] syntax error: expected an expression, got "="`},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if len(p.Errors()) == 0 || p.Errors()[0] != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}

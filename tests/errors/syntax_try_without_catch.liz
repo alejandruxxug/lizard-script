@@ -1,0 +1,2 @@
+try { puts("a") }
+puts("b")

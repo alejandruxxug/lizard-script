@@ -162,7 +162,8 @@ func isIncomplete(input string) bool {
 		return true
 	}
 	switch last.Type {
-	case token.ASSIGN, token.PLUS, token.MINUS, token.ASTERISK, token.SLASH,
+	case token.ASSIGN, token.PLUS_ASSIGN, token.MINUS_ASSIGN, token.ASTERISK_ASSIGN,
+		token.SLASH_ASSIGN, token.PLUS, token.MINUS, token.ASTERISK, token.SLASH,
 		token.DOUBLE_SLASH, token.POW, token.MODULE, token.EQ, token.NOT_EQ,
 		token.EXACT, token.NOT_EXACT, token.LT, token.GT, token.LTE, token.GTE,
 		token.AND, token.OR, token.COMMA, token.BANG,

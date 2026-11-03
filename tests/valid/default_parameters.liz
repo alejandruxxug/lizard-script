@@ -1,0 +1,40 @@
+-~> Default values for parameters.
+function t(key, values = null) {
+  if (values == null) { return key }
+  key + ":" + str(values)
+}
+puts(t("hello"))
+puts(t("hello", 3))
+
+-~> A default can use the parameters before it.
+function box(w, h = w * 2, label = "box " + str(w) + "x" + str(h)) {
+  [w, h, label]
+}
+puts(box(2))
+puts(box(2, 5))
+puts(box(2, 5, "wide"))
+
+-~> Defaults run at each call, so a list default is a new list every time.
+function collect(item, into = []) {
+  push(into, item)
+  into
+}
+puts(collect(1))
+puts(collect(2))
+puts(collect(3, [9]))
+
+-~> Function literals and closures too.
+let scale = 10
+let grow = function(n, by = scale) { n + by }
+puts(grow(1))
+scale = 20
+puts(grow(1))
+puts(grow(1, 1))
+
+-~> All parameters can have defaults.
+function pair(a = 1, b = 2) { a * 10 + b }
+puts(pair(), pair(5), pair(5, 6))
+
+-~> A name called default is still a name.
+let default = 7
+puts(default)

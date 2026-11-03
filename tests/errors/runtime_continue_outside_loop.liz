@@ -1,0 +1,2 @@
+puts("before")
+if (true) { continue }

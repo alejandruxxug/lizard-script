@@ -35,6 +35,12 @@ const (
 	EXACT        = "==="
 	NOT_EXACT    = "!=="
 
+	// Compound assignment: x += 1 changes x by the operator before the '='.
+	PLUS_ASSIGN     = "+="
+	MINUS_ASSIGN    = "-="
+	ASTERISK_ASSIGN = "*="
+	SLASH_ASSIGN    = "/="
+
 	LT  = "<"
 	GT  = ">"
 	LTE = "<="

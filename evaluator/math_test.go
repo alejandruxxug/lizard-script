@@ -57,7 +57,7 @@ func TestMathFunctions(t *testing.T) {
 		{"str(math.sqrt)", "\"builtin math.sqrt\""},
 		{"type(math)", "\"HASH\""},
 		{"math[\"pi\"] == math.pi", "true"},
-		{"len(keys(math))", "17"},
+		{"len(keys(math))", "19"},
 		{"let f = math.sqrt; f(9)", "3.0"},
 		// A variable called math hides the library.
 		{"let math = {\"pi\": 3}; math.pi", "3"},

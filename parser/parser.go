@@ -49,27 +49,31 @@ const maxNestingDepth = 10000
 // precedences lists every token that works as an infix operator. Any other
 // token counts as LOWEST, which is what stops parseExpression.
 var precedences = map[token.TokenType]int{
-	token.ASSIGN:       ASSIGN,
-	token.OR:           OR,
-	token.AND:          AND,
-	token.EQ:           EQUALS,
-	token.NOT_EQ:       EQUALS,
-	token.EXACT:        EQUALS,
-	token.NOT_EXACT:    EQUALS,
-	token.LT:           LESSGREATER,
-	token.GT:           LESSGREATER,
-	token.LTE:          LESSGREATER,
-	token.GTE:          LESSGREATER,
-	token.PLUS:         SUM,
-	token.MINUS:        SUM,
-	token.ASTERISK:     PRODUCT,
-	token.SLASH:        PRODUCT,
-	token.DOUBLE_SLASH: PRODUCT,
-	token.MODULE:       PRODUCT,
-	token.POW:          EXPONENT,
-	token.LPAREN:       CALL,
-	token.LBRACKET:     INDEX,
-	token.DOT:          INDEX,
+	token.ASSIGN:          ASSIGN,
+	token.PLUS_ASSIGN:     ASSIGN,
+	token.MINUS_ASSIGN:    ASSIGN,
+	token.ASTERISK_ASSIGN: ASSIGN,
+	token.SLASH_ASSIGN:    ASSIGN,
+	token.OR:              OR,
+	token.AND:             AND,
+	token.EQ:              EQUALS,
+	token.NOT_EQ:          EQUALS,
+	token.EXACT:           EQUALS,
+	token.NOT_EXACT:       EQUALS,
+	token.LT:              LESSGREATER,
+	token.GT:              LESSGREATER,
+	token.LTE:             LESSGREATER,
+	token.GTE:             LESSGREATER,
+	token.PLUS:            SUM,
+	token.MINUS:           SUM,
+	token.ASTERISK:        PRODUCT,
+	token.SLASH:           PRODUCT,
+	token.DOUBLE_SLASH:    PRODUCT,
+	token.MODULE:          PRODUCT,
+	token.POW:             EXPONENT,
+	token.LPAREN:          CALL,
+	token.LBRACKET:        INDEX,
+	token.DOT:             INDEX,
 }
 
 type (
@@ -121,27 +125,31 @@ func New(l *lexer.Lexer) *Parser {
 	}
 
 	p.infixParseFns = map[token.TokenType]infixParseFn{
-		token.OR:           p.parseInfixExpression,
-		token.AND:          p.parseInfixExpression,
-		token.EQ:           p.parseInfixExpression,
-		token.NOT_EQ:       p.parseInfixExpression,
-		token.EXACT:        p.parseInfixExpression,
-		token.NOT_EXACT:    p.parseInfixExpression,
-		token.LT:           p.parseInfixExpression,
-		token.GT:           p.parseInfixExpression,
-		token.LTE:          p.parseInfixExpression,
-		token.GTE:          p.parseInfixExpression,
-		token.PLUS:         p.parseInfixExpression,
-		token.MINUS:        p.parseInfixExpression,
-		token.ASTERISK:     p.parseInfixExpression,
-		token.SLASH:        p.parseInfixExpression,
-		token.DOUBLE_SLASH: p.parseInfixExpression,
-		token.MODULE:       p.parseInfixExpression,
-		token.POW:          p.parseInfixExpression,
-		token.ASSIGN:       p.parseAssignExpression,
-		token.LPAREN:       p.parseCallExpression,
-		token.LBRACKET:     p.parseIndexExpression,
-		token.DOT:          p.parseDotExpression,
+		token.OR:              p.parseInfixExpression,
+		token.AND:             p.parseInfixExpression,
+		token.EQ:              p.parseInfixExpression,
+		token.NOT_EQ:          p.parseInfixExpression,
+		token.EXACT:           p.parseInfixExpression,
+		token.NOT_EXACT:       p.parseInfixExpression,
+		token.LT:              p.parseInfixExpression,
+		token.GT:              p.parseInfixExpression,
+		token.LTE:             p.parseInfixExpression,
+		token.GTE:             p.parseInfixExpression,
+		token.PLUS:            p.parseInfixExpression,
+		token.MINUS:           p.parseInfixExpression,
+		token.ASTERISK:        p.parseInfixExpression,
+		token.SLASH:           p.parseInfixExpression,
+		token.DOUBLE_SLASH:    p.parseInfixExpression,
+		token.MODULE:          p.parseInfixExpression,
+		token.POW:             p.parseInfixExpression,
+		token.ASSIGN:          p.parseAssignExpression,
+		token.PLUS_ASSIGN:     p.parseAssignExpression,
+		token.MINUS_ASSIGN:    p.parseAssignExpression,
+		token.ASTERISK_ASSIGN: p.parseAssignExpression,
+		token.SLASH_ASSIGN:    p.parseAssignExpression,
+		token.LPAREN:          p.parseCallExpression,
+		token.LBRACKET:        p.parseIndexExpression,
+		token.DOT:             p.parseDotExpression,
 	}
 
 	// Read two tokens so curToken and peekToken are both set.
@@ -350,8 +358,13 @@ func (p *Parser) parseStatement() ast.Statement {
 			return p.parseFunctionDeclaration()
 		}
 	case token.IDENT:
-		if p.startsLayer() {
+		switch {
+		case p.startsLayer():
 			return p.parseLayerStatement()
+		case p.startsTry():
+			return p.parseTryStatement()
+		case p.startsContinue():
+			return p.parseContinueStatement()
 		}
 	}
 	return p.parseExpressionStatement()
@@ -456,6 +469,87 @@ func (p *Parser) parseControlStatement() ast.Statement {
 
 	stmt.Expression = p.prefixParseFns[p.curToken.Type]()
 	if stmt.Expression == nil {
+		return nil
+	}
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+	return stmt
+}
+
+// startsContinue reports whether the statement that begins at curToken is a
+// continue: the name "continue" alone, inside a loop. That is, followed by a ';', a '}', the
+// end of the input, or a line that doesn't go on with an operator, a '(' or a
+// '[' (which would still read as part of an expression, as it always did).
+// Anything else, like "continue + 1", is an ordinary expression, and
+// "continue" is an ordinary name everywhere else.
+func (p *Parser) startsContinue() bool {
+	if p.curToken.Literal != "continue" || p.loopDepth == 0 {
+		return false
+	}
+	if p.peekEndsStatement() {
+		return true
+	}
+	_, continues := precedences[p.peekToken.Type]
+	return p.peekToken.Line > p.curToken.Line && !continues
+}
+
+// parseContinueStatement parses: continue ;
+// startsContinue only says yes inside a loop body of the same function, so
+// outside of one "continue" stays the plain name it always was.
+func (p *Parser) parseContinueStatement() ast.Statement {
+	stmt := &ast.ContinueStatement{Token: p.curToken}
+
+	p.endStatement()
+	return stmt
+}
+
+// startsTry reports whether the statement that begins at curToken is a try:
+// the name "try" followed on the same line by '{'. "try {" was never a valid
+// statement (the name would be followed by a stray '{'), so nothing that
+// worked before reads differently. It is only looked for at the start of a
+// statement, so "if try { ... }" still uses a variable named try as the
+// condition.
+func (p *Parser) startsTry() bool {
+	return p.curToken.Literal == "try" && p.peekTokenIs(token.LBRACE) &&
+		p.peekToken.Line == p.curToken.Line
+}
+
+// parseTryStatement parses: try { ... } catch (e) { ... }
+// The name in the parentheses is optional: catch { ... }. Once a try has
+// begun the catch is required, so it is read as a name only here, and it
+// may start on the line after the '}'. It ends on the '}' of the catch.
+func (p *Parser) parseTryStatement() ast.Statement {
+	stmt := &ast.TryStatement{Token: p.curToken}
+
+	p.nextToken()
+	stmt.Body = p.parseBlockStatement()
+	if p.recovering {
+		return nil
+	}
+
+	if !p.peekTokenIs(token.IDENT) || p.peekToken.Literal != "catch" {
+		p.errorAt(p.peekToken, "expected \"catch\" after the try block, got %s", describeToken(p.peekToken))
+		return nil
+	}
+	p.nextToken()
+
+	if p.peekTokenIs(token.LPAREN) {
+		p.nextToken()
+		if !p.expectPeek(token.IDENT) {
+			return nil
+		}
+		stmt.Name = p.currentIdentifier()
+		if !p.expectPeek(token.RPAREN) {
+			return nil
+		}
+	}
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+	stmt.Catch = p.parseBlockStatement()
+	if p.recovering {
 		return nil
 	}
 
@@ -911,51 +1005,80 @@ func (p *Parser) parseFunction(function token.Token) ast.Expression {
 		return nil
 	}
 
-	literal.Parameters = p.parseFunctionParameters()
+	// The default values run inside the function, so a break or continue
+	// there can't reach a loop around it either.
+	outerLoopDepth := p.loopDepth
+	p.loopDepth = 0
+	literal.Parameters, literal.Defaults = p.parseFunctionParameters()
 	if literal.Parameters == nil {
+		p.loopDepth = outerLoopDepth
 		return nil
 	}
 
 	if !p.expectPeek(token.LBRACE) {
+		p.loopDepth = outerLoopDepth
 		return nil
 	}
 
-	outerLoopDepth := p.loopDepth
-	p.loopDepth = 0
 	literal.Body = p.parseBlockStatement()
 	p.loopDepth = outerLoopDepth
 
 	return literal
 }
 
-// parseFunctionParameters parses the names between parentheses. It starts on
-// the '(' and ends on the ')'. It returns an empty list for "()" and nil on
-// error, so the caller can tell them apart.
-func (p *Parser) parseFunctionParameters() []*ast.Identifier {
+// parseFunctionParameters parses the names between parentheses, each with an
+// optional default value: (a, b = 2). It starts on the '(' and ends on the
+// ')'. It returns an empty list for "()" and nil on error, so the caller can
+// tell them apart. The second list holds the default of each parameter, nil
+// for one without it, and is nil when no parameter has a default. A parameter
+// without a default can't come after one with it.
+func (p *Parser) parseFunctionParameters() ([]*ast.Identifier, []ast.Expression) {
 	parameters := []*ast.Identifier{}
+	var defaults []ast.Expression
 
 	if p.peekTokenIs(token.RPAREN) {
 		p.nextToken()
-		return parameters
+		return parameters, nil
 	}
 
-	if !p.expectPeek(token.IDENT) {
-		return nil
-	}
-	parameters = append(parameters, p.currentIdentifier())
-
-	for p.peekTokenIs(token.COMMA) {
-		p.nextToken()
+	for {
 		if !p.expectPeek(token.IDENT) {
-			return nil
+			return nil, nil
 		}
-		parameters = append(parameters, p.currentIdentifier())
+		parameter := p.currentIdentifier()
+
+		var value ast.Expression
+		if p.peekTokenIs(token.ASSIGN) {
+			p.nextToken()
+			p.nextToken()
+			value = p.parseExpression(LOWEST)
+			if value == nil {
+				return nil, nil
+			}
+			if defaults == nil {
+				defaults = make([]ast.Expression, len(parameters))
+			}
+		} else if defaults != nil {
+			p.errorAt(p.curToken, "parameter %s needs a default value, it comes after one that has it",
+				parameter.Value)
+			return nil, nil
+		}
+
+		parameters = append(parameters, parameter)
+		if defaults != nil {
+			defaults = append(defaults, value)
+		}
+
+		if !p.peekTokenIs(token.COMMA) {
+			break
+		}
+		p.nextToken()
 	}
 
 	if !p.expectPeek(token.RPAREN) {
-		return nil
+		return nil, nil
 	}
-	return parameters
+	return parameters, defaults
 }
 
 func (p *Parser) parseArrayLiteral() ast.Expression {
@@ -1030,10 +1153,14 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	return expression
 }
 
-// parseAssignExpression parses x = 5 and list[0] = 5. Like '**', it groups to
-// the right: a = b = 1 is (a = (b = 1)).
+// parseAssignExpression parses x = 5 and list[0] = 5, and the compound forms
+// x += 5, -=, *= and /=, whose Operator is the character before the '='. Like
+// '**', it groups to the right: a = b = 1 is (a = (b = 1)).
 func (p *Parser) parseAssignExpression(left ast.Expression) ast.Expression {
 	expression := &ast.AssignExpression{Token: p.curToken, Left: left}
+	if !p.curTokenIs(token.ASSIGN) {
+		expression.Operator = p.curToken.Literal[:1]
+	}
 
 	switch left.(type) {
 	case *ast.Identifier, *ast.IndexExpression:

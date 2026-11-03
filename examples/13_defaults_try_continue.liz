@@ -1,0 +1,65 @@
+-~> Default parameters, try / catch, continue and compound assignment.
+
+-~> A parameter can have a default value. It is worked out at each call,
+-~> after the parameters before it, so it can use them.
+function label(name, size = 12, caption = name + " (" + str(size) + ")") {
+  caption
+}
+puts(label("tree"))
+puts(label("tree", 20))
+puts(label("tree", 20, "big tree"))
+
+-~> Parameters with a default come last. A missing one without a default is
+-~> still an error.
+
+-~> try / catch turns a runtime error into a value you can look at.
+function divide(a, b) {
+  if (b == 0) { error("can't divide " + str(a) + " by zero") }
+  a / b
+}
+try {
+  puts(divide(10, 2))
+  puts(divide(1, 0))
+  puts("not reached")
+} catch (e) {
+  puts("caught:", e.message)
+}
+
+-~> The catch gets a hash with message, line and column. The name is optional.
+try { nope } catch (err) { puts(err.line, err.column, err.message) }
+try { nope } catch { puts("something failed") }
+
+-~> A try is a statement, with the value of the block that ran. As the last
+-~> statement of a function, that is what the function gives.
+function to_number(text, fallback = 0) {
+  try { int(text) } catch { fallback }
+}
+puts(to_number("12"), to_number("twelve"), to_number("twelve", -1))
+
+-~> continue skips the rest of a round. In a for loop the update still runs.
+let kept = []
+for (let i = 1; i <= 10; i += 1) {
+  if (i % 3 == 0) { continue }
+  push(kept, i)
+}
+puts(kept)
+
+-~> Compound assignment: += -= *= /= on names, list items and hash keys.
+let totals = {"sum": 0, "count": 0}
+let values = [4, 8, 15, 16, 23, 42]
+for (let i = 0; i < len(values); i += 1) {
+  try {
+    if (values[i] == 15) { error("skip 15") }
+    totals.sum += values[i]
+    totals.count += 1
+  } catch (e) {
+    puts("skipped:", e.message)
+    continue
+  }
+}
+puts(totals, totals.sum / totals.count)
+values[0] *= 10
+puts(values)
+
+-~> math.asin and math.acos are the inverses of sin and cos.
+puts(math.round(math.acos(0.5) / 1deg), math.round(math.asin(1) / 1deg))

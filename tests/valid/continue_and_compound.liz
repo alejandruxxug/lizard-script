@@ -1,0 +1,61 @@
+-~> continue skips to the next round.
+let odds = []
+for (let i = 0; i < 10; i += 1) {
+  if (i % 2 == 0) { continue }
+  push(odds, i)
+}
+puts(odds)
+
+-~> In a for loop the update still runs; in a while loop you update yourself.
+let n = 0
+let total = 0
+while (n < 6) {
+  n += 1
+  if (n == 3) { continue }
+  total += n
+}
+puts(total)
+
+-~> Only the innermost loop is skipped.
+let pairs = 0
+for (let a = 0; a < 3; a += 1) {
+  for (let b = 0; b < 3; b += 1) {
+    if (a == b) { continue }
+    pairs += 1
+  }
+}
+puts(pairs)
+
+-~> Compound assignment.
+let x = 10
+x += 5
+x -= 3
+x *= 2
+x /= 4
+puts(x)
+let s = "ab"
+s += "cd"
+s *= 2
+puts(s)
+
+let list = [1, 2, 3]
+list[1] += 40
+list[0] *= 7
+puts(list)
+
+let thing = {"count": 1, "inner": {"n": 2}}
+thing.count += 1
+thing.inner.n *= 5
+puts(thing)
+
+-~> The target is read and written once.
+let calls = 0
+function index() { calls += 1; 0 }
+let box = [100]
+box[index()] += 1
+puts(box, calls)
+
+-~> math.asin and math.acos.
+puts(math.acos(1), math.asin(0))
+puts(math.abs(math.acos(0.5) - 60deg) < 0.000001)
+puts(math.abs(math.asin(1) - 90deg) < 0.000001)

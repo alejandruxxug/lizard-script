@@ -164,6 +164,7 @@ This one command runs everything:
 | [10_floats_and_math.liz](examples/10_floats_and_math.liz) | floats, the `math` library, angle units |
 | [11_colors_and_points.liz](examples/11_colors_and_points.liz) | color literals, `rgb`/`hsl`, points and their arithmetic |
 | [12_layers.liz](examples/12_layers.liz) | `layer` blocks and the `text` and `list` helpers |
+| [13_defaults_try_continue.liz](examples/13_defaults_try_continue.liz) | default parameters, `try` / `catch`, `continue`, `+=` and friends |
 | [fizzbuzz.liz](examples/fizzbuzz.liz) | a complete small program |
 | [errors/lexical.liz](examples/errors/lexical.liz) | a lexical error |
 | [errors/syntax.liz](examples/errors/syntax.liz) | several syntax errors reported at once |

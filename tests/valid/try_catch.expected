@@ -1,0 +1,16 @@
+start
+caught: type mismatch: INTEGER + BOOLEAN
+4 13
+1
+recovered from boom
+math.sqrt: can't take the square root of a negative number: -1
+len: argument not supported, got INTEGER
+division by zero
+fine
+HASH
+mine
+3
+3
+again: identifier not found: nope
+5
+try is true

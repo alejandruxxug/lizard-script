@@ -537,3 +537,37 @@ func TestColorPositions(t *testing.T) {
 		t.Errorf("x at line %d, column %d, want line 1, column 9", got.Line, got.Column)
 	}
 }
+
+// TestCompoundAssignTokens checks that '+=', '-=', '*=' and '/=' are single
+// tokens, and that the operators they start from still lex as before.
+func TestCompoundAssignTokens(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []token.Token
+	}{
+		{"+=", []token.Token{{Type: token.PLUS_ASSIGN, Literal: "+="}}},
+		{"-=", []token.Token{{Type: token.MINUS_ASSIGN, Literal: "-="}}},
+		{"*=", []token.Token{{Type: token.ASTERISK_ASSIGN, Literal: "*="}}},
+		{"/=", []token.Token{{Type: token.SLASH_ASSIGN, Literal: "/="}}},
+		{"x+=1", []token.Token{{Type: token.IDENT, Literal: "x"}, {Type: token.PLUS_ASSIGN, Literal: "+="}, {Type: token.INT, Literal: "1"}}},
+		{"+ =", []token.Token{{Type: token.PLUS, Literal: "+"}, {Type: token.ASSIGN, Literal: "="}}},
+		{"+==", []token.Token{{Type: token.PLUS_ASSIGN, Literal: "+="}, {Type: token.ASSIGN, Literal: "="}}},
+		{"**=", []token.Token{{Type: token.POW, Literal: "**"}, {Type: token.ASSIGN, Literal: "="}}},
+		{"//=", []token.Token{{Type: token.DOUBLE_SLASH, Literal: "//"}, {Type: token.ASSIGN, Literal: "="}}},
+		{"%=", []token.Token{{Type: token.MODULE, Literal: "%"}, {Type: token.ASSIGN, Literal: "="}}},
+		{"*", []token.Token{{Type: token.ASTERISK, Literal: "*"}}},
+		{"/", []token.Token{{Type: token.SLASH, Literal: "/"}}},
+		{"a -~> note\n-= 1", []token.Token{{Type: token.IDENT, Literal: "a"}, {Type: token.MINUS_ASSIGN, Literal: "-="}, {Type: token.INT, Literal: "1"}}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, want := range append(tt.expected, token.Token{Type: token.EOF, Literal: ""}) {
+			got := l.NextToken()
+			if got.Type != want.Type || got.Literal != want.Literal {
+				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
+					tt.input, i, want, got)
+			}
+		}
+	}
+}

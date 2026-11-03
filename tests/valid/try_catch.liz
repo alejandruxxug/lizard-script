@@ -1,0 +1,66 @@
+-~> try / catch.
+try {
+  puts("start")
+  let r = 1 + true
+  puts("never printed")
+} catch (e) {
+  puts("caught:", e.message)
+  puts(e.line, e.column)
+}
+
+-~> catch without a name, and the value of the statement.
+let v = 0
+try { nope } catch { v = 1 }
+puts(v)
+function safe() {
+  try { error("boom") } catch (e) { "recovered from " + e.message }
+}
+puts(safe())
+
+-~> Errors from deep inside functions and from builtins.
+function deep(n) {
+  if (n == 0) { return math.sqrt(-1) }
+  deep(n - 1)
+}
+try { deep(5) } catch (e) { puts(e.message) }
+try { len(5) } catch (e) { puts(e.message) }
+try { [1, 2][0] / 0 } catch (e) { puts(e.message) }
+
+-~> Nothing fails: the catch is skipped.
+try { puts("fine") } catch (e) { puts("not here") }
+
+-~> The name belongs to the catch block only.
+let e = "mine"
+try { nope } catch (e) { puts(type(e)) }
+puts(e)
+
+-~> return, break and continue go through.
+function first(items) {
+  for (let i = 0; i < len(items); i += 1) {
+    try {
+      if (items[i] > 2) { return items[i] }
+    } catch (e) {}
+  }
+  null
+}
+puts(first([1, 2, 3, 4]))
+
+let rounds = 0
+while (true) {
+  rounds += 1
+  try { if (rounds == 3) { break } } catch (e) {}
+}
+puts(rounds)
+
+-~> A catch can fail too; an outer try catches that.
+try {
+  try { nope } catch (inner) { error("again: " + inner.message) }
+} catch (outer) {
+  puts(outer.message)
+}
+
+-~> try and catch are ordinary names elsewhere.
+let try = 2
+let catch = 3
+puts(try + catch)
+if try { puts("try is true") }

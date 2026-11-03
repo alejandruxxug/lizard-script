@@ -1,0 +1,2 @@
+0.0
+[line 2, column 15] runtime error: math.acos: can't take the acos of a number outside -1 to 1: 2

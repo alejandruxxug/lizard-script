@@ -1,0 +1,2 @@
+caught identifier not found: nope
+[line 1, column 55] runtime error: identifier not found: missing

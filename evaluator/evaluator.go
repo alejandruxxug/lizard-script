@@ -1,8 +1,9 @@
 // Package evaluator runs a lizard-script program by walking its syntax tree.
 //
-// Eval returns a value for every node. Three internal values travel up the
+// Eval returns a value for every node. Four internal values travel up the
 // tree to stop what is running: a ReturnValue up to the function call that it
-// leaves, a Break up to the innermost loop, and an Error all the way up.
+// leaves, a Break or a Continue up to the innermost loop, and an Error up to
+// the nearest try statement, or all the way up if there is none.
 package evaluator
 
 import (
@@ -21,6 +22,8 @@ var (
 	TRUE  = &object.Boolean{Value: true}
 	FALSE = &object.Boolean{Value: false}
 	BREAK = &object.Break{}
+
+	CONTINUE = &object.Continue{}
 )
 
 // maxCallDepth limits how many function calls can be open at once, so a
@@ -76,7 +79,9 @@ func countStep(tok token.Token) *object.Error {
 	}
 	steps++
 	if steps > MaxSteps {
-		return newError(tok, "the program ran too long (more than %d steps)", MaxSteps)
+		err := newError(tok, "the program ran too long (more than %d steps)", MaxSteps)
+		err.Uncatchable = true
+		return err
 	}
 	return nil
 }
@@ -139,6 +144,12 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.BreakStatement:
 		return BREAK
 
+	case *ast.ContinueStatement:
+		return CONTINUE
+
+	case *ast.TryStatement:
+		return evalTryStatement(node, env)
+
 	// Leaf expressions
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
@@ -187,7 +198,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 
 	// Functions
 	case *ast.FunctionLiteral:
-		return &object.Function{Parameters: node.Parameters, Body: node.Body, Env: env}
+		return &object.Function{Parameters: node.Parameters, Defaults: node.Defaults, Body: node.Body, Env: env}
 
 	case *ast.CallExpression:
 		function := Eval(node.Function, env)
@@ -280,7 +291,7 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) obje
 
 		if result != nil {
 			switch result.Type() {
-			case object.RETURN_VALUE_OBJ, object.BREAK_OBJ, object.ERROR_OBJ:
+			case object.RETURN_VALUE_OBJ, object.BREAK_OBJ, object.CONTINUE_OBJ, object.ERROR_OBJ:
 				return result
 			}
 		}
@@ -304,10 +315,42 @@ func evalLayerStatement(layer *ast.LayerStatement, env *object.Environment) obje
 
 	result := evalBlockStatement(layer.Body, object.NewEnclosedEnvironment(env))
 	switch result.Type() {
-	case object.RETURN_VALUE_OBJ, object.BREAK_OBJ, object.ERROR_OBJ:
+	case object.RETURN_VALUE_OBJ, object.BREAK_OBJ, object.CONTINUE_OBJ, object.ERROR_OBJ:
 		return result
 	}
 	return NULL
+}
+
+// evalTryStatement runs the body. If a runtime error stops it, the catch
+// block runs instead, in a scope where the name holds a hash with the
+// "message" of the error, without its position, and the "line" and "column"
+// where it happened. A return, break or continue in either block goes on up
+// as it is. The errors that protect the host (the step limit and the stack
+// overflows) are not caught. The value is the one of the block that ran.
+func evalTryStatement(node *ast.TryStatement, env *object.Environment) object.Object {
+	result := Eval(node.Body, env)
+
+	err, ok := result.(*object.Error)
+	if !ok || err.Uncatchable {
+		return result
+	}
+
+	catchEnv := object.NewEnclosedEnvironment(env)
+	if node.Name != nil {
+		catchEnv.Define(node.Name.Value, errorToHash(err))
+	}
+	return Eval(node.Catch, catchEnv)
+}
+
+// errorToHash is the value a catch block gets for an error.
+func errorToHash(err *object.Error) *object.Hash {
+	prefix := fmt.Sprintf("[line %d, column %d] runtime error: ", err.Line, err.Column)
+
+	hash := object.NewHash()
+	hash.Set(&object.String{Value: "message"}, &object.String{Value: strings.TrimPrefix(err.Message, prefix)})
+	hash.Set(&object.String{Value: "line"}, &object.Integer{Value: int64(err.Line)})
+	hash.Set(&object.String{Value: "column"}, &object.Integer{Value: int64(err.Column)})
+	return hash
 }
 
 // Expressions
@@ -426,8 +469,13 @@ func evalInfixExpression(node *ast.InfixExpression, env *object.Environment) obj
 	if isError(right) {
 		return right
 	}
+	return evalInfixValues(node.Token, node.Operator, left, right)
+}
 
-	switch node.Operator {
+// evalInfixValues applies a binary operator, other than && and ||, to two
+// values already evaluated. tok is where an error is reported.
+func evalInfixValues(tok token.Token, operator string, left, right object.Object) object.Object {
+	switch operator {
 	case "==":
 		return nativeBoolToBooleanObject(looseEquals(left, right))
 	case "!=":
@@ -440,29 +488,29 @@ func evalInfixExpression(node *ast.InfixExpression, env *object.Environment) obj
 
 	switch {
 	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
-		return evalIntegerInfixExpression(node.Token, node.Operator, left.(*object.Integer).Value, right.(*object.Integer).Value)
+		return evalIntegerInfixExpression(tok, operator, left.(*object.Integer).Value, right.(*object.Integer).Value)
 	case isNumber(left) && isNumber(right):
-		return evalFloatInfixExpression(node.Token, node.Operator, toFloat(left), toFloat(right))
+		return evalFloatInfixExpression(tok, operator, toFloat(left), toFloat(right))
 	case left.Type() == object.POINT_OBJ || right.Type() == object.POINT_OBJ:
-		if result, ok := evalPointInfix(node.Token, node.Operator, left, right); ok {
+		if result, ok := evalPointInfix(tok, operator, left, right); ok {
 			return result
 		}
-		return pointInfixError(node.Token, node.Operator, left, right)
+		return pointInfixError(tok, operator, left, right)
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
-		return evalStringInfixExpression(node.Token, node.Operator, left.(*object.String).Value, right.(*object.String).Value)
-	case node.Operator == "*" && left.Type() == object.STRING_OBJ && right.Type() == object.INTEGER_OBJ:
-		return repeatString(node.Token, left.(*object.String).Value, right.(*object.Integer).Value)
-	case node.Operator == "*" && left.Type() == object.INTEGER_OBJ && right.Type() == object.STRING_OBJ:
-		return repeatString(node.Token, right.(*object.String).Value, left.(*object.Integer).Value)
-	case node.Operator == "+" && left.Type() == object.ARRAY_OBJ && right.Type() == object.ARRAY_OBJ:
+		return evalStringInfixExpression(tok, operator, left.(*object.String).Value, right.(*object.String).Value)
+	case operator == "*" && left.Type() == object.STRING_OBJ && right.Type() == object.INTEGER_OBJ:
+		return repeatString(tok, left.(*object.String).Value, right.(*object.Integer).Value)
+	case operator == "*" && left.Type() == object.INTEGER_OBJ && right.Type() == object.STRING_OBJ:
+		return repeatString(tok, right.(*object.String).Value, left.(*object.Integer).Value)
+	case operator == "+" && left.Type() == object.ARRAY_OBJ && right.Type() == object.ARRAY_OBJ:
 		leftElements, rightElements := left.(*object.Array).Elements, right.(*object.Array).Elements
 		elements := make([]object.Object, 0, len(leftElements)+len(rightElements))
 		elements = append(elements, leftElements...)
 		return &object.Array{Elements: append(elements, rightElements...)}
 	case left.Type() != right.Type():
-		return newError(node.Token, "type mismatch: %s %s %s", left.Type(), node.Operator, right.Type())
+		return newError(tok, "type mismatch: %s %s %s", left.Type(), operator, right.Type())
 	default:
-		return newError(node.Token, "unknown operator: %s %s %s", left.Type(), node.Operator, right.Type())
+		return newError(tok, "unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
 }
 
@@ -727,9 +775,21 @@ func equals(left, right object.Object, strict bool) bool {
 func evalAssignExpression(node *ast.AssignExpression, env *object.Environment) object.Object {
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
+		// x += e is x = x + e: x is read first, and must exist.
+		var current object.Object
+		if node.Operator != "" {
+			if current = evalIdentifier(left, env); isError(current) {
+				return current
+			}
+		}
 		value := Eval(node.Value, env)
 		if isError(value) {
 			return value
+		}
+		if node.Operator != "" {
+			if value = evalInfixValues(node.Token, node.Operator, current, value); isError(value) {
+				return value
+			}
 		}
 		if !env.Assign(left.Value, value) {
 			return newError(left.Token, "can't assign to %s: it was never declared, use let %s = ...",
@@ -746,9 +806,21 @@ func evalAssignExpression(node *ast.AssignExpression, env *object.Environment) o
 		if isError(index) {
 			return index
 		}
+		// a[i] += e: a and i are evaluated once, and a[i] is read first.
+		var current object.Object
+		if node.Operator != "" {
+			if current = evalIndexExpression(left.Token, container, index); isError(current) {
+				return current
+			}
+		}
 		value := Eval(node.Value, env)
 		if isError(value) {
 			return value
+		}
+		if node.Operator != "" {
+			if value = evalInfixValues(node.Token, node.Operator, current, value); isError(value) {
+				return value
+			}
 		}
 		return assignIndex(left.Token, container, index, value)
 
@@ -873,13 +945,15 @@ func evalForExpression(node *ast.ForExpression, env *object.Environment) object.
 
 // evalLoopBody runs one round of a loop in a fresh scope. It reports whether
 // the loop must stop, and with which value: null after a break, or the
-// return or error that goes on up.
+// return or error that goes on up. A continue just ends the round.
 func evalLoopBody(body *ast.BlockStatement, env *object.Environment) (object.Object, bool) {
 	result := Eval(body, env)
 
 	switch result.Type() {
 	case object.BREAK_OBJ:
 		return NULL, true
+	case object.CONTINUE_OBJ:
+		return nil, false
 	case object.RETURN_VALUE_OBJ, object.ERROR_OBJ:
 		return result, true
 	}
@@ -896,25 +970,31 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 		if err := countStep(tok); err != nil {
 			return err
 		}
-		if len(args) != len(function.Parameters) {
-			return newError(tok, "wrong number of arguments: want %d, got %d",
-				len(function.Parameters), len(args))
+		if required := requiredParameters(function); len(args) < required || len(args) > len(function.Parameters) {
+			if required == len(function.Parameters) {
+				return newError(tok, "wrong number of arguments: want %d, got %d", required, len(args))
+			}
+			return newError(tok, "wrong number of arguments: want %d to %d, got %d",
+				required, len(function.Parameters), len(args))
 		}
 		if callDepth >= maxCallDepth {
-			return newError(tok, "stack overflow: more than %d nested calls", maxCallDepth)
+			return uncatchable(newError(tok, "stack overflow: more than %d nested calls", maxCallDepth))
 		}
 		if evalDepth >= maxEvalDepth {
-			return newError(tok, "stack overflow: the calls and the code inside them nest too deeply")
+			return uncatchable(newError(tok, "stack overflow: the calls and the code inside them nest too deeply"))
 		}
 
 		env := object.NewEnclosedEnvironment(function.Env)
-		for i, parameter := range function.Parameters {
-			env.Define(parameter.Value, args[i])
+		for i, arg := range args {
+			env.Define(function.Parameters[i].Value, arg)
 		}
 
 		callDepth++
+		defer func() { callDepth-- }()
+		if err := bindDefaults(function, env, len(args)); err != nil {
+			return err
+		}
 		result := evalBlockStatement(function.Body, env)
-		callDepth--
 
 		// A function without return gives the value of its last statement.
 		if returnValue, ok := result.(*object.ReturnValue); ok {
@@ -933,13 +1013,51 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 			if function == builtins["error"] {
 				return newError(tok, "%s", err.Message)
 			}
-			return newError(tok, "%s: %s", function.Name, err.Message)
+			// An error from a function the builtin called (list.sort
+			// with a comparison) keeps being one a try lets through.
+			wrapped := newError(tok, "%s: %s", function.Name, err.Message)
+			wrapped.Uncatchable = err.Uncatchable
+			return wrapped
 		}
 		return result
 
 	default:
 		return newError(tok, "not a function: %s", function.Type())
 	}
+}
+
+// requiredParameters is how many arguments a call must give: the parameters
+// before the first one with a default value.
+func requiredParameters(function *object.Function) int {
+	for i := range function.Parameters {
+		if i < len(function.Defaults) && function.Defaults[i] != nil {
+			return i
+		}
+	}
+	return len(function.Parameters)
+}
+
+// bindDefaults gives the parameters after the first given arguments their
+// default values. Each one is evaluated in the call's own scope, so it can
+// use the parameters before it. It returns the error of a default that fails.
+func bindDefaults(function *object.Function, env *object.Environment, given int) object.Object {
+	for i := given; i < len(function.Parameters); i++ {
+		value := Eval(function.Defaults[i], env)
+		if returned, ok := value.(*object.ReturnValue); ok {
+			value = returned.Value
+		}
+		if isError(value) {
+			return value
+		}
+		env.Define(function.Parameters[i].Value, value)
+	}
+	return nil
+}
+
+// uncatchable marks err as one that a try statement lets through.
+func uncatchable(err *object.Error) *object.Error {
+	err.Uncatchable = true
+	return err
 }
 
 // Data structures

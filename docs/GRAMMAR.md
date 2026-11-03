@@ -11,6 +11,8 @@ statement      = letStatement
                | functionDecl
                | returnStatement
                | breakStatement
+               | continueStatement
+               | tryStatement
                | controlStatement
                | layerStatement
                | expressionStatement
@@ -20,12 +22,15 @@ letStatement        = "let" IDENT "=" expression end ;
 functionDecl        = "function" IDENT "(" [ parameters ] ")" block [ ";" ] ;
 returnStatement     = "return" [ expression ] end ;
 breakStatement      = "break" end ;
+continueStatement   = "continue" end ;
+tryStatement        = "try" block "catch" [ "(" IDENT ")" ] block [ ";" ] ;
 controlStatement    = ( ifExpression | whileExpression | forExpression ) [ ";" ] ;
 layerStatement      = "layer" ( IDENT | STRING ) [ ";" ] { statement } ;
 expressionStatement = expression end ;
 
 block      = "{" { statement } "}" ;
-parameters = IDENT { "," IDENT } ;
+parameters = parameter { "," parameter } ;
+parameter  = IDENT [ "=" expression ] ;
 ```
 
 `end` is not a token. It is a `;`, or nothing when the next token is `}`, the end of the input, or on a later line. That is why `let x = 5 6` is an error while two statements on separate lines are fine.
@@ -37,7 +42,7 @@ The grammar is written by levels, one per row of the precedence table below. The
 ```ebnf
 expression = assignment ;
 
-assignment = logicalOr [ "=" assignment ] ;
+assignment = logicalOr [ ( "=" | "+=" | "-=" | "*=" | "/=" ) assignment ] ;
 logicalOr  = logicalAnd { "||" logicalAnd } ;
 logicalAnd = equality { "&&" equality } ;
 equality   = comparison { ( "==" | "!=" | "===" | "!==" ) comparison } ;
@@ -71,7 +76,7 @@ forExpression   = "for" "(" [ forInit ] ";" [ expression ] ";" [ expression ] ")
 forInit         = letStatement | expressionStatement ;
 ```
 
-The left side of `=` must be an identifier or an index expression. The grammar above allows more, so the parser checks it and rejects things like `1 = 2`. `a.name` is `a["name"]`, the same tree, so it works wherever an index does: `a.b.c`, `a.b[0]`, `a.b(1)`, `f().x` and `a.b = 1`. After the `.` must come an identifier; a keyword, a number or anything else is the syntax error `expected a name after "."`. In a `for`, the `;` after `forInit` is the one that ends that statement.
+The left side of `=`, `+=`, `-=`, `*=` and `/=` must be an identifier or an index expression. The grammar above allows more, so the parser checks it and rejects things like `1 = 2`. `a.name` is `a["name"]`, the same tree, so it works wherever an index does: `a.b.c`, `a.b[0]`, `a.b(1)`, `f().x` and `a.b = 1`. After the `.` must come an identifier; a keyword, a number or anything else is the syntax error `expected a name after "."`. In a `for`, the `;` after `forInit` is the one that ends that statement.
 
 ## Precedence and associativity
 
@@ -79,7 +84,7 @@ From weakest to strongest:
 
 | Level | Operators | Associativity |
 | --- | --- | --- |
-| `ASSIGN` | `=` | right |
+| `ASSIGN` | `=` `+=` `-=` `*=` `/=` | right |
 | `OR` | `\|\|` | left |
 | `AND` | `&&` | left |
 | `EQUALS` | `==` `!=` `===` `!==` | left |
@@ -108,6 +113,8 @@ hex     = digit | "a".."f" | "A".."F" ;
 comment = "-~>" { any character except newline } ;
 ```
 
+`+=`, `-=`, `*=` and `/=` are single tokens, taken before `+`, `-`, `*` and `/` (so `**=`, `//=` and `%=` are still `**`, `//` and `%` followed by `=`, which is a syntax error). Before, `+` followed by `=` was always a syntax error, so no program that worked reads differently.
+
 Whitespace and comments are skipped between tokens. Numbers are always decimal, so `010` is 10.
 
 A float needs digits on both sides of the `.`: `1.5` and `10.0` are floats, `.5` is a `.` and an integer, and `1.` is an integer and a `.`, so `1.x` is dot access on an integer (an error when it runs). `1.5.x` is the float `1.5` and then dot access.
@@ -131,13 +138,26 @@ The `{ statement }` in the rule is the body, and it is measured by columns, not 
 - Inside a `{ }` block (a function body or a loop), a layer works the same way, measured from the column of its own `layer` word and not from the brace.
 - After the name, anything else on the line is the syntax error `a layer is "layer name" alone on its line, got ... after the name`.
 
+## Parameter defaults
+
+A parameter can have a default value, `function t(key, values = null)`, also in function literals. The expression is any expression, up to the `,` or `)`. A parameter without a default can't come after one with a default (`function f(a = 1, b)` is the syntax error `parameter b needs a default value, it comes after one that has it`). A `break` or `continue` inside a default can't reach a loop around the function, like in the body. Before, `=` in a parameter list was a syntax error.
+
+## try and catch
+
+`try` and `catch` are not reserved words. A statement is a try statement when it starts with the identifier `try` followed, on the same line, by `{`. A name followed by a stray `{` was never valid, so every program that worked before reads the same: `let try = 1`, `try + 1`, `try(1)`, `f(try)` and even `if try { ... }` (a variable named `try` as the condition) use `try` as the ordinary identifier it is. The check is only made at the start of a statement, which is why a try is a statement and not an expression: `let x = try { ... }` is not valid. Once a try has begun the `catch` is required (it is read as the word `catch` there, and may start on the line after the `}`), so `catch` is an ordinary name everywhere else too. The name in `catch (e)` is optional: `catch { ... }`. `try` without a `catch` is the syntax error `expected "catch" after the try block, got ...`.
+
+## continue
+
+`continue` is not a reserved word either: a new keyword would stop `let continue = 1` from working. A statement is a continue when it is the identifier `continue` alone, inside the body of a `while` or `for` of the same function: followed by `;`, a `}`, the end of the input, or a new line that does not go on with an operator, `(` or `[` (the same lines that always continued an expression). So `continue + 1`, `continue = 5`, `continue(1)`, `continue.x` and `f(continue)` still use the name. Outside a loop (or in a function defined inside one) a lone `continue` is not special: it is the identifier expression it always was, which reads a variable named `continue` or gives the usual `identifier not found` runtime error. The only changed meaning is a lone `continue` statement inside a loop, which used to be a variable read with no visible effect.
+
 ## Rules that are not in the grammar
 
-- `break` must be inside a `while` or `for` of the same function. Otherwise it is a syntax error.
+- `break` must be inside a `while` or `for` of the same function. Otherwise it is a syntax error. `continue` is only a statement there; elsewhere it is an ordinary name.
 - `return` is allowed outside of a function, where it ends the program. What programs do when they run is in [SEMANTICS.md](SEMANTICS.md).
 - `elif` has no node of its own: it is an `if` inside the `else` block of the previous one.
 - `function add(x) { ... }` builds the same tree as `let add = function(x) { ... };`
 - An `if`, `while` or `for` that starts a statement ends at its closing `}`, so the next line is a new statement. As part of a larger expression they do produce a value: `let x = if (a) { 1 } else { 2 };`
+- `x += e` is `x = x + e` (same for `-`, `*` and `/`) with the target evaluated once; the tree is an assignment with an operator, not a rewritten one.
 - A `{` where an expression is expected is always a hash. There are no standalone blocks.
 - Nesting is limited to 10000 levels, where every expression, block and `if` inside another one counts as a level. That allows around 10000 parentheses or 3000 `if`s inside each other. Deeper code is the syntax error `the program is nested too deeply`, because the parser and the evaluator call themselves once per level and would otherwise crash.
 

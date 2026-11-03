@@ -14,13 +14,16 @@ statement   = "let" IDENT "=" expression end
             | "function" IDENT "(" [ params ] ")" block [ ";" ]
             | "return" [ expression ] end
             | "break" end
+            | "continue" end
+            | "try" block "catch" [ "(" IDENT ")" ] block [ ";" ]
             | ( ifExpr | whileExpr | forExpr ) [ ";" ]
             | expression end
             | ";" ;
 block       = "{" { statement } "}" ;
-params      = IDENT { "," IDENT } ;
+params      = param { "," param } ;
+param       = IDENT [ "=" expression ] ;
 
-expression  = logicalOr [ "=" expression ] ;            (* right associative *)
+expression  = logicalOr [ ( "=" | "+=" | "-=" | "*=" | "/=" ) expression ] ;   (* right associative *)
 logicalOr   = logicalAnd { "||" logicalAnd } ;
 logicalAnd  = equality { "&&" equality } ;
 equality    = comparison { ( "==" | "!=" | "===" | "!==" ) comparison } ;
@@ -81,6 +84,8 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 - **Block scopes.** Every block and every function call gets a new `Environment` linked to the one around it:
   - `let` creates a variable in the current scope, hiding outer ones with the same name;
   - `=` changes the closest existing variable, and assigning to an undeclared name is an error, which catches typos.
+- **Errors can be caught, the host's limits cannot.** `try`/`catch` catches any runtime error, but the step limit and the stack overflows are marked `Uncatchable` on the error and go through every `try`: they exist to protect the host, and a program that could swallow them could loop forever in a `catch`.
+- **Contextual words, no new keywords.** `try`, `catch` and `continue` are plain identifiers that the parser reads as statements only in the one shape that was invalid before (see section 7), so no program loses a variable by the name.
 - **Closures.** A function value keeps the environment where it was created, so it can read and change those variables later.
 - **Indentation for layers, braces for code.** Code blocks are closed by braces, and only `layer` bodies are closed by indentation, measured by the column of the first token of each statement with the positions the parser already has (no INDENT or DEDENT tokens). Mixing the two works: a layer inside a function body is measured from the `layer` word, not from the brace, and a tab counts as one column, so a file should not mix tabs and spaces in the same layer.
 - **Two equalities.** `===` requires the same type and value. `==` first converts booleans and numeric strings to numbers, so `"5" == 5`. Arrays and hashes compare by content.
@@ -104,6 +109,9 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 - In the REPL, an `if` without `else` runs once the next line shows it is complete, or after an empty line.
 - Nesting is limited to 10000 levels in the source, and recursion to 10000 calls.
 - A layer is closed by indentation, so the REPL, which reads one line at a time, runs a `layer` typed there as an empty layer.
+- In the REPL, a `try` block is run as soon as its line is complete, so the `catch` must start on the same line as the closing `}` (`} catch (e) {`); in a file it can be on the next one.
+- `try` is a statement, not an expression: `let x = try { ... } catch { ... }` is a syntax error. Its value is only seen as the last statement of a function or block.
+- A lone `continue` statement inside a loop is a `continue`, so a variable of that name used as a lone statement there (which did nothing) no longer does. Outside a loop it is the plain name, as before.
 - An infinite loop runs forever unless the host sets `evaluator.MaxSteps`; in the REPL, stop it with Ctrl+C.
 
 ## 5. Testing
@@ -149,3 +157,8 @@ Phases 1 to 4 follow the course's reference interpreter, and that foundation sta
 | 2026-11-02 | `null` value | `null` could only come out of things; writing it was "identifier not found". | The name `null` is resolved by the evaluator after variables and builtins (and before the libraries) to the one NULL object, so `let null = 5` keeps working. `type(null)` is `NULL`; equality and truthiness are as before. No new token or AST node. |
 | 2026-11-02 | `error(message)` and error positions | A library written in lizard needs to report misuse, and a host needs to show it at the user's line. | Builtin `error(message)`: a runtime error whose text is the message (non-strings as `str` shows them), at the position of the call, without the `error:` builtin prefix other builtin errors get. `object.Error` gains `Line` and `Column` ints (filled by `newError`, 0 otherwise); `Message` is unchanged. |
 | 2026-11-02 | `Steps()` and `SetSteps(n)` | A host that runs a user's program (with a step limit) from inside its own program needs to save the step count, run the inner one after `ResetSteps()`, and put the count back. | Evaluator: exported `Steps()` (steps since the last reset) and `SetSteps(n)` (restores a saved count). Nothing else changes: no token, AST or builtin, and the limit works as before. |
+| 2026-11-02 | Default parameter values | A library function like `t(key, values = null)` should not need every caller to pass every argument. | Parser: a parameter may be followed by `=` and an expression (a syntax error before); a parameter without a default after one with a default is the syntax error `parameter b needs a default value, it comes after one that has it`. AST: `FunctionLiteral.Defaults` (one entry per parameter, nil when none have one) and the same field on `object.Function`; both `String`/`Inspect` print `b = 2`. Evaluator: at each call, missing arguments are filled left to right by evaluating their default in the call's own scope, so `b = a * 2` sees `a`; fewer arguments than the parameters without a default, or more than all parameters, stays the `wrong number of arguments` error (`want 1 to 2, got 0` when defaults exist, the old text otherwise). No new token. |
+| 2026-11-02 | `try` / `catch` | A library or an editor must survive a failing user function and show its message instead of stopping. | No new token or reserved word. The parser reads a statement that starts with the identifier `try` followed on the same line by `{` as a try statement (`try {` was a syntax error before, so nothing that worked changes; `try` as a variable, a call or a condition keeps working, and `catch` is read as a word only right after the try block, where it is required). AST `TryStatement{Body, Name, Catch}`; `catch (e)` name optional. Evaluator: a runtime error from the body runs the catch block in a new scope with `e` as the HASH `{"message", "line", "column"}` (message without the position prefix); `return`, `break` and `continue` pass through; the value is the one of the block that ran. `object.Error` gains `Uncatchable`, set on the step limit and the stack overflows (and kept when a builtin like `list.sort` re-reports an error from the function it called), which a try never catches. |
+| 2026-11-02 | `continue` | Skipping a round with a nested `if` is noisy, and `break` already existed. | No new token or keyword: a new keyword would break a program with a variable called `continue`, so the parser reads a statement made only of the identifier `continue` (followed by `;`, `}`, the end of the input or a line that does not go on with an operator, `(` or `[`) as a continue; `continue + 1`, `continue = 1`, `continue(1)`, `f(continue)` and `let continue = 1` keep their meaning. It is only read that way inside a loop body of the same function; outside one (or in a function inside a loop) it stays the identifier it was, so it reads a variable or gives `identifier not found`. The only changed meaning is a lone `continue` statement inside a loop, which used to be a variable read with no visible effect. AST `ContinueStatement`; value `object.Continue` (type `CONTINUE`) that goes up to the innermost loop, which goes on with its next round (in a `for` the update still runs). |
+| 2026-11-02 | Compound assignment | `count = count + 1` and `list[i] = list[i] + 1` repeat the target and, for `a[f()]`, would run it twice. | Lexer: tokens `+=`, `-=`, `*=`, `/=` (`PLUS_ASSIGN` and kin), taken before `+ - * /`; each was a syntax error before (an operator followed by `=`), and `**=`, `//=`, `%=` still are. Parser: they are infix at `ASSIGN` precedence, right associative, with the same targets as `=`. AST: `AssignExpression` gains `Operator` (`""` for `=`, otherwise `+ - * /`). Evaluator: the target's container and index are evaluated once, the current value is read first (an unknown name is `identifier not found`, a missing item reads as `null`), the right side is evaluated, the operator is applied by the same code as `x + e` (the infix evaluation was split in two to share it), and the result is stored. |
+| 2026-11-02 | `math.asin` and `math.acos` | Angles from a ratio (a slope, a dot product) need the inverses of `sin` and `cos`. | Two more builtins in the `math` hash (`math.asin(x)`, `math.acos(x)`, radians, as floats); an `x` outside -1 to 1 is an argument error like `math.sqrt(-1)`. No new token or AST node. |

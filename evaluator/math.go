@@ -40,6 +40,8 @@ func mathLibrary() *object.Hash {
 		"sin":    floatFunction(math.Sin),
 		"cos":    floatFunction(math.Cos),
 		"tan":    floatFunction(math.Tan),
+		"asin":   inverseFunction("asin", math.Asin),
+		"acos":   inverseFunction("acos", math.Acos),
 		"sqrt":   mathSqrt,
 		"atan2":  mathAtan2,
 		"abs":    mathAbs,
@@ -92,6 +94,21 @@ func floatFunction(f func(float64) float64) object.BuiltinFunction {
 		numbers, err := numberArguments(args, 1)
 		if err != nil {
 			return err
+		}
+		return finite(f(numbers[0]))
+	}
+}
+
+// inverseFunction makes math.asin or math.acos: a builtin of one number that
+// must be from -1 to 1, which gives an angle in radians as a float.
+func inverseFunction(name string, f func(float64) float64) object.BuiltinFunction {
+	return func(args ...object.Object) object.Object {
+		numbers, err := numberArguments(args, 1)
+		if err != nil {
+			return err
+		}
+		if numbers[0] < -1 || numbers[0] > 1 {
+			return argError("can't take the %s of a number outside -1 to 1: %s", name, args[0].Inspect())
 		}
 		return finite(f(numbers[0]))
 	}

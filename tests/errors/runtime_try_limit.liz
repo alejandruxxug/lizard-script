@@ -1,0 +1,3 @@
+-~> The step limit and stack overflows are not caught.
+function again(n) { again(n + 1) }
+try { again(0) } catch (e) { puts("caught?") }

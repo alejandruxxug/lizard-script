@@ -79,6 +79,10 @@ func TestIsIncomplete(t *testing.T) {
 		{"1 -~> comment {", false},
 		{"if (a) { 1 } else", true},
 		{"let", true},
+		{"x +=", true},
+		{"x /=", true},
+		{"x += 1", false},
+		{"try { 1 } catch (e) {", true},
 	}
 
 	for _, tt := range tests {

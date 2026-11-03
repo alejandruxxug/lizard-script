@@ -1,0 +1,2 @@
+puts(math.acos(1))
+puts(math.acos(2))

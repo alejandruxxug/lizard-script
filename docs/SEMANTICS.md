@@ -30,6 +30,7 @@ Conditions accept any value. `false`, `null`, `0`, `0.0`, `""`, `[]` and `{}` co
 
 - `let x = ...` creates `x` in the current scope. If an outer scope already has an `x`, it is hidden, not changed. Writing `let` twice in the same scope replaces the old value.
 - `x = ...` changes the closest `x` that already exists, so a function can change a variable of the scope it was created in. Assigning to a name that was never declared is an error.
+- `x += e`, `x -= e`, `x *= e` and `x /= e` mean `x = x + e` and so on, with the same rules: `x` must exist, it is read before `e` runs, and the operator follows the rules of the types (`s += "a"` joins strings, `list += [1]` joins arrays, `s *= 2` repeats a string). They also work on items: `a[i] += e` and `h.n += e` evaluate `a`, `i` and `h` once, then read the item, apply the operator and store the result, so a missing item (which reads as `null`) is a type error, not a silent zero. The value of the expression is the new value.
 - Each block (`{ ... }` of an `if`, a loop round or a function call) is a new scope. Variables created inside it are gone after it ends.
 - The `let` in a `for` header lives in a scope of its own that wraps the whole loop. Each round of the body gets a fresh scope inside it.
 - A name is looked up from the innermost scope outwards, and then among the builtins. That means a variable can hide a builtin: `let len = 5`.
@@ -83,12 +84,15 @@ Equality never fails, whatever the types.
 ## Control flow
 
 - `if` produces the value of the block that ran, or `null` if none did.
-- `while` and `for` produce `null`. `break` leaves the innermost loop.
+- `while` and `for` produce `null`. `break` leaves the innermost loop. `continue` skips the rest of the current round of the innermost loop and goes on with the next one: in a `for` the update part still runs, in a `while` the condition is checked again. Both can sit inside blocks, layers and `try` statements of the loop.
+- `try { ... } catch (e) { ... }` runs the first block. If a runtime error stops it (any error: a failed operation, a builtin, `error(...)`, a function called from the block), the rest of the block is skipped and the second block runs, with `e` holding a hash with `"message"` (the text of the error without the `[line, column] runtime error:` start), `"line"` and `"column"` (where it happened, integers). The name is a variable of the catch block only, and `catch { ... }` has none. Each block has its own scope. The statement has the value of the block that ran, so it can be the last statement of a function. `return`, `break` and `continue` in either block work as if the try was not there. An error inside the catch block is not caught by the same try, but an outer try catches it.
+- The errors that protect a host are never caught: the step limit (`the program ran too long`) and the stack overflows, also when they happen inside a builtin that called a function, like `list.sort`. They go up through every `try` and stop the program.
 - A block, and a function body, produces the value of its last statement.
 
 ## Functions
 
-- Calling a function with a different number of arguments than it has parameters is an error.
+- Calling a function with a different number of arguments than it has parameters is an error, except for parameters with a default value.
+- A parameter can have a default: `function f(a, b = a * 2)`. When the call gives fewer arguments, each missing parameter gets its default, worked out at that call, in the scope of the function, from left to right, so it can use the parameters before it (not the ones after) and the variables around the function. `[]` as a default is a new list at each call. An error in a default is an error of the call. A call that leaves out a parameter without a default, or gives more arguments than parameters, is the error `wrong number of arguments: want 1 to 2, got 0` (`want 1, got 0` when no parameter has a default).
 - A function remembers the scope it was created in (it is a closure), and sees the changes made to it later.
 - A function without `return` gives the value of its last statement. A bare `return` gives `null`.
 - `return` outside of a function ends the program. Its value is the value of the program, which the REPL shows.
@@ -174,6 +178,7 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break and `\t` is 
 | `math.pi`, `math.tau` | π and 2π, as floats. |
 | `math.sin(x)`, `math.cos(x)`, `math.tan(x)` | As a float. |
 | `math.atan2(y, x)` | The angle of the point `(x, y)`, as a float. |
+| `math.asin(x)`, `math.acos(x)` | The angle in radians whose sine or cosine is `x`, as a float. `x` must be from -1 to 1, otherwise it is an error like `sqrt(-1)`. |
 | `math.sqrt(x)` | The square root, as a float. A negative `x` is an error. |
 | `math.abs(x)` | Without the sign. An integer for an integer, a float for a float. |
 | `math.floor(x)`, `math.ceil(x)`, `math.round(x)` | An integer. `round` goes away from zero on halves: `math.round(2.5)` is `3`, `math.round(-2.5)` is `-3`. An integer is returned as it is, and a float too big for an integer is an error. |
@@ -241,7 +246,7 @@ A runtime error stops the program. Its message has the position of the operator,
 [line 2, column 8] runtime error: type mismatch: INTEGER + BOOLEAN
 ```
 
-`object.Error` also has `Line` and `Column` fields with the same position, so a host can tell where an error was raised (for example by `error(...)` inside a library function) and show it at another line.
+A `try` statement can catch it and read the message, line and column (see Control flow). `object.Error` also has `Line` and `Column` fields with the same position, so a host can tell where an error was raised (for example by `error(...)` inside a library function) and show it at another line, and an `Uncatchable` flag, true for the step limit and stack overflow errors, which a `try` lets through.
 
 Syntax errors are found before the program starts, so a program with one doesn't run at all.
 

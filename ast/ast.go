@@ -94,6 +94,40 @@ func (bs *BreakStatement) statementNode()       {}
 func (bs *BreakStatement) TokenLiteral() string { return bs.Token.Literal }
 func (bs *BreakStatement) String() string       { return bs.TokenLiteral() + ";" }
 
+// ContinueStatement skips the rest of the current round of the innermost
+// loop: continue;
+// The parser only accepts it inside a while or for body. In the source it is
+// the plain name "continue", not a keyword, so a variable of that name works
+// everywhere else.
+type ContinueStatement struct {
+	Token token.Token // the "continue" name
+}
+
+func (cs *ContinueStatement) statementNode()       {}
+func (cs *ContinueStatement) TokenLiteral() string { return cs.Token.Literal }
+func (cs *ContinueStatement) String() string       { return cs.TokenLiteral() + ";" }
+
+// TryStatement runs Body and, if a runtime error stops it, runs Catch with
+// the error bound to Name: try { ... } catch (e) { ... }
+// Name is nil for "catch { ... }". In the source "try" and "catch" are plain
+// names, only read as a try statement in the place described in the parser.
+type TryStatement struct {
+	Token token.Token // the "try" name
+	Body  *BlockStatement
+	Name  *Identifier // nil when the catch has no name
+	Catch *BlockStatement
+}
+
+func (ts *TryStatement) statementNode()       {}
+func (ts *TryStatement) TokenLiteral() string { return ts.Token.Literal }
+func (ts *TryStatement) String() string {
+	catch := "catch "
+	if ts.Name != nil {
+		catch += "(" + ts.Name.String() + ") "
+	}
+	return "try " + ts.Body.String() + " " + catch + ts.Catch.String()
+}
+
 // ExpressionStatement lets an expression stand alone as a statement, because
 // a program is a list of statements: add(1, 2);
 type ExpressionStatement struct {
@@ -282,16 +316,19 @@ func (ie *InfixExpression) String() string {
 // AssignExpression changes something that already exists: x = 1, list[0] = 2
 // Left is always an Identifier or an IndexExpression, the parser rejects
 // anything else. It is an expression so it can be the update of a for loop.
+// For x += 1 the Operator is "+" (also "-", "*" and "/"), and it means
+// x = x + 1 with the target evaluated once. It is "" for a plain '='.
 type AssignExpression struct {
-	Token token.Token // the '=' token
-	Left  Expression
-	Value Expression
+	Token    token.Token // the '=' token, or '+=' and its kin
+	Left     Expression
+	Operator string
+	Value    Expression
 }
 
 func (ae *AssignExpression) expressionNode()      {}
 func (ae *AssignExpression) TokenLiteral() string { return ae.Token.Literal }
 func (ae *AssignExpression) String() string {
-	return "(" + ae.Left.String() + " = " + ae.Value.String() + ")"
+	return "(" + ae.Left.String() + " " + ae.Operator + "= " + ae.Value.String() + ")"
 }
 
 // Control flow
@@ -366,9 +403,14 @@ func (fe *ForExpression) String() string {
 // FunctionLiteral defines a function: function(a, b) { return a + b; }
 // Functions are values, so they have no name of their own: a name comes from
 // the LetStatement that stores them.
+//
+// Defaults has one entry per parameter: the expression of its default value,
+// or nil for a parameter without one. It is nil when no parameter has a
+// default.
 type FunctionLiteral struct {
 	Token      token.Token // the FUNCTION token
 	Parameters []*Identifier
+	Defaults   []Expression
 	Body       *BlockStatement
 }
 
@@ -376,10 +418,18 @@ func (fl *FunctionLiteral) expressionNode()      {}
 func (fl *FunctionLiteral) TokenLiteral() string { return fl.Token.Literal }
 func (fl *FunctionLiteral) String() string {
 	params := []string{}
-	for _, p := range fl.Parameters {
-		params = append(params, p.String())
+	for i, p := range fl.Parameters {
+		params = append(params, ParameterString(p, fl.Defaults, i))
 	}
 	return fl.TokenLiteral() + "(" + strings.Join(params, ", ") + ") " + fl.Body.String()
+}
+
+// ParameterString writes parameter i the way the source does: "b" or "b = 2".
+func ParameterString(parameter *Identifier, defaults []Expression, i int) string {
+	if i < len(defaults) && defaults[i] != nil {
+		return parameter.String() + " = " + defaults[i].String()
+	}
+	return parameter.String()
 }
 
 // CallExpression calls a function: add(1, 2 * 3)

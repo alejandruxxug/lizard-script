@@ -31,6 +31,7 @@ const (
 	// Internal values, never stored in a variable.
 	RETURN_VALUE_OBJ = "RETURN_VALUE"
 	BREAK_OBJ        = "BREAK"
+	CONTINUE_OBJ     = "CONTINUE"
 	ERROR_OBJ        = "ERROR"
 )
 
@@ -311,15 +312,18 @@ func inspectNested(root Object) string {
 // created, which is how it remembers the variables around it (a closure).
 type Function struct {
 	Parameters []*ast.Identifier
-	Body       *ast.BlockStatement
-	Env        *Environment
+	// Defaults has one entry per parameter, nil for one without a default
+	// value; it is nil when none has one. They run at each call.
+	Defaults []ast.Expression
+	Body     *ast.BlockStatement
+	Env      *Environment
 }
 
 func (f *Function) Type() ObjectType { return FUNCTION_OBJ }
 func (f *Function) Inspect() string {
 	params := []string{}
-	for _, p := range f.Parameters {
-		params = append(params, p.String())
+	for i, p := range f.Parameters {
+		params = append(params, ast.ParameterString(p, f.Defaults, i))
 	}
 	return "function(" + strings.Join(params, ", ") + ") " + f.Body.String()
 }
@@ -352,12 +356,22 @@ type Break struct{}
 func (b *Break) Type() ObjectType { return BREAK_OBJ }
 func (b *Break) Inspect() string  { return "break" }
 
+// Continue travels up from a continue statement to the innermost loop, which
+// goes on with its next round.
+type Continue struct{}
+
+func (c *Continue) Type() ObjectType { return CONTINUE_OBJ }
+func (c *Continue) Inspect() string  { return "continue" }
+
 // Error is a runtime error. It stops the program as it travels up.
 type Error struct {
 	Message string
 	// Line and Column are where the error happened, the same numbers that
 	// are in Message. They are 0 for an error that has no position yet.
 	Line, Column int
+	// Uncatchable marks the errors that protect the host: the step limit
+	// and the stack overflows. A try statement lets them go through.
+	Uncatchable bool
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
