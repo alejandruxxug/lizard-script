@@ -55,6 +55,19 @@ func ResetSteps() {
 	steps = 0
 }
 
+// Steps returns how many steps have been counted since the last ResetSteps.
+// Steps are only counted while MaxSteps is above 0.
+func Steps() int {
+	return steps
+}
+
+// SetSteps puts the step count back to n. A host that runs a program inside
+// another one saves Steps(), runs with ResetSteps(), and restores the count
+// with SetSteps when it is done.
+func SetSteps(n int) {
+	steps = n
+}
+
 // countStep takes one step. It returns an error at tok once the program has
 // gone over MaxSteps, and nil otherwise.
 func countStep(tok token.Token) *object.Error {

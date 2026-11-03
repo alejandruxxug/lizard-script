@@ -251,8 +251,10 @@ Syntax errors are found before the program starts, so a program with one doesn't
 
 ## Step limit (for hosts)
 
-`evaluator.MaxSteps` is the most steps a run can take. Its default, 0, means no limit. A step is one round of a `while` or `for` loop, or one function call (builtins included). The host sets `MaxSteps` and calls `evaluator.ResetSteps()` before each run; the REPL and `Run` reset it themselves. Past the limit the program stops with a runtime error at the loop or call:
+`evaluator.MaxSteps` is the most steps a run can take. Its default, 0, means no limit. A step is one round of a `while` or `for` loop, or one function call (builtins included). The host sets `MaxSteps` and calls `evaluator.ResetSteps()` before each run; the REPL and `Run` reset it themselves. Steps are only counted while `MaxSteps` is above 0. Past the limit the program stops with a runtime error at the loop or call:
 
 ```
 [line 1, column 1] runtime error: the program ran too long (more than 1000 steps)
 ```
+
+A host that runs one program from inside another (a user's drawing from inside its own UI code) reads and restores the count: `evaluator.Steps()` returns the steps counted since the last reset, and `evaluator.SetSteps(n)` sets the count to `n`. Save `Steps()`, call `ResetSteps()` for the inner run, then `SetSteps(saved)` so the outer program carries on from where it was, still under the same limit.

@@ -540,6 +540,64 @@ func TestStepLimitOff(t *testing.T) {
 	})
 }
 
+func TestStepsCount(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int
+	}{
+		{"1 + 1", 0},
+		{"let i = 0; while (i < 5) { i = i + 1 }", 6},
+		{"for (let i = 0; i < 7; i = i + 1) {}", 8},
+		{"function f() { 1 } f(); f(); f()", 3},
+		{"len(\"a\")", 1},
+	}
+	for _, tt := range tests {
+		withMaxSteps(1000, func() {
+			run(t, tt.input)
+			if got := Steps(); got != tt.expected {
+				t.Errorf("input %q - expected %d steps, got %d", tt.input, tt.expected, got)
+			}
+		})
+	}
+
+	// With no limit set, nothing is counted.
+	ResetSteps()
+	run(t, "let i = 0; while (i < 5) { i = i + 1 }")
+	if got := Steps(); got != 0 {
+		t.Errorf("expected 0 steps with no limit, got %d", got)
+	}
+}
+
+func TestSetSteps(t *testing.T) {
+	withMaxSteps(100, func() {
+		// A loop of n rounds takes n+1 steps (the last check of the condition
+		// counts too). An outer run, then a nested run that resets, then a restore.
+		run(t, "let i = 0; while (i < 30) { i = i + 1 }")
+		saved := Steps()
+		if saved != 31 {
+			t.Fatalf("expected 31 saved steps, got %d", saved)
+		}
+		ResetSteps()
+		run(t, "let i = 0; while (i < 10) { i = i + 1 }")
+		if got := Steps(); got != 11 {
+			t.Errorf("nested run: expected 11 steps, got %d", got)
+		}
+		SetSteps(saved)
+		if got := Steps(); got != 31 {
+			t.Errorf("after SetSteps: expected 31 steps, got %d", got)
+		}
+
+		// The count carries on from the restored value: 31 + 51 is fine,
+		// but 31 + 81 is over the limit of 100.
+		checkAll(t, []expectation{{"let i = 0; while (i < 50) { i = i + 1 }; i", "50"}})
+		SetSteps(saved)
+		result := run(t, "let i = 0; while (i < 80) { i = i + 1 }")
+		if !isError(result) || !strings.Contains(result.Inspect(), "ran too long") {
+			t.Errorf("expected the step limit after a restore, got %s", result.Inspect())
+		}
+	})
+}
+
 // TestStepLimitRecovers checks that a recursion that never ends is
 // stopped by the step limit when it is lower than the call limit, and that
 // the depth counters are back to zero afterwards.
