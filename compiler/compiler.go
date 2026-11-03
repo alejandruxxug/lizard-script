@@ -1,0 +1,214 @@
+// Package compiler turns a parsed program into bytecode (package code) for
+// the VM (package vm). The VM must do exactly what the evaluator does, so
+// the compiler follows the evaluator's rules rather than simpler ones; the
+// two places where that takes care are explained where they are done:
+// names and scopes in scopes.go, return, break and continue in signals.go.
+//
+// One file per part: this one has the compiler's state and the emitting of
+// instructions and table entries; functions.go the program and functions,
+// statements.go and expressions.go each kind of node.
+package compiler
+
+import (
+	"fmt"
+	"lizardscript/ast"
+	"lizardscript/code"
+	"lizardscript/object"
+	"lizardscript/token"
+	"math"
+)
+
+// Compile compiles program. The error only happens for programs beyond the
+// limits of the bytecode (more than 2^32 of something).
+func Compile(program *ast.Program) (unit *code.Unit, err error) {
+	c := &Compiler{
+		unit:      &code.Unit{},
+		integers:  map[int64]int{},
+		strings:   map[string]int{},
+		floats:    map[uint64]int{},
+		statement: map[ast.Statement]int{},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			failure, ok := r.(compileError)
+			if !ok {
+				panic(r)
+			}
+			unit, err = nil, failure
+		}
+	}()
+	c.unit.Main = c.compileProgram(program)
+	return c.unit, nil
+}
+
+// compileError stops compiling a program that doesn't fit the bytecode.
+type compileError string
+
+func (e compileError) Error() string { return string(e) }
+
+// Compiler holds the unit being built and the function being compiled.
+type Compiler struct {
+	unit *code.Unit
+	fs   *funcState
+
+	// The constants already in the unit, so each is stored once.
+	integers  map[int64]int
+	strings   map[string]int
+	floats    map[uint64]int
+	statement map[ast.Statement]int
+}
+
+// funcState is one function being compiled (the program is one too).
+type funcState struct {
+	parent *funcState
+	ins    []byte
+	count  int // instructions emitted, a bound for MaxStack
+
+	scope     *scope
+	nextSlot  int
+	numLocals int
+
+	// free lists where each captured variable comes from, in the order of
+	// the closure's Free cells.
+	free      []code.Capture
+	freeIndex map[*symbol]int
+
+	// targets are the constructs a return, break or continue can stop at,
+	// innermost last, and open the layers and trys open right now, which a
+	// jump out of them must close.
+	targets []*target
+	open    []openKind
+
+	// stubs are the signal checks whose code goes at the end.
+	stubs []stub
+}
+
+// label is a place in the code that jumps go to, maybe not known yet.
+type label struct {
+	at   int
+	uses []int // the operands waiting for it
+}
+
+// Emitting code
+
+func (c *Compiler) emit(op code.Opcode, operands ...int) int {
+	for _, o := range operands {
+		if o < 0 || o > math.MaxUint32 {
+			panic(compileError("the program is too big to compile"))
+		}
+	}
+	fs := c.fs
+	at := len(fs.ins)
+	fs.ins = append(fs.ins, code.Make(op, operands...)...)
+	fs.count++
+	return at
+}
+
+// operandAt is where operand i of the instruction at `at` starts. All
+// operands that point somewhere are 4 bytes.
+func operandAt(at, i int) int {
+	return at + 1 + 4*i
+}
+
+func (c *Compiler) newLabel() *label {
+	return &label{at: -1}
+}
+
+// place puts l here and fills the jumps that were waiting for it.
+func (c *Compiler) place(l *label) {
+	l.at = len(c.fs.ins)
+	for _, use := range l.uses {
+		c.patch(use, l.at)
+	}
+	l.uses = nil
+}
+
+func (c *Compiler) patch(operand, value int) {
+	ins := c.fs.ins
+	ins[operand] = byte(value >> 24)
+	ins[operand+1] = byte(value >> 16)
+	ins[operand+2] = byte(value >> 8)
+	ins[operand+3] = byte(value)
+}
+
+// point fills operand i of the instruction at `at` with l, now or once l is
+// placed.
+func (c *Compiler) point(at, i int, l *label) {
+	operand := operandAt(at, i)
+	if l.at >= 0 {
+		c.patch(operand, l.at)
+		return
+	}
+	l.uses = append(l.uses, operand)
+}
+
+// jump emits a jump instruction whose only operand is l.
+func (c *Compiler) jump(op code.Opcode, l *label) {
+	at := c.emit(op, 0)
+	c.point(at, 0, l)
+}
+
+// Tables
+
+func (c *Compiler) token(tok token.Token) int {
+	c.unit.Tokens = append(c.unit.Tokens, tok)
+	return len(c.unit.Tokens) - 1
+}
+
+func (c *Compiler) node(n ast.Node) int {
+	c.unit.Nodes = append(c.unit.Nodes, n)
+	return len(c.unit.Nodes) - 1
+}
+
+func (c *Compiler) statementIndex(st ast.Statement) int {
+	if i, ok := c.statement[st]; ok {
+		return i
+	}
+	c.unit.Statements = append(c.unit.Statements, st)
+	c.statement[st] = len(c.unit.Statements) - 1
+	return len(c.unit.Statements) - 1
+}
+
+func (c *Compiler) constant(obj object.Object) int {
+	c.unit.Constants = append(c.unit.Constants, obj)
+	return len(c.unit.Constants) - 1
+}
+
+func (c *Compiler) integer(value int64) int {
+	if i, ok := c.integers[value]; ok {
+		return i
+	}
+	i := c.constant(&object.Integer{Value: value})
+	c.integers[value] = i
+	return i
+}
+
+func (c *Compiler) str(value string) int {
+	if i, ok := c.strings[value]; ok {
+		return i
+	}
+	i := c.constant(&object.String{Value: value})
+	c.strings[value] = i
+	return i
+}
+
+func (c *Compiler) float(value float64) int {
+	bits := math.Float64bits(value)
+	if i, ok := c.floats[bits]; ok {
+		return i
+	}
+	i := c.constant(&object.Float{Value: value})
+	c.floats[bits] = i
+	return i
+}
+
+func (c *Compiler) name(n code.Name) int {
+	c.unit.Names = append(c.unit.Names, n)
+	return len(c.unit.Names) - 1
+}
+
+// fail emits an error the program reports when it gets here.
+func (c *Compiler) fail(tok token.Token, format string, args ...any) {
+	c.unit.Failures = append(c.unit.Failures, code.Failure{Token: tok, Message: fmt.Sprintf(format, args...)})
+	c.emit(code.OpFail, len(c.unit.Failures)-1)
+}

@@ -2,6 +2,7 @@
 //
 //	lizardscript              starts the REPL
 //	lizardscript program.liz  runs a file
+//	lizardscript --vm program.liz  runs a file on the bytecode VM
 package main
 
 import (
@@ -27,8 +28,25 @@ func main() {
 			os.Exit(1)
 		}
 
+	case 3:
+		if os.Args[1] != "--vm" {
+			usage()
+		}
+		source, err := os.ReadFile(os.Args[2])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if !repl.RunVM(string(source), os.Stdout, os.Stderr) {
+			os.Exit(1)
+		}
+
 	default:
-		fmt.Fprintln(os.Stderr, "usage: lizardscript [file]")
-		os.Exit(2)
+		usage()
 	}
+}
+
+func usage() {
+	fmt.Fprintln(os.Stderr, "usage: lizardscript [--vm] [file]")
+	os.Exit(2)
 }

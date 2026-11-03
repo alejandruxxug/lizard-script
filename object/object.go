@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"lizardscript/ast"
+	"lizardscript/token"
 	"math"
 	"strconv"
 	"strings"
@@ -379,6 +380,20 @@ func (f *Function) Inspect() string {
 		params = append(params, ast.ParameterString(p, f.Defaults, i))
 	}
 	return "function(" + strings.Join(params, ", ") + ") " + f.Body.String()
+}
+
+// Callable is a function value that another engine runs, like the closures
+// of the bytecode VM (package vm). It has the type FUNCTION and shows its
+// source like a Function. The evaluator calls it where it would call a
+// Function, so builtins that take a function (list.sort) work with both.
+type Callable interface {
+	Object
+	// ParameterCount is the number of parameters, defaults included.
+	ParameterCount() int
+	// Call runs the function with args, as a call at tok: it counts the
+	// step, checks the arguments and the call depth, and returns the value
+	// or an *Error, like a call of a Function.
+	Call(tok token.Token, args []Object) Object
 }
 
 // BuiltinFunction is the Go code behind a builtin. It returns an *Error

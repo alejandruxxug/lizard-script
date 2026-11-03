@@ -220,12 +220,17 @@ func numberLess(x, y object.Object) bool {
 // sortWith sorts using a lizard function. An error inside it stops the sort
 // and is the result.
 func sortWith(out *object.Array, less object.Object) object.Object {
-	function, ok := less.(*object.Function)
-	if !ok {
+	var parameters int
+	switch function := less.(type) {
+	case *object.Function:
+		parameters = len(function.Parameters)
+	case object.Callable:
+		parameters = function.ParameterCount()
+	default:
 		return argError("argument 2 must be a function, got %s", less.Type())
 	}
-	if len(function.Parameters) != 2 {
-		return argError("the comparison function must take 2 parameters, it takes %d", len(function.Parameters))
+	if parameters != 2 {
+		return argError("the comparison function must take 2 parameters, it takes %d", parameters)
 	}
 
 	var failure object.Object
@@ -233,7 +238,7 @@ func sortWith(out *object.Array, less object.Object) object.Object {
 		if failure != nil {
 			return false
 		}
-		result := applyFunction(token.Token{}, function, []object.Object{out.Elements[i], out.Elements[j]})
+		result := applyFunction(token.Token{}, less, []object.Object{out.Elements[i], out.Elements[j]})
 		if isError(result) {
 			failure = result
 			return false

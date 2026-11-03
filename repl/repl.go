@@ -12,6 +12,7 @@ import (
 	"lizardscript/object"
 	"lizardscript/parser"
 	"lizardscript/token"
+	"lizardscript/vm"
 	"strings"
 )
 
@@ -123,6 +124,25 @@ func Run(source string, out, errOut io.Writer) bool {
 	evaluator.Output = out
 	evaluator.ResetMath()
 	if err, ok := evaluator.Eval(program, object.NewEnvironment()).(*object.Error); ok {
+		fmt.Fprintln(errOut, err.Message)
+		return false
+	}
+	return true
+}
+
+// RunVM is Run on the bytecode VM (package vm) instead of the evaluator.
+// The output is the same.
+func RunVM(source string, out, errOut io.Writer) bool {
+	p := parser.New(lexer.New(source))
+	program := p.ParseProgram()
+	if len(p.Errors()) != 0 {
+		printErrors(errOut, p.Errors())
+		return false
+	}
+
+	evaluator.Output = out
+	evaluator.ResetMath()
+	if err, ok := vm.Run(program, object.NewEnvironment()).(*object.Error); ok {
 		fmt.Fprintln(errOut, err.Message)
 		return false
 	}

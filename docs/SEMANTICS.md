@@ -2,6 +2,8 @@
 
 What a program does when it runs. The syntax is in [GRAMMAR.md](GRAMMAR.md).
 
+A program can run on two engines: the tree-walking evaluator (`evaluator.Eval`, the default) and the bytecode VM (`vm.Run`, `lizardscript --vm`). Everything on this page holds for both: they give the same values, output, errors with the same positions, steps and hook calls, and functions of one can be called from the other through the same environment. The one difference is a limit, see Functions.
+
 ## Values
 
 | Type | Examples | Notes |
@@ -96,7 +98,7 @@ Equality never fails, whatever the types.
 - A function remembers the scope it was created in (it is a closure), and sees the changes made to it later.
 - A function without `return` gives the value of its last statement. A bare `return` gives `null`.
 - `return` outside of a function ends the program. Its value is the value of the program, which the REPL shows.
-- More than 10000 nested calls is a stack overflow error. So is a smaller number of calls whose bodies are nested deeply enough that, together, they would use too much of the interpreter's memory: `stack overflow: the calls and the code inside them nest too deeply`.
+- More than 10000 nested calls is a stack overflow error. So is a smaller number of calls whose bodies are nested deeply enough that, together, they would use too much of the interpreter's memory: `stack overflow: the calls and the code inside them nest too deeply`. The VM doesn't need that second limit, so there only the 10000 calls count.
 
 ## Indexing
 

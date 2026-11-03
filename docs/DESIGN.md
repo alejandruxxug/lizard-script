@@ -63,8 +63,11 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 | `parser` | A Pratt parser: one function per prefix form and one per infix operator, driven by a precedence table. It builds the AST and collects every syntax error with its position. |
 | `object` | The runtime values (`Integer`, `String`, `Array`, `Hash`, `Function`, …) and `Environment`, a map of variables linked to the scope around it. |
 | `evaluator` | `Eval(node, env)` walks the tree and returns a value. It also holds the builtins (`puts`, `len`, `str`, `int`, `push`, …). |
-| `repl` | The interactive loop and `Run`, which runs a whole file. |
-| `main.go` | `lizardscript` starts the REPL; `lizardscript file.liz` runs a file. |
+| `code` | The bytecode: opcodes, their encoding, and the compiled unit with its tables. |
+| `compiler` | Turns the AST into bytecode for the VM, with the evaluator's rules for scopes and signals. |
+| `vm` | `vm.Run(program, env)`: a stack VM that runs the bytecode, a second, faster engine with the same results. |
+| `repl` | The interactive loop and `Run`, which runs a whole file (`RunVM` runs it on the VM). |
+| `main.go` | `lizardscript` starts the REPL; `lizardscript file.liz` runs a file; `lizardscript --vm file.liz` runs it on the VM. |
 
 **Errors.** Each kind of error is detected in its own stage and reported as `[line L, column C] <kind> error: <message>`:
 - **Lexical:** the lexer turns a bad character into an `ILLEGAL` token, and the parser reports it as a lexical error.
@@ -75,6 +78,22 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 - a `ReturnValue` stops at the function call it belongs to;
 - a `Break` stops at the innermost loop;
 - an `Error` goes all the way up.
+
+### The second engine: bytecode compiler and VM
+
+`vm.Run(program, env)` has the contract of `evaluator.Eval(program, env)` and gives the same results: the same value, output, error messages and positions, steps and hook calls. It is several times faster on loops and calls (no environment map per scope, no allocation for small integers), for hosts that run a lot of code. The evaluator stays the default for the REPL and `Run`.
+
+```
+AST ──> compiler ──> bytecode (code.Unit) ──> vm ──> values / output
+                                                │
+                    frames + slots + cells, the host's environment, and the evaluator's operators and builtins
+```
+
+The structure follows the sequel of the course book (*Writing a Compiler in Go*), but lizard's rules win where they differ from Monkey's:
+- **Resolved at compile time.** Each name a scope declares (lets, parameters, the catch name) gets a slot in its function's frame. The evaluator looks names up at run time in maps, so the compiler decides each read with the same answer: inside a function, a `let` has run before every read after it in its scope and not before any read earlier in it (each block, loop round and call starts its scope fresh), so an earlier read means the scope outside. A closure only knows whether the `let` had run when it was made: if not, its read checks the variable at run time and falls back to the next scope out while it is still unset. A local that a closure uses is a cell, new each time its scope starts, so closures share it by reference and each loop round gets its own.
+- **Resolved at run time.** The program's own scope is the host's `env`, read and written by name, so globals added between runs are found, then the builtins, `null`, `math`, `text` and `list`.
+- **Signals.** `return`, `break` and `continue` are jumps that close the layers and trys they leave. An `if` or loop used as a value stops them and gets them as its value, and a statement whose value is one of those values acts like it, exactly as in the evaluator.
+- **Interop points.** Everything but the fast paths (integer arithmetic and comparisons, array indexing) calls the evaluator's own code through `evaluator/engines.go` (`Infix`, `Index`, `SetIndex`, `ApplyFunction`, `Builtin`, …), so messages can't drift apart. A VM closure is an `object.Callable`: it is a `FUNCTION`, prints its source, and the evaluator and `list.sort` call it; the VM calls the evaluator's functions and the builtins through `evaluator.ApplyFunction`. The step counter, `MaxSteps`, `Output`, the hooks and the call depth (10000 calls of both engines together) are shared.
 
 ## 3. Design decisions
 
@@ -115,13 +134,15 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 - Indexing a string is O(1) only after its first use, which costs one pass over the text (and memory for the characters of non-ASCII text); a `String` object caches that and is not safe to share between goroutines.
 - An emoji written as a surrogate pair (`"\uD83D\uDE00"`) is an error: write the code point (`"\u{1F600}"`).
 - An infinite loop runs forever unless the host sets `evaluator.MaxSteps`; in the REPL, stop it with Ctrl+C.
+- The VM has no Go recursion for lizard calls, so the evaluator's second stack limit (`the calls and the code inside them nest too deeply`, for up to 10000 calls whose bodies nest very deeply) never happens on it; only the 10000-call limit does. No test program reaches that limit.
 
 ## 5. Testing
 
 `go test ./...` runs everything:
 - unit tests for each package (lexer, parser, evaluator, REPL);
 - the programs in `tests/`: 29 valid programs and 50 that must fail with a lexical, syntax or runtime error, each compared with its `.expected` output;
-- every program in `examples/`.
+- every program in `examples/`;
+- the VM: every program of `tests/` and `examples/` also runs on it with the same `.expected` output, and a differential test runs each of the about 1400 programs in the evaluator's unit tests (valid and failing), plus hand-written corners of scopes, signals, try, layers and steps, on both engines, comparing output, value, error, step count and hook calls.
 
 ## 6. Use of AI
 
@@ -167,3 +188,4 @@ Phases 1 to 4 follow the course's reference interpreter, and that foundation sta
 | 2026-11-03 | `\r` and `\u` escapes | Text with carriage returns or characters the editor can't type needs to be written in a literal. | Lexer only: `\r`, `\uXXXX` (exactly 4 hex digits) and `\u{X...}` (1 to 6) become one character in the STRING literal; a malformed escape, a surrogate half (D800 to DFFF) or a value above 10FFFF is an ILLEGAL token whose literal is the escape, worded by the parser as `invalid unicode escape ...: reason`. They were `unknown escape` errors before, so no working program changes (one lexer test case that used `\r` as the unknown escape now uses `\q`). |
 | 2026-11-03 | Cached string characters | `s[i]` and `len(s)` converted the whole string each time, so a loop over a long string was quadratic. | `object.String` keeps unexported cache fields filled on first use (ASCII text needs no copy) and gains `Len()`, `Runes()` and `RuneAt(i)`; `Value` and the printed output are unchanged. The evaluator's `s[i]`, `len` and `text.slice`, `find` and `code` use them. |
 | 2026-11-03 | Source names | A host loads libraries and the user's program into one environment and must tell which source a statement or error came from. | `lexer.NewNamed(input, name)` (`New` is unchanged, name `""`); `token.Token.Source`; `object.Error.Source`, filled by `newError` from the token. Names are not in any message. The parser copies the source onto the `let` token it builds for `function name() {}`. |
+| 2026-11-03 | Bytecode compiler and VM | A host that runs a lot of code (redrawing on every change) needs a faster engine than walking the tree. | New packages `code` (opcodes, encoding, compiled unit), `compiler` (AST to bytecode) and `vm` (`vm.Run(program, env)`, same contract and results as `evaluator.Eval`; `vm.RunUnit` for a program compiled once), `repl.RunVM` and `lizardscript --vm file.liz`. The evaluator stays the default and is untouched in meaning. It gains `evaluator/engines.go`, exports that wrap what Eval already does (`ApplyFunction`, `Infix`, `Prefix`, `Index`, `SetIndex`, `IsTruthy`, `Builtin`, `CountStep`, `CallDepth`/`SetCallDepth`, `ErrorHash`, `NewError`, `MaxCallDepth`); `object.Callable`, an interface for function values of another engine, which `applyFunction` calls before "not a function" and `list.sort` accepts as a comparison. No token, AST node or builtin changes. See section 2. |

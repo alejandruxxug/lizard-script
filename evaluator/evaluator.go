@@ -1021,6 +1021,10 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 		}
 		return result
 
+	case object.Callable:
+		// A function of another engine does the same checks itself.
+		return function.Call(tok, args)
+
 	default:
 		return newError(tok, "not a function: %s", function.Type())
 	}
