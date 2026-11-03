@@ -176,4 +176,4 @@ To add a test, write the `.liz` file and generate its `.expected` file with `go 
 
 ## Credits
 
-This project follows the structure of the interpreter built in class ([sebastianzapatar/compi20262](https://github.com/sebastianzapatar/compi20262)), which is itself based on Thorsten Ball's *Writing an Interpreter in Go*.
+This project follows the structure of the interpreter built in class, the `evaluator` branch of [sebastianzapatar/compi8am](https://github.com/sebastianzapatar/compi8am/tree/evaluator), which is itself based on Thorsten Ball's *Writing an Interpreter in Go*.
