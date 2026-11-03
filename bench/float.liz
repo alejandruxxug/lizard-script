@@ -1,0 +1,9 @@
+-~> Float math: 5 million rounds of a multiply and an add.
+function run(n) {
+  let x = 0.0
+  for (let i = 0; i < n; i += 1) {
+    x = x * 0.999 + 1.5
+  }
+  x
+}
+puts(run(5000000))

@@ -1,0 +1,9 @@
+-~> Integer loop: 10 million rounds of a modulo and an addition.
+function run(n) {
+  let t = 0
+  for (let i = 0; i < n; i += 1) {
+    t += i % 7
+  }
+  t
+}
+puts(run(10000000))

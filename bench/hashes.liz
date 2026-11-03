@@ -1,0 +1,13 @@
+-~> Hashes: build 200,000 small records and sum one field.
+function run(n) {
+  let rows = []
+  for (let i = 0; i < n; i += 1) {
+    push(rows, {"id": i, "x": i * 2, "name": "row"})
+  }
+  let total = 0
+  for (let i = 0; i < len(rows); i += 1) {
+    total += rows[i].x
+  }
+  total
+}
+puts(run(200000))

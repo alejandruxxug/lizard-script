@@ -1,0 +1,9 @@
+-~> Point math: 2 million additions of 2D points.
+function run(n) {
+  let p = (0.0, 0.0)
+  for (let i = 0; i < n; i += 1) {
+    p = p + (1.0, 2.0)
+  }
+  p
+}
+puts(run(2000000))

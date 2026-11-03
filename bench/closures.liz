@@ -1,0 +1,18 @@
+-~> Closures: make a counter and call it a million times.
+function counter() {
+  let n = 0
+  function() {
+    n += 1
+    n
+  }
+}
+
+function main() {
+  let next = counter()
+  let last = 0
+  for (let i = 0; i < 1000000; i += 1) {
+    last = next()
+  }
+  puts(last)
+}
+main()

@@ -1,0 +1,13 @@
+-~> Strings: build a 200,000-character string piece by piece, then count a letter.
+function run(n) {
+  let s = ""
+  for (let i = 0; i < n; i += 1) {
+    s += "ab"
+  }
+  let count = 0
+  for (let i = 0; i < len(s); i += 1) {
+    if (s[i] == "a") { count += 1 }
+  }
+  count
+}
+puts(run(100000))
