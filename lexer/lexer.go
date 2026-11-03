@@ -23,6 +23,7 @@ type Lexer struct {
 	endLine      int    // line where the last token ended, 0 before the first one
 	source       string // name stamped on every token, "" when unnamed
 	keepComments bool   // return comments as COMMENT tokens instead of skipping them
+	continues    int    // continuation bytes still expected for the current UTF-8 character
 }
 
 // New creates a Lexer for input and loads its first character.
@@ -67,8 +68,30 @@ func (l *Lexer) readChar() {
 	}
 	l.position = l.readPosition
 	l.readPosition += 1
-	if !isContinuationByte(l.ch) {
-		l.column += 1
+	// The bytes after the first of a UTF-8 character share its column. A
+	// continuation byte that no character started is a column of its own.
+	if isContinuationByte(l.ch) && l.continues > 0 {
+		l.continues -= 1
+		return
+	}
+	l.column += 1
+	l.continues = continuationsAfter(l.ch)
+}
+
+// continuationsAfter is how many continuation bytes follow ch when ch starts
+// a UTF-8 character: 1, 2 or 3 for the lead bytes, 0 for anything else.
+func continuationsAfter(ch byte) int {
+	switch {
+	case ch >= 0xF8:
+		return 0
+	case ch >= 0xF0:
+		return 3
+	case ch >= 0xE0:
+		return 2
+	case ch >= 0xC0:
+		return 1
+	default:
+		return 0
 	}
 }
 

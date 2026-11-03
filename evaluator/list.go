@@ -17,7 +17,7 @@ func listLibrary() *object.Hash {
 		return listHash
 	}
 	hash := object.NewHash()
-	for name, fn := range map[string]object.BuiltinFunction{
+	setLibrary(hash, "list.", map[string]object.BuiltinFunction{
 		"slice":   listSlice,
 		"insert":  listInsert,
 		"remove":  listRemove,
@@ -25,9 +25,7 @@ func listLibrary() *object.Hash {
 		"reverse": listReverse,
 		"sort":    listSort,
 		"copy":    listCopy,
-	} {
-		hash.Set(&object.String{Value: name}, &object.Builtin{Name: "list." + name, Fn: fn})
-	}
+	})
 	listHash = hash
 	return hash
 }

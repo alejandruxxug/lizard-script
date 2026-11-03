@@ -21,7 +21,7 @@ func textLibrary() *object.Hash {
 		return textHash
 	}
 	hash := object.NewHash()
-	for name, fn := range map[string]object.BuiltinFunction{
+	setLibrary(hash, "text.", map[string]object.BuiltinFunction{
 		"slice":   textSlice,
 		"find":    textFind,
 		"split":   textSplit,
@@ -36,9 +36,7 @@ func textLibrary() *object.Hash {
 		"code":    textCode,
 		"char":    textChar,
 		"number":  textNumber,
-	} {
-		hash.Set(&object.String{Value: name}, &object.Builtin{Name: "text." + name, Fn: fn})
-	}
+	})
 	textHash = hash
 	return hash
 }

@@ -41,7 +41,7 @@ func mathLibrary() *object.Hash {
 		return mathHash
 	}
 	hash := object.NewHash()
-	for name, fn := range map[string]object.BuiltinFunction{
+	setLibrary(hash, "math.", map[string]object.BuiltinFunction{
 		"sin":    floatFunction(math.Sin),
 		"cos":    floatFunction(math.Cos),
 		"tan":    floatFunction(math.Tan),
@@ -59,9 +59,7 @@ func mathLibrary() *object.Hash {
 		"seed":   mathSeed,
 		"dist":   mathDist,
 		"angle":  mathAngle,
-	} {
-		hash.Set(&object.String{Value: name}, &object.Builtin{Name: "math." + name, Fn: fn})
-	}
+	})
 	hash.Set(&object.String{Value: "pi"}, &object.Float{Value: math.Pi})
 	hash.Set(&object.String{Value: "tau"}, &object.Float{Value: 2 * math.Pi})
 	mathHash = hash

@@ -13,16 +13,14 @@ func hashLibrary() *object.Hash {
 		return hashLibraryHash
 	}
 	hash := object.NewHash()
-	for name, fn := range map[string]object.BuiltinFunction{
+	setLibrary(hash, "hash.", map[string]object.BuiltinFunction{
 		"copy":   hashCopy,
 		"keys":   hashKeys,
 		"values": hashValues,
 		"merge":  hashMerge,
 		"has":    hashHas,
 		"remove": hashRemove,
-	} {
-		hash.Set(&object.String{Value: name}, &object.Builtin{Name: "hash." + name, Fn: fn})
-	}
+	})
 	hashLibraryHash = hash
 	return hash
 }
