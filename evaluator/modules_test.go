@@ -100,8 +100,8 @@ func TestUse(t *testing.T) {
 		{"uses itself", "use \"self\"", "null"},
 		{"a cycle sees the names so far, then the rest", "use \"ring_a\"\nuse \"ring_b\"\n[seen, seen_in_hash, from_a(), hash_later()]", "[1, 1, 22, 2]"},
 		{"a name used before its module defines it", "use \"early_a\"",
-			"identifier not found: late: " + dir + "/early_a.liz defines it further down, but it is still loading (use cycle: " +
-				dir + "/early_a.liz uses " + dir + "/early_b.liz, which uses " + dir + "/early_a.liz)"},
+			"identifier not found: late: early_a.liz defines it further down, but it is still loading (use cycle: " +
+				"early_a.liz uses early_b.liz, which uses early_a.liz)"},
 		{"syntax errors", "use \"broken\"", "[line 1, column 5] syntax error: let needs a name before the \"=\", like let x = 1\n[line 2, column 5]"},
 		{"runtime errors", "use \"fails\"", "[line 2, column 11] runtime error: type mismatch: INTEGER + STRING"},
 	}

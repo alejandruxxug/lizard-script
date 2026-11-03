@@ -57,6 +57,7 @@ type Runner func(program *ast.Program, env *object.Environment) object.Object
 // module is a file loaded by use.
 type module struct {
 	name    string              // the path it was found at, its source name
+	from    string              // the source name of the file whose use loaded it first
 	env     *object.Environment // its top scope
 	names   *object.Hash        // its names, for use ... as
 	program *ast.Program        // its statements
@@ -144,6 +145,7 @@ func loadModule(node *ast.UseStatement, run Runner) (*module, *object.Error) {
 	}
 	m := &module{
 		name:    name,
+		from:    node.Token.Source,
 		env:     object.NewEnclosedEnvironment(modules.preludeEnv()),
 		names:   object.NewHash(),
 		program: program,
@@ -325,7 +327,7 @@ func explainNotLoaded(err *object.Error, state *moduleState) *object.Error {
 		explained := *err
 		explained.Message = strings.Replace(err.Message, notFound+name,
 			fmt.Sprintf("%s%s: %s defines it further down, but it is still loading (%s)",
-				notFound, name, m.name, m.cycle), 1)
+				notFound, name, shownName(m, state.chain), m.cycle), 1)
 		return &explained
 	}
 	return err
@@ -362,14 +364,31 @@ func cycleMessage(m *module, chain []*module) string {
 	for len(chain) > 0 && chain[0] != m {
 		chain = chain[1:]
 	}
-	message := "use cycle: " + m.name + " uses "
+	message := "use cycle: " + shownName(m, chain) + " uses "
 	for _, step := range chain[1:] {
-		message += step.name + ", which uses "
+		message += shownName(step, chain) + ", which uses "
 	}
 	if len(chain) <= 1 {
 		return message + "itself"
 	}
-	return message + m.name
+	return message + shownName(m, chain)
+}
+
+// shownName is how a message names the file of m: from the folder of the
+// program that started loading the chain, the way an error's file is shown,
+// so the message is the same wherever the program is run from.
+func shownName(m *module, chain []*module) string {
+	if len(chain) == 0 || IsStandardModule(m.name) {
+		return m.name
+	}
+	root := chain[0].from
+	if root == "" {
+		return m.name
+	}
+	if rel, err := filepath.Rel(filepath.Dir(root), m.name); err == nil {
+		return filepath.ToSlash(rel)
+	}
+	return m.name
 }
 
 // syntaxErrors is the error of a module whose file doesn't parse: every
