@@ -30,7 +30,8 @@ product     = prefix { ( "*" | "/" | "//" | "%" ) prefix } ;
 prefix      = ( "-" | "!" ) prefix | power ;
 power       = postfix [ "**" prefix ] ;                 (* right associative *)
 postfix     = primary { "(" [ args ] ")" | "[" expression "]" } ;
-primary     = IDENT | INT | STRING | "true" | "false" | "(" expression ")"
+primary     = IDENT | INT | FLOAT | STRING | COLOR | "true" | "false" | "(" expression ")"
+            | "(" expression "," expression [ "," expression ] ")"
             | "[" [ args ] "]" | "{" [ pair { "," pair } [ "," ] ] "}"
             | "function" "(" [ params ] ")" block | ifExpr | whileExpr | forExpr ;
 args        = expression { "," expression } ;
@@ -88,7 +89,7 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 - **Floats never hold Infinity or NaN.** Any operation that would produce one (`10.0 ** 400`, `0.0 ** -1`, `math.sqrt(-1)`) is a runtime error, so a float is always a real number that prints and compares normally.
 - **Truthiness.** `false`, `null`, `0`, `""`, `[]` and `{}` are false. `&&` and `||` short-circuit and always give a boolean.
 - **Shared data.** Arrays and hashes are references: `let b = a` shares the same array, and functions can change their arguments.
-- **Hash keys and order.** Keys keep their insertion order, so output is predictable. Only integers, booleans and strings can be keys, and `1` and `"1"` are different keys.
+- **Hash keys and order.** Keys keep their insertion order, so output is predictable. Only integers, booleans and strings can be keys (not floats, colors or points), and `1` and `"1"` are different keys.
 - **No crashes on adversarial input.**
   - Printing and comparing values use an explicit stack instead of recursion, and detect values that contain themselves (shown as `[...]`).
   - The parser rejects programs nested more than 10000 levels.
@@ -107,7 +108,7 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 
 `go test ./...` runs everything:
 - unit tests for each package (lexer, parser, evaluator, REPL);
-- the programs in `tests/`: 19 valid programs and 35 that must fail with a lexical, syntax or runtime error, each compared with its `.expected` output;
+- the programs in `tests/`: 21 valid programs and 37 that must fail with a lexical, syntax or runtime error, each compared with its `.expected` output;
 - every program in `examples/`.
 
 ## 6. Use of AI
@@ -117,7 +118,7 @@ We used Claude Code (Anthropic's Claude Opus 5.5) as a programming assistant for
 - the REPL and the `lizardscript` command (phase 4);
 - later fixes: values that contain themselves, `elif`/`else` on a new line in the REPL, and the nesting and stack limits;
 - the `tests/` folder, the examples and a first draft of this document;
-- the extensions of section 7 (string escapes, dot access, the step limit, floats, `math` and units), written with Claude Code.
+- the extensions of section 7 (string escapes, dot access, the step limit, floats, `math`, units, colors and points), written with Claude Code.
 
 **To complete by the team:** state here whether AI was also used in phases 1 and 2 (tokens, lexer, AST, parser) and for what.
 
@@ -138,3 +139,5 @@ Phases 1 to 4 follow the course's reference interpreter, and that foundation sta
 | 2026-11-02 | Floats | Curves and rotations need decimal numbers. | New token `FLOAT` (digits `.` digits; `.5` and `1.` are not floats, `1.x` is still an integer and a dot), AST node `FloatLiteral`, value `Float` with type name `FLOAT`. INTEGER with INTEGER is exactly as before (`1 / 2` is `0`); a float on either side makes the operation float: `/` is real division, `//` floors and `%` pairs with it, `**` uses `math.Pow`, comparisons work by value, `1 == 1.0` is true and `1 === 1.0` false. Division or `%` by zero is the existing error, and a result that would be Infinity or NaN is the runtime error `the result is not a number`. Builtins: new `float(x)`; `int` also takes a float (towards zero). A float is not a hash key. |
 | 2026-11-02 | `math` library | Curves, waves and rotations need `sin`, `sqrt`, `random` and friends. | A name `math` that the evaluator resolves after variables and builtins, so a variable called `math` hides it. Its value is a HASH of builtins (`sin cos tan atan2 sqrt abs floor ceil round min max random seed`) and the floats `pi` and `tau`, used with dot access (`math.sin(x)`). The hash is made once per run, so changing it (`math.pi = 3`) does not reach the next run. `random` is deterministic: a fixed default seed, restarted by `evaluator.ResetMath()` (called by the REPL and `Run`, and by hosts before each run next to `ResetSteps`), changed with `math.seed(n)`. No new token or AST node. |
 | 2026-11-02 | Number units | Angles and sizes are easier to read as `45deg` or `10px`. | Lexer: a number directly followed by a whole-word unit. `deg`, `rad` and `turn` become a FLOAT in radians, already converted in the token (`45deg` is `0.785...`); `px` keeps the number, integer or float. Any other word after a number lexes as before (number, then identifier), and the parser words that syntax error as `unknown unit "kg"` when the name touches the number. Before, `45deg` was a syntax error, and `5x` still is, so no working program changes. |
+| 2026-11-02 | Colors | Drawing code reads better with `#3fa34d` than with three numbers. | New token `COLOR`, and the lexer takes the whole word after a `#`: 3, 6 or 8 hex digits in any case, anything else is an ILLEGAL token worded `bad color #12` (a lone `#` stays `unexpected character "#"`). AST node `ColorLiteral` (the parser decodes the digits; `#rgb` repeats each digit). Value `Color` with four 0 to 255 channels, type name `COLOR`, shown as `#rrggbb` or `#rrggbbaa` when alpha is not 255. Read with dot access `c.r c.g c.b c.a`; assigning is `colors can't be changed`. `==` and `===` compare the channels. Not a hash key. Builtins: `rgb`, `rgba`, `hsl`. `#` was an unexpected character before, so no working program changes. |
+| 2026-11-02 | Points | Positions are the main data of a drawing, and `(120, 80)` reads like one. | No new token. The parser reads `(a, b)` and `(a, b, c)` inside parentheses as AST node `PointLiteral`; `(x)` is the grouped expression it always was, while `()` and four or more coordinates are the syntax error `a point has two or three coordinates` (both were syntax errors before). Value `Point` with type name `POINT` holding two or three integers or floats, each keeping its type. Operators `p + q`, `p - q`, `p * n`, `n * p`, `p / n` and `-p` apply the number rules of floats per coordinate (so the zero-division and `the result is not a number` errors apply); mixing 2D and 3D points is an error. Dot access reads `x y z`, assigning is `points can't be changed`; `==` and `===` compare coordinates. Not a hash key. Builtin `point`, and in the `math` hash `dist` and `angle`. |

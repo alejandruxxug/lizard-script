@@ -20,6 +20,7 @@ const (
 	INT    = "INT"    // 1343456
 	FLOAT  = "FLOAT"  // 1.5
 	STRING = "STRING" // "foobar"
+	COLOR  = "COLOR"  // #3fa34d
 
 	// Operators
 	ASSIGN       = "="

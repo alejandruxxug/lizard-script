@@ -121,6 +121,12 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.StringLiteral:
 		return &object.String{Value: node.Value}
 
+	case *ast.ColorLiteral:
+		return &object.Color{R: node.R, G: node.G, B: node.B, A: node.A}
+
+	case *ast.PointLiteral:
+		return evalPointLiteral(node, env)
+
 	case *ast.Boolean:
 		return nativeBoolToBooleanObject(node.Value)
 
@@ -311,6 +317,9 @@ func evalPrefixExpression(node *ast.PrefixExpression, right object.Object) objec
 	case "!":
 		return nativeBoolToBooleanObject(!isTruthy(right))
 	case "-":
+		if point, ok := right.(*object.Point); ok {
+			return negatePoint(point)
+		}
 		if float, ok := right.(*object.Float); ok {
 			return &object.Float{Value: -float.Value}
 		}
@@ -366,6 +375,11 @@ func evalInfixExpression(node *ast.InfixExpression, env *object.Environment) obj
 		return evalIntegerInfixExpression(node.Token, node.Operator, left.(*object.Integer).Value, right.(*object.Integer).Value)
 	case isNumber(left) && isNumber(right):
 		return evalFloatInfixExpression(node.Token, node.Operator, toFloat(left), toFloat(right))
+	case left.Type() == object.POINT_OBJ || right.Type() == object.POINT_OBJ:
+		if result, ok := evalPointInfix(node.Token, node.Operator, left, right); ok {
+			return result
+		}
+		return pointInfixError(node.Token, node.Operator, left, right)
 	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
 		return evalStringInfixExpression(node.Token, node.Operator, left.(*object.String).Value, right.(*object.String).Value)
 	case node.Operator == "*" && left.Type() == object.STRING_OBJ && right.Type() == object.INTEGER_OBJ:
@@ -583,6 +597,18 @@ func equals(left, right object.Object, strict bool) bool {
 			if left.Value != right.(*object.String).Value {
 				return false
 			}
+		case *object.Color:
+			if *left != *right.(*object.Color) {
+				return false
+			}
+		case *object.Point:
+			right := right.(*object.Point)
+			if len(left.Coords) != len(right.Coords) {
+				return false
+			}
+			for i := range left.Coords {
+				stack = append(stack, pair{left.Coords[i], right.Coords[i]})
+			}
 		case *object.Null:
 		case *object.Array:
 			right := right.(*object.Array)
@@ -689,6 +715,12 @@ func assignIndex(tok token.Token, container, index, value object.Object) object.
 
 	case *object.String:
 		return newError(tok, "strings can't be changed")
+
+	case *object.Color:
+		return newError(tok, "colors can't be changed")
+
+	case *object.Point:
+		return newError(tok, "points can't be changed")
 
 	default:
 		return newError(tok, "index assignment not supported: %s", container.Type())
@@ -875,6 +907,12 @@ func evalIndexExpression(tok token.Token, left, index object.Object) object.Obje
 			return NULL
 		}
 		return &object.String{Value: string([]rune(left.Value)[i])}
+
+	case *object.Color:
+		return evalColorProperty(tok, left, index)
+
+	case *object.Point:
+		return evalPointProperty(tok, left, index)
 
 	default:
 		return newError(tok, "index operator not supported: %s", left.Type())

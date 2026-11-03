@@ -158,6 +158,33 @@ func (fl *FloatLiteral) expressionNode()      {}
 func (fl *FloatLiteral) TokenLiteral() string { return fl.Token.Literal }
 func (fl *FloatLiteral) String() string       { return fl.Token.Literal }
 
+// ColorLiteral is a color written in the code, like #3fa34d. Each channel is
+// 0 to 255; A is 255 when the literal has no alpha.
+type ColorLiteral struct {
+	Token      token.Token // the COLOR token
+	R, G, B, A uint8
+}
+
+func (cl *ColorLiteral) expressionNode()      {}
+func (cl *ColorLiteral) TokenLiteral() string { return cl.Token.Literal }
+func (cl *ColorLiteral) String() string       { return cl.Token.Literal }
+
+// PointLiteral is (x, y) or (x, y, z): two or three coordinates.
+type PointLiteral struct {
+	Token  token.Token // the '(' token
+	Coords []Expression
+}
+
+func (pl *PointLiteral) expressionNode()      {}
+func (pl *PointLiteral) TokenLiteral() string { return pl.Token.Literal }
+func (pl *PointLiteral) String() string {
+	parts := []string{}
+	for _, c := range pl.Coords {
+		parts = append(parts, c.String())
+	}
+	return "(" + strings.Join(parts, ", ") + ")"
+}
+
 // Boolean is true or false.
 type Boolean struct {
 	Token token.Token // the TRUE or FALSE token

@@ -1,0 +1,26 @@
+-~> Points: (x, y) or (x, y, z), arithmetic per coordinate, dot access.
+let p = (1, 2)
+let q = (3, 4)
+puts(p, q, type(p), p.x, p.y)
+puts(p + q, q - p, p * 3, 3 * p, q / 2, -p)
+
+-~> Coordinates keep their type, and the numeric rules are the ones of numbers.
+puts((0.5, 2), (1, 2) + (0.5, 1), (3, 4) / 2, (3, 4) / 2.0)
+puts((1, 2) * 0.5, 2 * (1.5, 2), (1, 2) == (1.0, 2), (1, 2) === (1.0, 2), (1, 2) === (1, 2))
+puts((1, 2) != (1, 3), (1, 2) == (1, 2, 3), (1, 2) == [1, 2])
+
+-~> Three coordinates, and a call with one point as the argument.
+let c = (1, 2, 3)
+puts(c, c.z, c + (1, 1, 1), c * 2, -c, (1, 2, 3) == (1, 2, 3))
+let shift = function(pt) { return pt + (10, 10) }
+puts(shift((1, 2)), shift(point(5, 5)))
+
+-~> The point builder and math.dist, math.angle.
+puts(point(1, 2), point(1.5, 2, 3), math.dist((0, 0), (3, 4)), math.dist((1, 2, 3), (1, 2, 5)))
+puts(math.angle((0, 0), (1, 1)) == 45deg, math.angle((0, 0), (0, -1)) == -90deg)
+
+-~> Points are values: truthy, in arrays, and in expressions.
+let corners = [(0, 0), (10, 0), (10, 10)]
+puts(corners, corners[2].x + corners[2].y)
+let mid = (corners[0] + corners[2]) / 2
+puts(mid, (1 + 2, 3 * 4), ((1, 2)))

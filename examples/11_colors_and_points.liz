@@ -1,0 +1,27 @@
+-~> Colors and points: the two values a drawing is made of.
+
+-~> A color is #rgb, #rrggbb or #rrggbbaa. Its channels are read with dot access.
+let leaf = #3fa34d
+puts(leaf, leaf.r, leaf.g, leaf.b, leaf.a)
+puts(rgb(255, 128, 0), rgba(0, 0, 0, 128), hsl(210, 50, 40))
+
+-~> A color can't be changed, so a variation is a new color.
+let see_through = function(c, alpha) { return rgba(c.r, c.g, c.b, alpha) }
+puts(see_through(leaf, 100))
+
+-~> A point is (x, y), or (x, y, z). Arithmetic works on each coordinate.
+let a = (10, 20)
+let b = (40, 60)
+puts(a + b, b - a, a * 2, b / 2, -a)
+puts("x is", a.x, "and y is", a.y)
+
+-~> Distances and angles between points.
+puts(math.dist(a, b), math.angle(a, b))
+
+-~> Points on a circle around a center.
+let center = (100, 100)
+for (let i = 0; i < 4; i = i + 1) {
+  let angle = i * 90deg
+  let spot = center + (math.round(50 * math.cos(angle)), math.round(50 * math.sin(angle)))
+  puts(spot)
+}

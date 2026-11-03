@@ -1,0 +1,11 @@
+#3fa34d COLOR
+63 163 77 255
+#ff0000 #ffaa00 #3fa34d80 #00000000
+true true false true
+#ff8000 #0a141e80 #00ff80
+#ff0000 #00ff00 #0000ff #336699
+#ffffff #ff0000 #808000
+truthy
+[#ff0000, #00ff00, #0000ff] 3 255
+#aabbcc false
+#3fa34d64

@@ -8,6 +8,8 @@ What a program does when it runs. The syntax is in [GRAMMAR.md](GRAMMAR.md).
 | --- | --- | --- |
 | `INTEGER` | `5`, `-12` | 64-bit signed. Arithmetic wraps around on overflow, like Go. |
 | `FLOAT` | `1.5`, `-0.25`, `45deg` | 64-bit decimal number. Never infinite or NaN. |
+| `COLOR` | `#3fa34d`, `rgb(63, 163, 77)` | Four channels, each an integer 0 to 255. Can't be changed or used as a hash key. |
+| `POINT` | `(1, 2)`, `(0.5, 2, 3)` | Two or three coordinates, each an integer or a float that keeps its type. Can't be changed or used as a hash key. |
 | `BOOLEAN` | `true`, `false` | |
 | `STRING` | `"Liz"` | Length and indexes count characters, not bytes. Strings can't be changed. |
 | `NULL` | | What an `if` without `else`, a loop, `let`, `puts` and a missing index produce. It can't be written directly. |
@@ -98,11 +100,41 @@ Equality never fails, whatever the types.
 - `hash[key]` gives `null` when the key isn't there. The key must be a valid key type. Keys are compared exactly, so `1` and `"1"` are different keys.
 - `array[i] = x` changes an element that already exists. An index outside of the array is an error, so use `push` to add elements.
 - `hash[key] = x` adds or replaces a key.
+- `c.r`, `c.g`, `c.b`, `c.a` read the channels of a color (integers), and `p.x`, `p.y`, `p.z` the coordinates of a point (`z` only exists on a point with three). Any other name is an error, and so is assigning: `c.r = 1` is `colors can't be changed` and `p.x = 1` is `points can't be changed`, like strings. Make a new value instead.
 - `a.name` is exactly `a["name"]`, for reading and for assigning, so on a hash it gives the value or `null`, and on anything else it gives the same error as indexing it with a string.
 
 ## Units
 
 A number directly followed by `deg`, `rad`, `turn` or `px` is read by the lexer: `45deg` is the float `0.785...` (radians), `1.5rad` is `1.5`, `0.25turn` is `0.25 * 2π`, and `10px` is just `10` (an integer stays an integer, `10.5px` is a float). Letters right after a number that are not exactly one of these words are not a unit: `5kg` is the number `5` and the name `kg`, which is a syntax error (`unknown unit "kg"`).
+
+## Colors
+
+`#rgb`, `#rrggbb` and `#rrggbbaa` are colors; `#rgb` repeats each digit (`#f80` is `#ff8800`) and the alpha is 255 when it isn't written. A color is always truthy. `==` and `===` compare the four channels, and a color is never equal to a value of another type (`#fff == "#ffffff"` is false). There is no arithmetic on colors.
+
+A color is shown as `#rrggbb` in lowercase, or `#rrggbbaa` when the alpha is not 255, so `puts(#3FA34D)` writes `#3fa34d` and `str(#fff)` is `"#ffffff"`.
+
+| Builtin | Does |
+| --- | --- |
+| `rgb(r, g, b)`, `rgba(r, g, b, a)` | A color from channels. Each is an integer or a float, rounded to the nearest integer (halves away from zero), and must end up from 0 to 255; otherwise it is an error. |
+| `hsl(h, s, l)` | A color from a hue in degrees (0 to 360, so `360` is the same as `0`) and a saturation and lightness in percent (0 to 100). Anything outside is an error. Channels are rounded: `hsl(210, 50, 40)` is `#336699`. |
+
+## Points
+
+`(x, y)` and `(x, y, z)` are points; `point(x, y)` and `point(x, y, z)` make the same value. Every coordinate must be an integer or a float, and keeps its type: `(1, 2.5)` has an integer `x` and a float `y`. A point is always truthy, even `(0, 0)`.
+
+| Expression | Result |
+| --- | --- |
+| `p + q`, `p - q` | A point, coordinate by coordinate. Both need the same number of coordinates; mixing a 2D and a 3D point is an error. |
+| `p * n`, `n * p`, `p / n` | Every coordinate times or divided by the number `n`. |
+| `-p` | Every coordinate negated. |
+
+Each coordinate follows the rules of numbers above: integers stay integers (`(3, 4) / 2` is `(1, 2)`, rounding towards zero), a float makes that coordinate a float (`(3, 4) / 2.0` is `(1.5, 2.0)`), dividing by zero is an error, and a coordinate that would be infinite or not a number is `the result is not a number`. Any other operator or operand (`p * q`, `p + 1`, `1 + p`, `2 / p`, `p // 2`, `p < q`) is the usual type error.
+
+`==` and `===` compare the coordinates with the equality of numbers, so `(1, 2) == (1.0, 2)` is true and `(1, 2) === (1.0, 2)` is false. Points with a different number of coordinates are never equal.
+
+A point is shown as `(1, 2)` or `(0.5, 2)`, each coordinate the way `puts` writes it.
+
+`math.dist(p, q)` is the distance between two points with the same number of coordinates, as a float. `math.angle(p, q)` is the angle in radians of the line from `p` to `q`, measured from the positive x direction like `math.atan2`, as a float; it is only for points with two coordinates.
 
 ## Strings
 
@@ -141,6 +173,7 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break and `\t` is 
 | `math.min(a, b, ...)`, `math.max(a, b, ...)` | The smallest or largest of at least two numbers, compared by value. The result is that argument itself, so `math.min(1, 2.5)` is the integer `1`; on a tie the first one. |
 | `math.random()` | A float from 0 up to but not including 1. |
 | `math.random(a, b)` | An integer from `a` to `b`, both included. An error if `b < a`. |
+| `math.dist(p, q)`, `math.angle(p, q)` | On points, see Points above. |
 | `math.seed(n)` | Restarts `random` from the integer `n`. Returns `null`. |
 
 `random` is deterministic: every run starts from the same default seed, so the same program makes the same numbers (and the same picture). `math.seed(n)` picks another sequence, and the same `n` always gives the same one. A host that runs programs one after another calls `evaluator.ResetMath()` before each run; the REPL and `Run` do it themselves, once per session or file.

@@ -105,6 +105,7 @@ func New(l *lexer.Lexer) *Parser {
 		token.IDENT:    p.parseIdentifier,
 		token.INT:      p.parseIntegerLiteral,
 		token.FLOAT:    p.parseFloatLiteral,
+		token.COLOR:    p.parseColorLiteral,
 		token.STRING:   p.parseStringLiteral,
 		token.TRUE:     p.parseBoolean,
 		token.FALSE:    p.parseBoolean,
@@ -178,6 +179,9 @@ func (p *Parser) errorAt(tok token.Token, format string, args ...any) {
 func illegalMessage(tok token.Token) string {
 	if strings.HasPrefix(tok.Literal, "\"") {
 		return "unterminated string"
+	}
+	if strings.HasPrefix(tok.Literal, "#") && len(tok.Literal) > 1 {
+		return "bad color " + tok.Literal
 	}
 	// A lone backslash outside a string is an unexpected character.
 	if strings.HasPrefix(tok.Literal, "\\") && len(tok.Literal) > 1 {
@@ -586,6 +590,22 @@ func (p *Parser) parseFloatLiteral() ast.Expression {
 	return &ast.FloatLiteral{Token: p.curToken, Value: value}
 }
 
+// parseColorLiteral reads the hex digits of a color token. The lexer already
+// checked that there are 3, 6 or 8 of them. #rgb stands for #rrggbb.
+func (p *Parser) parseColorLiteral() ast.Expression {
+	digits := p.curToken.Literal[1:]
+	if len(digits) == 3 {
+		digits = digits[0:1] + digits[0:1] + digits[1:2] + digits[1:2] + digits[2:3] + digits[2:3]
+	}
+	channels := []uint8{0, 0, 0, 255}
+	for i := 0; i < len(digits); i += 2 {
+		value, _ := strconv.ParseUint(digits[i:i+2], 16, 8)
+		channels[i/2] = uint8(value)
+	}
+	return &ast.ColorLiteral{Token: p.curToken,
+		R: channels[0], G: channels[1], B: channels[2], A: channels[3]}
+}
+
 func (p *Parser) parseStringLiteral() ast.Expression {
 	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
 }
@@ -608,20 +628,61 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	return expression
 }
 
-// parseGroupedExpression parses (x). Parentheses create no node: their only
-// effect is to restart the precedence from LOWEST.
+// parseGroupedExpression parses (x), or a point (x, y) and (x, y, z).
+// Parentheses around one expression create no node: their only effect is to
+// restart the precedence from LOWEST. A comma after the first expression
+// makes it a point.
 func (p *Parser) parseGroupedExpression() ast.Expression {
+	open := p.curToken
 	p.nextToken()
+
+	// () is not an empty group: say what was probably meant.
+	if p.curTokenIs(token.RPAREN) {
+		p.errorAt(open, pointSizeMessage)
+		return nil
+	}
 
 	expression := p.parseExpression(LOWEST)
 	if expression == nil {
 		return nil
 	}
 
+	if p.peekTokenIs(token.COMMA) {
+		return p.parsePointRest(open, expression)
+	}
+
 	if !p.expectPeek(token.RPAREN) {
 		return nil
 	}
 	return expression
+}
+
+// pointSizeMessage is the error of a point with no coordinates or too many.
+const pointSizeMessage = "a point has two or three coordinates"
+
+// parsePointRest parses the rest of a point after its first coordinate,
+// starting on that coordinate and ending on the ')'.
+func (p *Parser) parsePointRest(open token.Token, first ast.Expression) ast.Expression {
+	point := &ast.PointLiteral{Token: open, Coords: []ast.Expression{first}}
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		coord := p.parseExpression(LOWEST)
+		if coord == nil {
+			return nil
+		}
+		point.Coords = append(point.Coords, coord)
+	}
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+	if len(point.Coords) > 3 {
+		p.errorAt(open, pointSizeMessage)
+		return nil
+	}
+	return point
 }
 
 // parseCondition parses the condition of an if, elif or while. It starts on

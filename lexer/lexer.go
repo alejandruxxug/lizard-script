@@ -114,6 +114,8 @@ func (l *Lexer) readToken() token.Token {
 		tok = l.readString()
 	case '.':
 		tok = newToken(token.DOT, l.ch)
+	case '#':
+		return l.readColor()
 	case ';':
 		tok = newToken(token.SEMICOLON, l.ch)
 	case ':':
@@ -279,6 +281,34 @@ func (l *Lexer) unknownEscape() token.Token {
 		l.readChar()
 	}
 	return token.Token{Type: token.ILLEGAL, Literal: literal}
+}
+
+// readColor reads a color: '#' and then 3, 6 or 8 hex digits. It takes the
+// whole word after the '#', so #12 and #12xyz are one ILLEGAL token whose
+// literal is the text as written, instead of a color followed by a name. A
+// '#' alone is an ILLEGAL character, as it always was.
+func (l *Lexer) readColor() token.Token {
+	start := l.position
+	l.readChar()
+	for isLetter(l.ch) || isDigit(l.ch) {
+		l.readChar()
+	}
+	text := l.input[start:l.position]
+
+	digits := text[1:]
+	if len(digits) != 3 && len(digits) != 6 && len(digits) != 8 {
+		return token.Token{Type: token.ILLEGAL, Literal: text}
+	}
+	for i := 0; i < len(digits); i++ {
+		if !isHexDigit(digits[i]) {
+			return token.Token{Type: token.ILLEGAL, Literal: text}
+		}
+	}
+	return token.Token{Type: token.COLOR, Literal: text}
+}
+
+func isHexDigit(ch byte) bool {
+	return isDigit(ch) || 'a' <= ch && ch <= 'f' || 'A' <= ch && ch <= 'F'
 }
 
 // readNumber reads a number: digits, optionally a '.' and more digits, and

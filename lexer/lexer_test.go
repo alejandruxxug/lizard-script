@@ -479,3 +479,61 @@ func TestFloatPositions(t *testing.T) {
 		t.Errorf("x at line %d, column %d, want line 1, column 8", got.Line, got.Column)
 	}
 }
+
+// TestColors checks the color literals and the lengths and digits that make
+// a '#' word illegal.
+func TestColors(t *testing.T) {
+	color := func(s string) token.Token { return token.Token{Type: token.COLOR, Literal: s} }
+	bad := func(s string) token.Token { return token.Token{Type: token.ILLEGAL, Literal: s} }
+	ident := func(s string) token.Token { return token.Token{Type: token.IDENT, Literal: s} }
+	comma := token.Token{Type: token.COMMA, Literal: ","}
+	rparen := token.Token{Type: token.RPAREN, Literal: ")"}
+
+	tests := []struct {
+		input    string
+		expected []token.Token
+	}{
+		{"#fff", []token.Token{color("#fff")}},
+		{"#3fa34d", []token.Token{color("#3fa34d")}},
+		{"#3fa34d80", []token.Token{color("#3fa34d80")}},
+		{"#ABCDEF", []token.Token{color("#ABCDEF")}},
+		{"#aBc", []token.Token{color("#aBc")}},
+		{"#000000ff", []token.Token{color("#000000ff")}},
+		{"#123,", []token.Token{color("#123"), comma}},
+		{"#123)", []token.Token{color("#123"), rparen}},
+		{"#fff #000", []token.Token{color("#fff"), color("#000")}},
+		// The whole word is the color, so a bad one is a single token.
+		{"#", []token.Token{bad("#")}},
+		{"#1", []token.Token{bad("#1")}},
+		{"#12", []token.Token{bad("#12")}},
+		{"#1234", []token.Token{bad("#1234")}},
+		{"#12345", []token.Token{bad("#12345")}},
+		{"#1234567", []token.Token{bad("#1234567")}},
+		{"#123456789", []token.Token{bad("#123456789")}},
+		{"#ggg", []token.Token{bad("#ggg")}},
+		{"#12345g", []token.Token{bad("#12345g")}},
+		{"#fff_", []token.Token{bad("#fff_")}},
+		{"#red", []token.Token{bad("#red")}},
+		{"# fff", []token.Token{bad("#"), ident("fff")}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, want := range append(tt.expected, token.Token{Type: token.EOF, Literal: ""}) {
+			got := l.NextToken()
+			if got.Type != want.Type || got.Literal != want.Literal {
+				t.Fatalf("input %q, token[%d] - expected=%+v, got=%+v",
+					tt.input, i, want, got)
+			}
+		}
+	}
+}
+
+// TestColorPositions checks the column after a color.
+func TestColorPositions(t *testing.T) {
+	l := New("#3fa34d x")
+	l.NextToken()
+	if got := l.NextToken(); got.Line != 1 || got.Column != 9 {
+		t.Errorf("x at line %d, column %d, want line 1, column 9", got.Line, got.Column)
+	}
+}

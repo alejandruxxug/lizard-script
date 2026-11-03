@@ -647,3 +647,82 @@ func TestFloatErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestColorLiterals(t *testing.T) {
+	tests := []struct {
+		input      string
+		r, g, b, a uint8
+	}{
+		{"#000", 0, 0, 0, 255},
+		{"#fff", 255, 255, 255, 255},
+		{"#f80", 255, 136, 0, 255},
+		{"#3fa34d", 63, 163, 77, 255},
+		{"#3FA34D", 63, 163, 77, 255},
+		{"#3fa34d80", 63, 163, 77, 128},
+		{"#00000000", 0, 0, 0, 0},
+	}
+	for _, tt := range tests {
+		statement := parse(t, tt.input).Statements[0].(*ast.ExpressionStatement)
+		color, ok := statement.Expression.(*ast.ColorLiteral)
+		if !ok {
+			t.Fatalf("input %q - expected *ast.ColorLiteral, got %T", tt.input, statement.Expression)
+		}
+		if color.R != tt.r || color.G != tt.g || color.B != tt.b || color.A != tt.a {
+			t.Errorf("input %q - got %d %d %d %d", tt.input, color.R, color.G, color.B, color.A)
+		}
+	}
+}
+
+func TestPointTrees(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"(1, 2)", "(1, 2)"},
+		{"(1, 2, 3)", "(1, 2, 3)"},
+		{"(1 + 2, 3 * 4)", "((1 + 2), (3 * 4))"},
+		{"((1, 2))", "(1, 2)"},
+		{"(1)", "1"},
+		{"(1 + 2)", "(1 + 2)"},
+		{"((1, 2), 3)", "((1, 2), 3)"},
+		{"(1, 2) + (3, 4)", "((1, 2) + (3, 4))"},
+		{"2 * (1, 2)", "(2 * (1, 2))"},
+		{"-(1, 2)", "(-(1, 2))"},
+		{"(1, 2).x", "((1, 2)[\"x\"])"},
+		{"f((1, 2))", "f((1, 2))"},
+		{"f((1, 2), 3)", "f((1, 2), 3)"},
+		{"f(1, 2)", "f(1, 2)"},
+		{"[(1, 2), (3, 4)]", "[(1, 2), (3, 4)]"},
+		{"(a, b)", "(a, b)"},
+		{"(f(1), g(2, 3))", "(f(1), g(2, 3))"},
+		{"(1,\n2)", "(1, 2)"},
+	}
+	for _, tt := range tests {
+		if got := parse(t, tt.input).String(); got != tt.expected {
+			t.Errorf("input %q - expected %s, got %s", tt.input, tt.expected, got)
+		}
+	}
+}
+
+func TestColorAndPointErrors(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"#12", `[line 1, column 1] lexical error: bad color #12`},
+		{"let c = #12345", `[line 1, column 9] lexical error: bad color #12345`},
+		{"#ggg", `[line 1, column 1] lexical error: bad color #ggg`},
+		{"#1234", `[line 1, column 1] lexical error: bad color #1234`},
+		{"f(#12)", `[line 1, column 3] lexical error: bad color #12`},
+		{"(#12, 1)", `[line 1, column 2] lexical error: bad color #12`},
+		{"#", `[line 1, column 1] lexical error: unexpected character "#"`},
+		{"()", `[line 1, column 1] syntax error: a point has two or three coordinates`},
+		{"let p = ()", `[line 1, column 9] syntax error: a point has two or three coordinates`},
+		{"(1, 2, 3, 4)", `[line 1, column 1] syntax error: a point has two or three coordinates`},
+		{"(1, 2, 3, 4, 5)", `[line 1, column 1] syntax error: a point has two or three coordinates`},
+		{"(1, )", `[line 1, column 5] syntax error: expected an expression, got ")"`},
+		{"(1, 2", `[line 1, column 6] syntax error: expected ")", got end of input`},
+		{"(, 1)", `[line 1, column 2] syntax error: expected an expression, got ","`},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if len(p.Errors()) != 1 || p.Errors()[0] != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}

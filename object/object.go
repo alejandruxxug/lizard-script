@@ -20,6 +20,8 @@ const (
 	FLOAT_OBJ    = "FLOAT"
 	BOOLEAN_OBJ  = "BOOLEAN"
 	STRING_OBJ   = "STRING"
+	COLOR_OBJ    = "COLOR"
+	POINT_OBJ    = "POINT"
 	NULL_OBJ     = "NULL"
 	ARRAY_OBJ    = "ARRAY"
 	HASH_OBJ     = "HASH"
@@ -70,6 +72,39 @@ func (f *Float) Inspect() string {
 		text += ".0"
 	}
 	return text
+}
+
+// Color is a color with four channels, each 0 to 255. It can't be changed
+// and can't be a hash key.
+type Color struct {
+	R, G, B, A uint8
+}
+
+func (c *Color) Type() ObjectType { return COLOR_OBJ }
+
+// Inspect writes #rrggbb in lowercase, or #rrggbbaa when the color is not
+// fully opaque.
+func (c *Color) Inspect() string {
+	if c.A == 255 {
+		return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
+	}
+	return fmt.Sprintf("#%02x%02x%02x%02x", c.R, c.G, c.B, c.A)
+}
+
+// Point is a position with two or three coordinates (x, y) or (x, y, z).
+// Every coordinate is an Integer or a Float and keeps its type. It can't be
+// changed and can't be a hash key.
+type Point struct {
+	Coords []Object
+}
+
+func (p *Point) Type() ObjectType { return POINT_OBJ }
+func (p *Point) Inspect() string {
+	parts := make([]string, len(p.Coords))
+	for i, c := range p.Coords {
+		parts[i] = c.Inspect()
+	}
+	return "(" + strings.Join(parts, ", ") + ")"
 }
 
 // Boolean is true or false. There are only two of them, see the evaluator.

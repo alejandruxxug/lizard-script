@@ -46,8 +46,9 @@ prefix     = ( "-" | "!" ) prefix | power ;
 power      = postfix [ "**" prefix ] ;
 postfix    = primary { "(" [ arguments ] ")" | "[" expression "]" | "." IDENT } ;
 
-primary    = IDENT | INT | FLOAT | STRING | "true" | "false"
+primary    = IDENT | INT | FLOAT | STRING | COLOR | "true" | "false"
            | "(" expression ")"
+           | pointLiteral
            | arrayLiteral
            | hashLiteral
            | functionLiteral
@@ -56,6 +57,7 @@ primary    = IDENT | INT | FLOAT | STRING | "true" | "false"
            | forExpression ;
 
 arguments       = expression { "," expression } ;
+pointLiteral    = "(" expression "," expression [ "," expression ] ")" ;
 arrayLiteral    = "[" [ arguments ] "]" ;
 hashLiteral     = "{" [ pair { "," pair } [ "," ] ] "}" ;
 pair            = expression ":" expression ;
@@ -99,6 +101,8 @@ FLOAT   = digit { digit } "." digit { digit } [ unit ]
 unit    = "deg" | "rad" | "turn" | "px" ;
 STRING  = '"' { any character except '"' and '\' | escape } '"' ;
 escape  = "\\" ( '"' | "\\" | "n" | "t" ) ;
+COLOR   = "#" hex hex hex [ hex hex hex [ hex hex ] ] ;
+hex     = digit | "a".."f" | "A".."F" ;
 comment = "-~>" { any character except newline } ;
 ```
 
@@ -107,6 +111,10 @@ Whitespace and comments are skipped between tokens. Numbers are always decimal, 
 A float needs digits on both sides of the `.`: `1.5` and `10.0` are floats, `.5` is a `.` and an integer, and `1.` is an integer and a `.`, so `1.x` is dot access on an integer (an error when it runs). `1.5.x` is the float `1.5` and then dot access.
 
 A unit must come right after the number, with no space: `45deg`, `1.5rad`, `0.25turn`, `10px`. `deg`, `rad` and `turn` make a FLOAT in radians (`45deg` is 0.785..., `1turn` is 2π), and `px` leaves the number as it is. The unit is only taken when the whole word is one of the four, so `5degx` is not a unit: it is the integer `5` and then the name `degx`, as before. When a number is directly followed by a name like that and a statement should end there, the parser says `unknown unit "kg"` instead of the plain "expected end of statement" (a syntax error, not a lexical one). A number too big for a float is the syntax error `number ... is too large`.
+
+A color is `#` and then exactly 3, 6 or 8 hex digits: `#rgb`, `#rrggbb`, `#rrggbbaa`, in any case. The lexer takes the whole word after the `#`, so `#12`, `#1234`, `#12345` and `#12ab_z` are the lexical error `bad color #12` (with the text as written) and not a color followed by a name. A `#` with no word after it is still `unexpected character "#"`.
+
+A point is `(x, y)` or `(x, y, z)`. A comma after the first expression inside parentheses is what makes it a point; `(x)` is still a grouped expression. `()` and four or more coordinates are the syntax error `a point has two or three coordinates`, reported at the `(`. A point is one argument: `f((1, 2))` passes a point, while `f(1, 2)` passes two numbers. A trailing comma, `(1, 2,)`, is an error.
 
 ## Rules that are not in the grammar
 

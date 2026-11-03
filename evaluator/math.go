@@ -48,6 +48,8 @@ func mathLibrary() *object.Hash {
 		"max":    mathExtreme(func(a, b float64) bool { return b > a }),
 		"random": mathRandom,
 		"seed":   mathSeed,
+		"dist":   mathDist,
+		"angle":  mathAngle,
 	} {
 		hash.Set(&object.String{Value: name}, &object.Builtin{Name: "math." + name, Fn: fn})
 	}

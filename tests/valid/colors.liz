@@ -1,0 +1,23 @@
+-~> Colors: hex literals, channels with dot access, and the builders.
+let green = #3fa34d
+puts(green, type(green))
+puts(green.r, green.g, green.b, green.a)
+
+-~> #rgb doubles each digit, any case works, and alpha prints only if not 255.
+puts(#f00, #FFAA00, #3fa34d80, #00000000)
+puts(#3fa34d == #3FA34D, #fff === #ffffff, #fff == #ffffff00, #fff != #000)
+
+-~> The builders: floats are rounded.
+puts(rgb(255, 128, 0), rgba(10, 20, 30, 128), rgb(0.4, 254.6, 127.5))
+puts(hsl(0, 100, 50), hsl(120, 100, 50), hsl(240, 100, 50), hsl(210, 50, 40))
+puts(hsl(0, 0, 100), hsl(360, 100, 50), hsl(60, 100, 25))
+
+-~> Colors are values: truthy, comparable, and fine in arrays.
+if (#000) { puts("truthy") }
+let palette = [#f00, #0f0, #00f]
+puts(palette, len(palette), palette[1].g)
+puts(str(#abc), #abc == "#aabbcc")
+
+-~> A color can't be changed: make a new one.
+let fade = function(c, alpha) { return rgba(c.r, c.g, c.b, alpha) }
+puts(fade(green, 100))

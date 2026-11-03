@@ -38,6 +38,10 @@ func init() {
 		"int":    builtinInt,
 		"float":  builtinFloat,
 		"range":  builtinRange,
+		"rgb":    builtinRGB,
+		"rgba":   builtinRGBA,
+		"hsl":    builtinHSL,
+		"point":  builtinPoint,
 	} {
 		builtins[name] = &object.Builtin{Name: name, Fn: fn}
 	}
