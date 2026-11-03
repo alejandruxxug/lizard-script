@@ -1,0 +1,83 @@
+-~> An analog clock drawn with spans: the face is a disc, the hands are
+-~> thick lines. Esc quits.
+-~> Run it with: lizardscript examples/terrarium/clock.liz
+
+let size = 320
+let center = (size / 2, size / 2)
+let w = window.open(size, size, "clock", {"scale": 1, "fps": 30})
+
+-~> A filled circle, one span per row. (/ of two integers is a whole
+-~> number, so the fractions below divide by a float.)
+function disc(c, r, color) {
+  let rows = math.floor(r)
+  for (let dy = -rows; dy <= rows; dy += 1) {
+    let half = math.sqrt(r * r - dy * dy)
+    window.span(w, c.y + dy, c.x - half, c.x + half, color)
+  }
+}
+
+-~> A thick line from a to b: the spans of every row it crosses, cut from
+-~> the band of points closer than half its width to the segment.
+function line(a, b, width, color) {
+  let r = width / 2.0
+  let top = math.floor(math.min(a.y, b.y) - r)
+  let bottom = math.ceil(math.max(a.y, b.y) + r)
+  let d = b - a
+  let length2 = d.x * d.x + d.y * d.y
+  let runs = []
+  for (let y = top; y <= bottom; y += 1) {
+    let left = null
+    let right = null
+    for (let x = math.floor(math.min(a.x, b.x) - r); x <= math.ceil(math.max(a.x, b.x) + r); x += 1) {
+      -~> The closest point of the segment to the middle of the pixel.
+      let p = (x + 0.5, y + 0.5)
+      let t = math.max(0, math.min(1, ((p.x - a.x) * d.x + (p.y - a.y) * d.y) / length2))
+      if (math.dist(p, a + d * t) <= r) {
+        if (left == null) {
+          left = x
+        }
+        right = x + 1
+      }
+    }
+    if (left != null) {
+      push(runs, [y, left, right])
+    }
+  }
+  window.spans(w, runs, color)
+}
+
+-~> The end of a hand at a fraction of a turn, clockwise from 12.
+function hand_end(turn, length) {
+  let angle = turn * math.tau - math.pi / 2
+  center + (math.cos(angle) * length, math.sin(angle) * length)
+}
+
+function draw() {
+  let now = time.now()
+  window.clear(w, #1d2b33)
+  disc(center, 150, #f4efe6)
+  for (let mark = 0; mark < 12; mark += 1) {
+    disc(hand_end(mark / 12.0, 132), 4, #2b3a55)
+  }
+  let minutes = now.minute + now.second / 60.0
+  let hours = now.hour % 12 + minutes / 60
+  line(center, hand_end(hours / 12.0, 75), 9, #2b3a55)
+  line(center, hand_end(minutes / 60.0, 115), 6, #2b3a55)
+  line(center, hand_end(now.second / 60.0, 125), 2, #d95763)
+  disc(center, 6, #d95763)
+}
+
+let shown = -1
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    if (events[i].type == "key" && events[i].key == "Escape") {
+      return false
+    }
+  }
+  -~> Draw only when the second changes.
+  let second = time.now().second
+  if (second != shown) {
+    shown = second
+    draw()
+  }
+})

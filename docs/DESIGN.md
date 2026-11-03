@@ -66,8 +66,9 @@ source text ──> lexer ──> tokens ──> parser ──> AST ──> eval
 | `code` | The bytecode: opcodes, their encoding, and the compiled unit with its tables. |
 | `compiler` | Turns the AST into bytecode for the VM, with the evaluator's rules for scopes and signals. |
 | `vm` | `vm.Run(program, env)`: a stack VM that runs the bytecode, a second, faster engine with the same results. |
-| `repl` | The interactive loop and `Run`, which runs a whole file (`RunVM` runs it on the VM). |
-| `main.go` | `lizardscript` starts the REPL; `lizardscript file.liz` runs a file; `lizardscript --vm file.liz` runs it on the VM. |
+| `repl` | The interactive loop and `Run`, which runs a whole file (`RunVM` runs it on the VM). Both install the Terrarium first (the REPL without `window` and `pen`). |
+| `terrarium` | The standard library: the modules `fs`, `os`, `time`, `json`, `img`, `clip`, and in `terrarium/window` and `terrarium/pen`, `window` and `pen`. See below and [TERRARIUM.md](TERRARIUM.md). |
+| `main.go` | `lizardscript` starts the REPL; `lizardscript file.liz [args]` runs a file; `lizardscript --vm file.liz [args]` runs it on the VM. `os.args()` gives the args. |
 
 **Errors.** Each kind of error is detected in its own stage and reported as `[line L, column C] <kind> error: <message>`:
 - **Lexical:** the lexer turns a bad character into an `ILLEGAL` token, and the parser reports it as a lexical error.
@@ -94,6 +95,23 @@ The structure follows the sequel of the course book (*Writing a Compiler in Go*)
 - **Resolved at run time.** The program's own scope is the host's `env`, read and written by name, so globals added between runs are found, then the builtins, `null`, `math`, `text` and `list`.
 - **Signals.** `return`, `break` and `continue` are jumps that close the layers and trys they leave. An `if` or loop used as a value stops them and gets them as its value, and a statement whose value is one of those values acts like it, exactly as in the evaluator.
 - **Interop points.** Everything but the fast paths (integer arithmetic and comparisons, array indexing) calls the evaluator's own code through `evaluator/engines.go` (`Infix`, `Index`, `SetIndex`, `ApplyFunction`, `Builtin`, …), so messages can't drift apart. A VM closure is an `object.Callable`: it is a `FUNCTION`, prints its source, and the evaluator and `list.sort` call it; the VM calls the evaluator's functions and the builtins through `evaluator.ApplyFunction`. The step counter, `MaxSteps`, `Output`, the hooks and the call depth (10000 calls of both engines together) are shared.
+
+### The Terrarium: the standard library
+
+The Terrarium is how a program reaches the world outside it: files, the system, time, images, the clipboard, and a window with its input and pen pressure. With it a whole app can be written in lizard-script; the Go code only reaches the system, and what to draw, every pixel of it, is decided by the program. The full reference is [TERRARIUM.md](TERRARIUM.md).
+
+```
+host ──> terrarium.Install(env) ──> env: fs os time json img clip (+ window pen) ──> evaluator or vm
+                │
+     Go modules (one file each) + lizard-script modules (terrarium/lib/*.liz, run into env)
+```
+
+- **Modules are values, not syntax.** Each module is a HASH of builtins that `Install` defines in the program's environment, so `fs.read(path)` is plain dot access and a call, both engines run it unchanged, and a program's own `let fs = ...` hides it like any variable. They are made new for each install, so a change to one doesn't reach the next run.
+- **Lizard-script first.** A module that needs no system access and no speed is written in lizard-script and embedded (`json` is). It keeps its helpers inside one function that returns the module's hash, so a program's names never meet them.
+- **Opaque values.** An image or a window is an `object.Native{Kind, Value}`: type `NATIVE`, shown as `<image 640x480>`, equal only to itself. Only the builtins that know its kind look inside.
+- **Drawing targets.** Images and windows are drawn on the same way: `size`, `clear`, `fill`, `span`, `spans` and `blit` are one implementation (`terrarium/internal/canvas`) present in both modules, and each takes either target, so a drawing library can take either one. A new target implements `pixels.Target`.
+- **Optional window.** `window` and `pen` need Ebitengine, so they live in their own package, which adds itself to `Install` from its `init` when a host imports it. A host with no screen calls `InstallCore` or doesn't import it, and doesn't link a window. `window.run` calls the program's `tick` through `evaluator.ApplyFunction`, like `list.sort` calls its comparison, so it works with functions of either engine.
+- **System differences** live in files with build tags (`sys_darwin.go`, `pen_windows.go`, ...). Nothing needs a C compiler, so the CLI builds for macOS, Windows and Linux from any of them.
 
 ## 3. Design decisions
 
@@ -189,3 +207,4 @@ Phases 1 to 4 follow the course's reference interpreter, and that foundation sta
 | 2026-11-03 | Cached string characters | `s[i]` and `len(s)` converted the whole string each time, so a loop over a long string was quadratic. | `object.String` keeps unexported cache fields filled on first use (ASCII text needs no copy) and gains `Len()`, `Runes()` and `RuneAt(i)`; `Value` and the printed output are unchanged. The evaluator's `s[i]`, `len` and `text.slice`, `find` and `code` use them. |
 | 2026-11-03 | Source names | A host loads libraries and the user's program into one environment and must tell which source a statement or error came from. | `lexer.NewNamed(input, name)` (`New` is unchanged, name `""`); `token.Token.Source`; `object.Error.Source`, filled by `newError` from the token. Names are not in any message. The parser copies the source onto the `let` token it builds for `function name() {}`. |
 | 2026-11-03 | Bytecode compiler and VM | A host that runs a lot of code (redrawing on every change) needs a faster engine than walking the tree. | New packages `code` (opcodes, encoding, compiled unit), `compiler` (AST to bytecode) and `vm` (`vm.Run(program, env)`, same contract and results as `evaluator.Eval`; `vm.RunUnit` for a program compiled once), `repl.RunVM` and `lizardscript --vm file.liz`. The evaluator stays the default and is untouched in meaning. It gains `evaluator/engines.go`, exports that wrap what Eval already does (`ApplyFunction`, `Infix`, `Prefix`, `Index`, `SetIndex`, `IsTruthy`, `Builtin`, `CountStep`, `CallDepth`/`SetCallDepth`, `ErrorHash`, `NewError`, `MaxCallDepth`); `object.Callable`, an interface for function values of another engine, which `applyFunction` calls before "not a function" and `list.sort` accepts as a comparison. No token, AST node or builtin changes. See section 2. |
+| 2026-11-03 | The Terrarium, a standard library | A whole app (a paint program, a game) should be writable in lizard-script alone, with files, images, a window and pen input, and no host of its own. | New package `terrarium` (`Install`, `InstallCore`, `Register`, `Args`) with the modules `fs`, `os`, `time`, `img`, `clip` in Go and `json` in lizard-script (embedded), and the packages `terrarium/window` (Ebitengine, only to open the window, read input and show the buffer) and `terrarium/pen` (pressure on macOS and Windows Ink). New value `object.Native` (type `NATIVE`) for images and windows. `repl.Run` and `RunVM` install the whole Terrarium, the REPL all but `window` and `pen`; `lizardscript file.liz args...` passes the args to `os.args()`. No token, AST node, evaluator or VM change. A program that used one of the names `fs`, `os`, `time`, `json`, `img`, `clip`, `window` or `pen` without defining it got `identifier not found` before and now gets the module; a program that defines one hides the module, so no working program changes. New dependencies: Ebitengine, purego, golang.org/x/sys. See section 2 and TERRARIUM.md. |

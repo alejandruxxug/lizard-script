@@ -1,0 +1,443 @@
+-~> json: reading and writing JSON.
+-~>   json.parse(text)               the value of the JSON text
+-~>   json.write(value, indent = 0)  the JSON text of value; with an indent
+-~>                                  above 0, one item per line, nested by
+-~>                                  that many spaces
+-~> Objects are hashes, arrays are arrays, strings are strings, true and
+-~> false are booleans and null is null. A number without a fraction or an
+-~> exponent is an INTEGER (a FLOAT when it is too big for one), any other is
+-~> a FLOAT. When writing, a COLOR becomes its "#rrggbb" text and a POINT
+-~> becomes [x, y] (or [x, y, z]). A hash key that is not a string is
+-~> written with str(). A value that can't be JSON (a function) or that
+-~> contains itself is an error.
+-~>
+-~> Everything but json itself lives inside the function below, so a
+-~> program's own names never meet the helpers.
+
+let json = function() {
+  -~> Objects and arrays nest at most this deep, so a hostile input can't
+  -~> overflow the stack.
+  let max_depth = 100
+
+  -~> ---- reading ----
+
+  -~> Stops with a message that says where in the text the problem is.
+  function fail(p, message) {
+    let row = 1
+    let col = 1
+    for (let k = 0; k < p.i && k < p.n; k += 1) {
+      if (p.c[k] == "\n") {
+        row += 1
+        col = 1
+      } else {
+        col += 1
+      }
+    }
+    error("json.parse: line " + str(row) + ", column " + str(col) + ": " + message)
+  }
+
+  -~> The text of characters a to b of the input.
+  function chunk(p, a, b) {
+    text.join(list.slice(p.c, a, b), "")
+  }
+
+  -~> A character for a message: control characters are shown by their code.
+  function show(c) {
+    if (c === null) {
+      return "the end of the text"
+    }
+    if (c < " ") {
+      return "character code " + str(text.code(c, 0))
+    }
+    "'" + c + "'"
+  }
+
+  function skip(p) {
+    while (p.i < p.n) {
+      let c = p.c[p.i]
+      if (c == " " || c == "\n" || c == "\t" || c == "\r") {
+        p.i += 1
+      } else {
+        return null
+      }
+    }
+  }
+
+  function is_digit(c) {
+    c != null && c >= "0" && c <= "9"
+  }
+
+  -~> The word true, false or null, and the value it stands for.
+  function word(p, name, value) {
+    let found = chunk(p, p.i, p.i + len(name))
+    if (found !== name) {
+      fail(p, "expected " + name + ", found '" + found + "' (the only words are true, false and null)")
+    }
+    p.i += len(name)
+    value
+  }
+
+  let hex_digits = "0123456789abcdef"
+
+  -~> The four hex digits at the cursor as a number; moves past them.
+  function hex4(p) {
+    if (p.i + 4 > p.n) {
+      fail(p, "a \\u escape needs 4 hex digits")
+    }
+    let n = 0
+    for (let k = 0; k < 4; k += 1) {
+      let d = text.find(hex_digits, text.lower(p.c[p.i + k]))
+      if (d < 0) {
+        p.i += k
+        fail(p, "a \\u escape needs 4 hex digits, got " + show(p.c[p.i]))
+      }
+      n = n * 16 + d
+    }
+    p.i += 4
+    n
+  }
+
+  let simple = {"\"": "\"", "\\": "\\", "/": "/", "b": text.char(8), "f": text.char(12), "n": "\n", "r": "\r", "t": "\t"}
+
+  -~> The character of the escape after a backslash. The cursor is on the
+  -~> letter after the backslash.
+  function escape_char(p) {
+    let e = p.c[p.i]
+    let plain = simple[e]
+    if (plain !== null) {
+      p.i += 1
+      return plain
+    }
+    if (e != "u") {
+      fail(p, "bad escape \\" + e)
+    }
+    p.i += 1
+    let code = hex4(p)
+    if (code >= 56320 && code <= 57343) {
+      fail(p, "a low surrogate (\\udc00 to \\udfff) must come right after a high one (\\ud800 to \\udbff)")
+    }
+    if (code >= 55296 && code <= 56319) {
+      if (p.i + 1 < p.n && p.c[p.i] == "\\" && p.c[p.i + 1] == "u") {
+        p.i += 2
+        let low = hex4(p)
+        if (low >= 56320 && low <= 57343) {
+          return text.char(65536 + (code - 55296) * 1024 + (low - 56320))
+        }
+      }
+      fail(p, "a high surrogate must be followed by a low one (\\udc00 to \\udfff)")
+    }
+    text.char(code)
+  }
+
+  -~> The string at the cursor (on its opening quote).
+  function read_string(p) {
+    let opening = p.i
+    p.i += 1
+    let parts = []
+    let start = p.i
+    while (true) {
+      if (p.i >= p.n) {
+        p.i = opening
+        fail(p, "this string is never closed")
+      }
+      let c = p.c[p.i]
+      if (c == "\"") {
+        push(parts, chunk(p, start, p.i))
+        p.i += 1
+        return text.join(parts, "")
+      }
+      if (c == "\\") {
+        push(parts, chunk(p, start, p.i))
+        p.i += 1
+        if (p.i >= p.n) {
+          fail(p, "the text ends inside an escape")
+        }
+        push(parts, escape_char(p))
+        start = p.i
+      } elif (c < " ") {
+        fail(p, "a string can't hold the " + show(c) + " as it is, write it as an escape")
+      } else {
+        p.i += 1
+      }
+    }
+  }
+
+  function read_number(p) {
+    let start = p.i
+    if (p.c[p.i] == "-") {
+      p.i += 1
+    }
+    if (!is_digit(p.c[p.i])) {
+      fail(p, "a number needs a digit here")
+    }
+    if (p.c[p.i] == "0") {
+      p.i += 1
+      if (is_digit(p.c[p.i])) {
+        fail(p, "a number can't start with extra zeros")
+      }
+    } else {
+      while (is_digit(p.c[p.i])) {
+        p.i += 1
+      }
+    }
+    if (p.c[p.i] == ".") {
+      p.i += 1
+      if (!is_digit(p.c[p.i])) {
+        fail(p, "a number needs a digit after the point")
+      }
+      while (is_digit(p.c[p.i])) {
+        p.i += 1
+      }
+    }
+    if (p.c[p.i] == "e" || p.c[p.i] == "E") {
+      p.i += 1
+      if (p.c[p.i] == "+" || p.c[p.i] == "-") {
+        p.i += 1
+      }
+      if (!is_digit(p.c[p.i])) {
+        fail(p, "a number needs a digit in its exponent")
+      }
+      while (is_digit(p.c[p.i])) {
+        p.i += 1
+      }
+    }
+    let n = text.number(chunk(p, start, p.i))
+    if (n === null) {
+      p.i = start
+      fail(p, "this number is too big")
+    }
+    n
+  }
+
+  function read_array(p, depth) {
+    p.i += 1
+    let out = []
+    skip(p)
+    if (p.i < p.n && p.c[p.i] == "]") {
+      p.i += 1
+      return out
+    }
+    while (true) {
+      push(out, read_value(p, depth + 1))
+      skip(p)
+      if (p.i >= p.n) {
+        fail(p, "the array is never closed, expected , or ]")
+      }
+      let c = p.c[p.i]
+      p.i += 1
+      if (c == "]") {
+        return out
+      }
+      if (c != ",") {
+        p.i -= 1
+        fail(p, "expected , or ] in an array, got " + show(c))
+      }
+    }
+  }
+
+  function read_object(p, depth) {
+    p.i += 1
+    let out = {}
+    skip(p)
+    if (p.i < p.n && p.c[p.i] == "}") {
+      p.i += 1
+      return out
+    }
+    while (true) {
+      skip(p)
+      if (p.i >= p.n) {
+        fail(p, "the object is never closed")
+      }
+      if (p.c[p.i] != "\"") {
+        fail(p, "expected a string key in an object, got " + show(p.c[p.i]))
+      }
+      let key = read_string(p)
+      skip(p)
+      if (p.i >= p.n || p.c[p.i] != ":") {
+        fail(p, "expected : after the key \"" + key + "\"")
+      }
+      p.i += 1
+      out[key] = read_value(p, depth + 1)
+      skip(p)
+      if (p.i >= p.n) {
+        fail(p, "the object is never closed, expected , or }")
+      }
+      let c = p.c[p.i]
+      p.i += 1
+      if (c == "}") {
+        return out
+      }
+      if (c != ",") {
+        p.i -= 1
+        fail(p, "expected , or } in an object, got " + show(c))
+      }
+    }
+  }
+
+  function read_value(p, depth) {
+    if (depth > max_depth) {
+      fail(p, "nested more than " + str(max_depth) + " levels deep")
+    }
+    skip(p)
+    if (p.i >= p.n) {
+      fail(p, "the text ends where a value should be")
+    }
+    let c = p.c[p.i]
+    if (c == "{") {
+      return read_object(p, depth)
+    }
+    if (c == "[") {
+      return read_array(p, depth)
+    }
+    if (c == "\"") {
+      return read_string(p)
+    }
+    if (c == "t") {
+      return word(p, "true", true)
+    }
+    if (c == "f") {
+      return word(p, "false", false)
+    }
+    if (c == "n") {
+      return word(p, "null", null)
+    }
+    if (c == "-" || is_digit(c)) {
+      return read_number(p)
+    }
+    fail(p, "unexpected " + show(c) + ", expected a value")
+  }
+
+  -~> json.parse(text) is the value of the JSON text.
+  function parse(source) {
+    if (type(source) != "STRING") {
+      error("json.parse: want a STRING text, got " + type(source))
+    }
+    let chars = text.split(source, "")
+    let p = {"c": chars, "i": 0, "n": len(chars)}
+    let v = read_value(p, 0)
+    skip(p)
+    if (p.i < p.n) {
+      fail(p, "unexpected " + show(p.c[p.i]) + " after the end of the value")
+    }
+    v
+  }
+
+  -~> ---- writing ----
+
+  -~> The escapes of the control characters, as [character, escape] pairs.
+  function control_table() {
+    let names = {8: "\\b", 9: "\\t", 10: "\\n", 12: "\\f", 13: "\\r"}
+    let out = []
+    for (let k = 0; k < 32; k += 1) {
+      let e = names[k]
+      if (e === null) {
+        e = "\\u00" + hex_digits[k // 16] + hex_digits[k % 16]
+      }
+      push(out, [text.char(k), e])
+    }
+    out
+  }
+
+  let controls = control_table()
+
+  -~> The JSON text of a string, with its quotes. It makes a few passes over
+  -~> the whole text, not one call for each character, so a long text is
+  -~> cheap.
+  function quote(s) {
+    if (text.find(s, "\\") >= 0) {
+      s = text.replace(s, "\\", "\\\\")
+    }
+    if (text.find(s, "\"") >= 0) {
+      s = text.replace(s, "\"", "\\\"")
+    }
+    for (let k = 0; k < 32; k += 1) {
+      if (text.find(s, controls[k][0]) >= 0) {
+        s = text.replace(s, controls[k][0], controls[k][1])
+      }
+    }
+    "\"" + s + "\""
+  }
+
+  -~> The items of an array or object between open and close: on one line
+  -~> when indent is 0, else one per line, each indent spaces further in than
+  -~> pad.
+  function enclose(open, items, close, indent, pad) {
+    if (len(items) == 0) {
+      return open + close
+    }
+    if (indent == 0) {
+      return open + text.join(items, ",") + close
+    }
+    let inner = pad + " " * indent
+    open + "\n" + inner + text.join(items, ",\n" + inner) + "\n" + pad + close
+  }
+
+  function write_value(v, indent, depth, pad) {
+    if (depth > max_depth) {
+      error("json.write: the value is nested more than " + str(max_depth) + " levels deep (does it contain itself?)")
+    }
+    let t = type(v)
+    if (t == "STRING") {
+      return quote(v)
+    }
+    if (t == "INTEGER" || t == "FLOAT") {
+      return str(v)
+    }
+    if (t == "BOOLEAN") {
+      if (v) {
+        return "true"
+      }
+      return "false"
+    }
+    if (t == "NULL") {
+      return "null"
+    }
+    if (t == "COLOR") {
+      return quote(str(v))
+    }
+    if (t == "POINT") {
+      let coords = [str(v.x), str(v.y)]
+      -~> Reading z of a point with two coordinates is an error.
+      try {
+        push(coords, str(v.z))
+      } catch {
+      }
+      return "[" + text.join(coords, ",") + "]"
+    }
+    let inner = pad + " " * indent
+    if (t == "ARRAY") {
+      let items = []
+      for (let k = 0; k < len(v); k += 1) {
+        push(items, write_value(v[k], indent, depth + 1, inner))
+      }
+      return enclose("[", items, "]", indent, pad)
+    }
+    if (t == "HASH") {
+      let colon = ":"
+      if (indent > 0) {
+        colon = ": "
+      }
+      let items = []
+      let names = keys(v)
+      for (let k = 0; k < len(names); k += 1) {
+        let name = names[k]
+        if (type(name) != "STRING") {
+          name = str(name)
+        }
+        push(items, quote(name) + colon + write_value(v[names[k]], indent, depth + 1, inner))
+      }
+      return enclose("{", items, "}", indent, pad)
+    }
+    error("json.write: can't write a " + t + " as JSON")
+  }
+
+  -~> json.write(value, indent = 0) is the JSON text of value.
+  function write(value, indent = 0) {
+    if (type(indent) != "INTEGER" || indent < 0 || indent > 16) {
+      error("json.write: the indent must be an INTEGER from 0 to 16, got " + str(indent))
+    }
+    write_value(value, indent, 0, "")
+  }
+
+  {"parse": parse, "write": write}
+}()

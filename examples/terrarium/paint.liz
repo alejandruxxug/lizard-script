@@ -1,0 +1,52 @@
+-~> Paint with the mouse, a trackpad or a pen: drag to paint circles whose
+-~> size follows the pressure. c clears, Esc quits.
+-~> Run it with: lizardscript examples/terrarium/paint.liz
+
+let paper = #f4efe6
+let ink = #2b3a55
+let w = window.open(600, 400, "paint 🦎")
+window.clear(w, paper)
+
+-~> A filled circle, one span per row. (/ of two integers is a whole
+-~> number, so the fractions below divide by a float.)
+function circle(center, r, color) {
+  let rows = math.floor(r)
+  for (let dy = -rows; dy <= rows; dy += 1) {
+    let half = math.sqrt(r * r - dy * dy)
+    window.span(w, center.y + dy, center.x - half, center.x + half, color)
+  }
+}
+
+-~> The size of the brush for a pressure from 0 to 1.
+function brush(pressure) {
+  2 + pressure * 14
+}
+
+-~> A drag can move far in one frame: fill the gap with circles.
+function stroke(from, to, r) {
+  let steps = math.max(1, math.ceil(math.dist(from, to) / (r / 2)))
+  for (let i = 1; i <= steps; i += 1) {
+    circle(from + (to - from) * (i / float(steps)), r, ink)
+  }
+}
+
+let last = null
+
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "down" && e.button == "left") {
+      circle(e.pos, brush(e.pen.pressure), ink)
+      last = e.pos
+    } elif (e.type == "move" && last != null) {
+      stroke(last, e.pos, brush(e.pen.pressure))
+      last = e.pos
+    } elif (e.type == "up") {
+      last = null
+    } elif (e.type == "type" && e.text == "c") {
+      window.clear(w, paper)
+    } elif (e.type == "key" && e.key == "Escape") {
+      return false
+    }
+  }
+})

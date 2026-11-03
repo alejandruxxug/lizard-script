@@ -49,6 +49,8 @@ let lizard = {"name": "Liz", "toes": [5, 5, 5, 5]};
 - [docs/DESIGN.md](docs/DESIGN.md): the design document. It has the grammar in EBNF, the architecture, the design decisions, the known limitations and how we used AI.
 - [docs/GRAMMAR.md](docs/GRAMMAR.md): the full grammar, with precedence and associativity.
 - [docs/SEMANTICS.md](docs/SEMANTICS.md): what each construct does when it runs, such as truthiness, `==` vs `===`, `/` vs `//`, scopes and the builtins.
+- [docs/TERRARIUM.md](docs/TERRARIUM.md): the Terrarium, the standard library: files, the system, time, JSON, images, the clipboard, and a window to draw in with its input. Examples are in `examples/terrarium/`.
+- [docs/learn/](docs/learn/README.md): a teaching guide to the language, in English and Spanish, with exercises, projects and a cheat sheet. / Guía para aprender y enseñar el lenguaje, en inglés y español.
 
 ## Tokens
 

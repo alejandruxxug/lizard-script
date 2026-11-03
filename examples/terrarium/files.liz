@@ -1,0 +1,35 @@
+-~> Files and JSON with the Terrarium: write, read, list, and a JSON round
+-~> trip. Run it with: lizardscript examples/terrarium/files.liz
+
+let dir = fs.join(fs.home(), ".lizard-files-example")
+fs.mkdir(dir)
+
+-~> Write a text file, add to it, and read it back.
+let notes = fs.join(dir, "notes.txt")
+fs.write(notes, "lizards like sun\n")
+fs.append(notes, "and warm rocks\n")
+puts(fs.read(notes))
+
+-~> A lizard as JSON, written with an indent of 2 and read back.
+let lizard = {"name": "Liz", "toes": [5, 5, 5, 5], "color": #6abe30, "home": {"rock": true}}
+let path = fs.join(dir, "liz.json")
+fs.write(path, json.write(lizard, 2))
+puts(fs.read(path))
+
+let back = json.parse(fs.read(path))
+puts("name:", back.name, "toes:", len(back.toes), "color:", back.color)
+
+puts("in the folder:", fs.list(dir))
+
+-~> A mistake is an error that try can catch.
+try {
+  fs.read(fs.join(dir, "missing.txt"))
+} catch (e) {
+  puts("caught:", e.message)
+}
+
+-~> Tidy up: files first, since remove refuses a folder with something in it.
+fs.remove(notes)
+fs.remove(path)
+fs.remove(dir)
+puts("cleaned up:", !fs.exists(dir))

@@ -1,0 +1,23 @@
+-~> Make an image, draw a gradient pixel by pixel, and save it as a PNG.
+-~> Run it with: lizardscript examples/terrarium/image.liz [out.png]
+
+let w = 256
+let h = 128
+let picture = img.new(w, h)
+
+for (let y = 0; y < h; y += 1) {
+  for (let x = 0; x < w; x += 1) {
+    -~> Red grows to the right, blue grows down.
+    img.set(picture, x, y, rgb(x, 80, y * 2))
+  }
+}
+
+-~> The drawing functions every target shares: a white bar with soft ends.
+img.fill(picture, [20.5, 54, 215, 20], #ffffffc0)
+
+let out = "gradient.png"
+if (len(os.args()) > 0) {
+  out = os.args()[0]
+}
+img.save(picture, out)
+puts("saved", out, img.size(img.load(out)))

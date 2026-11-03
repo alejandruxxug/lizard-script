@@ -11,6 +11,7 @@ import (
 	"lizardscript/lexer"
 	"lizardscript/object"
 	"lizardscript/parser"
+	"lizardscript/terrarium"
 	"lizardscript/token"
 	"lizardscript/vm"
 	"strings"
@@ -27,7 +28,8 @@ const (
 // one with an open '{', keeps reading lines until it is, or until an empty
 // line. An input that ends with an if waits for one more line, because an
 // elif or else there continues it: the input runs once that line, or an
-// empty one, shows it doesn't.
+// empty one, shows it doesn't. The Terrarium is there, but for window and
+// pen.
 func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
@@ -35,6 +37,7 @@ func Start(in io.Reader, out io.Writer) {
 	evaluator.Output = out
 	evaluator.ResetSteps()
 	evaluator.ResetMath()
+	terrarium.InstallCore(env)
 
 	var input strings.Builder
 	waitingForElse := false
@@ -111,8 +114,9 @@ func evalInput(input string, env *object.Environment, out io.Writer) {
 	}
 }
 
-// Run runs a whole program. puts writes to out, and syntax and runtime
-// errors go to errOut. It reports whether the program ran without errors.
+// Run runs a whole program with the Terrarium installed. puts writes to out,
+// and syntax and runtime errors go to errOut. It reports whether the program
+// ran without errors.
 func Run(source string, out, errOut io.Writer) bool {
 	p := parser.New(lexer.New(source))
 	program := p.ParseProgram()
@@ -123,7 +127,9 @@ func Run(source string, out, errOut io.Writer) bool {
 
 	evaluator.Output = out
 	evaluator.ResetMath()
-	if err, ok := evaluator.Eval(program, object.NewEnvironment()).(*object.Error); ok {
+	env := object.NewEnvironment()
+	terrarium.Install(env)
+	if err, ok := evaluator.Eval(program, env).(*object.Error); ok {
 		fmt.Fprintln(errOut, err.Message)
 		return false
 	}
@@ -142,7 +148,9 @@ func RunVM(source string, out, errOut io.Writer) bool {
 
 	evaluator.Output = out
 	evaluator.ResetMath()
-	if err, ok := vm.Run(program, object.NewEnvironment()).(*object.Error); ok {
+	env := object.NewEnvironment()
+	terrarium.Install(env)
+	if err, ok := vm.Run(program, env).(*object.Error); ok {
 		fmt.Fprintln(errOut, err.Message)
 		return false
 	}

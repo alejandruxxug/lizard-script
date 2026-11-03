@@ -229,6 +229,10 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break, `\t` is a t
 
 `text` and `list` are found after variables and the other builtins, so `let text = 1` hides the library. They are made new for each run, like `math`, and `evaluator.ResetMath()` resets them too.
 
+## The Terrarium
+
+A program run by `lizardscript file.liz` (or `repl.Run`, on either engine) has the Terrarium, the standard library, installed: the names `fs`, `os`, `time`, `json`, `img`, `clip`, `window` and `pen` are modules, hashes of builtins used with dot access like `math`. The REPL has all of them but `window` and `pen`. Unlike `math`, `text` and `list`, they are ordinary variables of the program's top scope, so `let fs = 1` replaces the module for the rest of the program. They are made new for each run. Their errors are runtime errors that start with the builtin's name (`fs.read: can't read notes.txt: no such file or directory`) and a `try` catches them. Images and windows are values of type `NATIVE`, equal only to themselves. Every function is in [TERRARIUM.md](TERRARIUM.md).
+
 ## Hooks (for hosts)
 
 A host that embeds the interpreter can watch a program run. Both hooks are package variables of `evaluator`, `nil` by default, and cost one `nil` check per statement while they are `nil`. The REPL and `Run` never set them.
