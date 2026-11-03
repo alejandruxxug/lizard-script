@@ -68,6 +68,18 @@ func countStep(tok token.Token) *object.Error {
 	return nil
 }
 
+// OnStatement is a hook for a host. When it is not nil, it is called right
+// before every statement runs: in the program, in blocks, in layer bodies and
+// in function bodies. The host can read the statement's token for its place
+// in the source. The REPL and Run leave it nil.
+var OnStatement func(node ast.Statement)
+
+// OnLayer is a hook for a host. When it is not nil, it is called with enter
+// true when the body of a layer starts and with enter false when it ends,
+// also when it ends by an error, a return or a break. tok is the "layer"
+// token. The REPL and Run leave it nil.
+var OnLayer func(name string, enter bool, tok token.Token)
+
 // callDepth counts the function calls open right now, and evalDepth the
 // calls of Eval.
 var callDepth, evalDepth int
@@ -86,6 +98,9 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 
 	case *ast.BlockStatement:
 		return evalBlockStatement(node, object.NewEnclosedEnvironment(env))
+
+	case *ast.LayerStatement:
+		return evalLayerStatement(node, env)
 
 	case *ast.ExpressionStatement:
 		return Eval(node.Expression, env)
@@ -218,6 +233,9 @@ func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 	var result object.Object = NULL
 
 	for _, statement := range program.Statements {
+		if OnStatement != nil {
+			OnStatement(statement)
+		}
 		result = Eval(statement, env)
 
 		switch result := result.(type) {
@@ -238,6 +256,9 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) obje
 	var result object.Object = NULL
 
 	for _, statement := range block.Statements {
+		if OnStatement != nil {
+			OnStatement(statement)
+		}
 		result = Eval(statement, env)
 
 		if result != nil {
@@ -251,6 +272,27 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) obje
 	return result
 }
 
+// evalLayerStatement runs the body of a layer in a new scope and tells the
+// host when it starts and ends. A return, break or error passes through, and
+// the layer still ends for the host.
+func evalLayerStatement(layer *ast.LayerStatement, env *object.Environment) object.Object {
+	if OnLayer != nil {
+		OnLayer(layer.Name, true, layer.Token)
+		defer func() {
+			if OnLayer != nil {
+				OnLayer(layer.Name, false, layer.Token)
+			}
+		}()
+	}
+
+	result := evalBlockStatement(layer.Body, object.NewEnclosedEnvironment(env))
+	switch result.Type() {
+	case object.RETURN_VALUE_OBJ, object.BREAK_OBJ, object.ERROR_OBJ:
+		return result
+	}
+	return NULL
+}
+
 // Expressions
 
 func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
@@ -262,6 +304,12 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 	}
 	if node.Value == "math" {
 		return mathLibrary()
+	}
+	if node.Value == "text" {
+		return textLibrary()
+	}
+	if node.Value == "list" {
+		return listLibrary()
 	}
 	return newError(node.Token, "identifier not found: %s", node.Value)
 }

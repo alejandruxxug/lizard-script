@@ -25,6 +25,8 @@ var mathHash *object.Hash
 func ResetMath() {
 	random = rand.New(rand.NewSource(defaultSeed))
 	mathHash = nil
+	textHash = nil
+	listHash = nil
 }
 
 // mathLibrary returns the value of the name math, a hash of builtins and

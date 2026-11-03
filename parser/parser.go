@@ -349,6 +349,10 @@ func (p *Parser) parseStatement() ast.Statement {
 		if p.peekTokenIs(token.IDENT) {
 			return p.parseFunctionDeclaration()
 		}
+	case token.IDENT:
+		if p.startsLayer() {
+			return p.parseLayerStatement()
+		}
 	}
 	return p.parseExpressionStatement()
 }
@@ -457,6 +461,57 @@ func (p *Parser) parseControlStatement() ast.Statement {
 
 	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
+	}
+	return stmt
+}
+
+// startsLayer reports whether the statement that begins at curToken is a
+// layer: the name "layer" followed on the same line by a name or a string.
+// Two names side by side were never valid, so nothing that worked before
+// reads differently, and "layer" anywhere else is an ordinary identifier.
+func (p *Parser) startsLayer() bool {
+	if p.curToken.Literal != "layer" || p.peekToken.Line != p.curToken.Line {
+		return false
+	}
+	return p.peekTokenIs(token.IDENT) || p.peekTokenIs(token.STRING)
+}
+
+// parseLayerStatement parses: layer <name> ;?  followed by an indented body.
+// The body is every following statement that starts on a later line, in a
+// column greater than the one of "layer". Columns are the ones the lexer
+// reports, where a tab counts as one. The body ends at the first statement
+// that is not indented more, at a '}' or at the end of the input.
+func (p *Parser) parseLayerStatement() ast.Statement {
+	layer := p.curToken
+	p.nextToken()
+	stmt := &ast.LayerStatement{Token: layer, Name: p.curToken.Literal}
+	stmt.Body = &ast.BlockStatement{Token: layer}
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	} else if !p.peekEndsStatement() && p.peekToken.Line == layer.Line {
+		p.errorAt(p.peekToken, "a layer is \"layer name\" alone on its line, got %s after the name",
+			describeToken(p.peekToken))
+		return nil
+	}
+
+	defer p.leave()
+	if !p.enter() {
+		return stmt
+	}
+
+	for !p.peekTokenIs(token.EOF) && !p.peekTokenIs(token.RBRACE) &&
+		p.peekToken.Line > layer.Line && p.peekToken.Column > layer.Column {
+		p.nextToken()
+		inner := p.parseStatement()
+		if p.recovering {
+			p.synchronize()
+			if p.braceDepth < p.blockBrace {
+				break
+			}
+		} else if inner != nil {
+			stmt.Body.Statements = append(stmt.Body.Statements, inner)
+		}
 	}
 	return stmt
 }

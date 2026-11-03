@@ -1,0 +1,39 @@
+-~> Layers, and the text and list helpers.
+
+-~> A layer is a named group of statements. Its body is every line indented
+-~> more than the word layer, so there are no braces.
+let picture = []
+
+layer sky
+  push(picture, "sun")
+  layer clouds
+    push(picture, "cloud")
+  push(picture, "birds")
+
+layer "tall grass"
+  push(picture, "grass")
+
+puts(picture)
+
+-~> Variables made in a layer stay in it, but outer ones can be changed.
+let count = 0
+layer counting
+  let step = 5
+  count = count + step
+puts(count)
+
+-~> text cuts and joins strings. Indexes count characters.
+let title = "  Lizard Script  "
+let clean = text.trim(title)
+puts(clean, text.slice(clean, 0, 6), text.find(clean, "Script"))
+puts(text.split("red,green,blue", ","))
+puts(text.join(["a", "b", "c"], "+"), text.upper(clean))
+puts(text.number("2.5") * 2, text.number("two"))
+
+-~> list reorders arrays. sort and reverse make new arrays.
+let scores = [30, 10, 20]
+puts(list.sort(scores), list.reverse(scores), scores)
+puts(list.sort(scores, function(a, b) { a > b }))
+list.insert(scores, 1, 99)
+list.remove(scores, 0)
+puts(scores, list.index(scores, 20))

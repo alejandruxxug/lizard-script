@@ -125,6 +125,49 @@ func (bs *BlockStatement) String() string {
 	return out.String()
 }
 
+// LayerStatement is a named group of statements, written as "layer name"
+// followed by an indented body. The body is a BlockStatement whose Token is
+// the "layer" token, since there is no brace.
+type LayerStatement struct {
+	Token token.Token // the "layer" identifier
+	Name  string
+	Body  *BlockStatement
+}
+
+func (ls *LayerStatement) statementNode()       {}
+func (ls *LayerStatement) TokenLiteral() string { return ls.Token.Literal }
+
+// String prints "layer name" and then each statement of the body on its own
+// line, indented by two spaces more than the layer.
+func (ls *LayerStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString("layer ")
+	if isPlainName(ls.Name) {
+		out.WriteString(ls.Name)
+	} else {
+		out.WriteString("\"" + ls.Name + "\"")
+	}
+	for _, s := range ls.Body.Statements {
+		out.WriteString("\n")
+		out.WriteString("  " + strings.ReplaceAll(s.String(), "\n", "\n  "))
+	}
+	return out.String()
+}
+
+// isPlainName reports whether name can be written without quotes.
+func isPlainName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, c := range name {
+		letter := c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+		if !letter && (i == 0 || c < '0' || c > '9') {
+			return false
+		}
+	}
+	return token.LookupIdent(name) == token.IDENT
+}
+
 // Leaf expressions
 
 // Identifier is the name of a variable or function.

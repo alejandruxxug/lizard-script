@@ -1,0 +1,60 @@
+-~> A layer is a named block, and its body is whatever is indented more.
+let total = 0
+let log = []
+
+layer sun
+  let size = 10
+  total = total + size
+  push(log, "in sun")
+  layer rays
+    let size = 3
+    total = total + size
+    push(log, "in rays")
+  push(log, "back in sun")
+
+layer "big moon" -~> a name with spaces needs quotes
+  total = total + 100
+
+layer empty
+
+push(log, "after")
+puts(total)
+puts(log)
+
+-~> Variables made in a layer stay in it.
+let outside = 1
+layer scratch
+  let outside = 2
+  puts(outside)
+puts(outside)
+
+-~> Layers work inside braces, measured from the layer's own column.
+function paint(n) {
+  let drawn = 0
+  for (let i = 0; i < n; i = i + 1) {
+    layer stroke
+      drawn = drawn + 1
+      if (drawn == 2) { break }
+  }
+  layer result
+    return drawn
+  return -1
+}
+puts(paint(5))
+
+-~> return inside a layer ends the function, a loop break ends the loop.
+function find(list, x) {
+  for (let i = 0; i < len(list); i = i + 1) {
+    layer check
+      if (list[i] == x) { return i }
+  }
+  return -1
+}
+puts(find([4, 5, 6], 6), find([4, 5, 6], 9))
+
+-~> layer is still an ordinary name everywhere else.
+let layer = 1
+layer = layer + 1
+puts(layer, layer * 2)
+function twice(layer) { layer * 2 }
+puts(twice(layer))

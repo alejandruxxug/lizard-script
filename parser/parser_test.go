@@ -726,3 +726,112 @@ func TestColorAndPointErrors(t *testing.T) {
 		}
 	}
 }
+
+// lines prints each top-level statement of a program on its own line.
+func lines(program *ast.Program) string {
+	parts := make([]string, len(program.Statements))
+	for i, s := range program.Statements {
+		parts[i] = s.String()
+	}
+	return strings.Join(parts, "\n")
+}
+
+func TestLayerStatements(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"with a body", "layer sun\n  let a = 1\n  puts(a)", "layer sun\n  let a = 1;\n  puts(a)"},
+		{"empty", "layer sun", "layer sun"},
+		{"empty before another statement", "layer sun\nlet a = 1", "layer sun\nlet a = 1;"},
+		{"the body ends at a dedent", "layer sun\n  let a = 1\nlet b = 2\n  let c = 3", "layer sun\n  let a = 1;\nlet b = 2;\nlet c = 3;"},
+		{"nested", "layer a\n  layer b\n    1\n  2\n3", "layer a\n  layer b\n    1\n  2\n3"},
+		{"siblings", "layer a\n  1\nlayer b\n  2", "layer a\n  1\nlayer b\n  2"},
+		{"a string name", "layer \"big sun\"\n  1", "layer \"big sun\"\n  1"},
+		{"a string that is a plain name", "layer \"sun\"", "layer sun"},
+		{"a trailing comment", "layer sun -~> the sun\n  1", "layer sun\n  1"},
+		{"a comment line inside", "layer sun\n  -~> note\n  1", "layer sun\n  1"},
+		{"a semicolon after the name", "layer sun;\n  1", "layer sun\n  1"},
+		{"in a function", "function f() {\n  layer a\n    1\n  2\n}", "let f = function() { layer a\n  1 2 };"},
+		{"in a loop", "while (x) {\n  layer a\n    1\n}", "while x { layer a\n  1 }"},
+		{"an if inside", "layer a\n  if (x) {\n    1\n  }\n2", "layer a\n  if x { 1 }\n2"},
+		{"deeper than needed", "layer a\n      1\n   2", "layer a\n  1\n  2"},
+		{"tabs count as one column", "layer a\n\t1\nlayer b\n\t\tlayer c\n\t\t\t2", "layer a\n  1\nlayer b\n  layer c\n    2"},
+		{"the same line is not the body", "layer a; 1", "layer a\n1"},
+		{"a multi-line statement stays whole", "layer a\n  let x = 1 +\n2\n3", "layer a\n  let x = (1 + 2);\n3"},
+		{"inside a layer, the column is the layer's", "  layer a\n    1\n  2", "layer a\n  1\n2"},
+		{"a name that is a keyword in a string", "layer \"let\"", "layer \"let\""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := lines(parse(t, tt.input)); got != tt.expected {
+				t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+			}
+		})
+	}
+}
+
+// Where the body of a layer ends is a matter of columns, so check the tree
+// and not only the printed form.
+func TestLayerBodyTree(t *testing.T) {
+	program := parse(t, "layer a\n  layer b\n    1\n    2\n  3\n4")
+	if len(program.Statements) != 2 {
+		t.Fatalf("expected 2 top-level statements, got %d", len(program.Statements))
+	}
+	a, ok := program.Statements[0].(*ast.LayerStatement)
+	if !ok || a.Name != "a" || len(a.Body.Statements) != 2 {
+		t.Fatalf("layer a wrong: %#v", program.Statements[0])
+	}
+	b, ok := a.Body.Statements[0].(*ast.LayerStatement)
+	if !ok || b.Name != "b" || len(b.Body.Statements) != 2 {
+		t.Fatalf("layer b wrong: %#v", a.Body.Statements[0])
+	}
+	if b.Token.Line != 2 || b.Token.Column != 3 {
+		t.Errorf("layer b token at %d:%d, want 2:3", b.Token.Line, b.Token.Column)
+	}
+}
+
+// "layer" is an ordinary identifier anywhere but at the start of a statement
+// followed by a name on the same line.
+func TestLayerAsAnIdentifier(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"let layer = 1", "let layer = 1;"},
+		{"layer + 1", "(layer + 1)"},
+		{"layer = 2", "(layer = 2)"},
+		{"f(layer)", "f(layer)"},
+		{"layer", "layer"},
+		{"layer\nsun", "layer\nsun"},
+		{"layer(1)", "layer(1)"},
+		{"layer[0]", "(layer[0])"},
+		{"layer.x", "(layer[\"x\"])"},
+		{"let layer = function(a) { layer }", "let layer = function(a) { layer };"},
+		{"[layer, layer]", "[layer, layer]"},
+		{"layer -1", "(layer - 1)"},
+		{"layer == 1", "(layer == 1)"},
+		{"layer\n  1", "layer\n1"},
+	}
+	for _, tt := range tests {
+		if got := lines(parse(t, tt.input)); got != tt.expected {
+			t.Errorf("input %q\nexpected: %q\n     got: %q", tt.input, tt.expected, got)
+		}
+	}
+}
+
+func TestLayerErrors(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"layer sun foo", `[line 1, column 11] syntax error: a layer is "layer name" alone on its line, got identifier "foo" after the name`},
+		{"layer sun 1", `[line 1, column 11] syntax error: a layer is "layer name" alone on its line, got "1" after the name`},
+		{"layer \"sun\" + 1", `[line 1, column 13] syntax error: a layer is "layer name" alone on its line, got "+" after the name`},
+		{"layer a b c\n  1", `[line 1, column 9] syntax error: a layer is "layer name" alone on its line, got identifier "b" after the name`},
+		{"layer sun\n  let = 1", `[line 2, column 7] syntax error: expected identifier, got "="`},
+		{"layer sun\n  break", `[line 2, column 3] syntax error: break outside of a loop`},
+	}
+	for _, tt := range tests {
+		p := New(lexer.New(tt.input))
+		p.ParseProgram()
+		if len(p.Errors()) != 1 || p.Errors()[0] != tt.expected {
+			t.Errorf("input %q\nexpected: %s\n     got: %v", tt.input, tt.expected, p.Errors())
+		}
+	}
+}

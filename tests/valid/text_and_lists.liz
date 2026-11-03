@@ -1,0 +1,23 @@
+-~> text and list helpers: indexes count characters.
+let line = "  héllo, wörld  "
+let word = text.trim(line)
+puts(word, len(word))
+puts(text.slice(word, 1, 4), text.slice(word, -5, 99))
+puts(text.find(word, "ö"), text.find(word, "z"), text.find(word, "l", 3))
+puts(text.split("a,b,,c", ","))
+puts(text.join(["x", "y", "z"], " - "))
+puts(text.replace("a.b.c", ".", "/"))
+puts(text.lines("one\ntwo\n\nfour"))
+puts(text.starts(word, "hé"), text.ends(word, "ld"), text.upper(word), text.lower("ÀB"))
+puts(text.code("é", 0), text.char(8594), text.code("abc", 9))
+puts(text.number("42"), text.number("1.5"), text.number("4x"), text.number(""))
+
+let nums = [5, 3, 9, 1]
+puts(list.sort(nums), nums)
+puts(list.sort(nums, function(a, b) { a > b }))
+puts(list.sort(["pear", "fig", "apple"]))
+puts(list.slice(nums, 1, 3), list.reverse(nums), list.index(nums, 9), list.index(nums, 7))
+let copy = list.copy(nums)
+list.insert(copy, 1, 100)
+list.remove(copy, -1)
+puts(copy, nums)

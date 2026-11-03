@@ -12,6 +12,7 @@ statement      = letStatement
                | returnStatement
                | breakStatement
                | controlStatement
+               | layerStatement
                | expressionStatement
                | ";" ;
 
@@ -20,6 +21,7 @@ functionDecl        = "function" IDENT "(" [ parameters ] ")" block [ ";" ] ;
 returnStatement     = "return" [ expression ] end ;
 breakStatement      = "break" end ;
 controlStatement    = ( ifExpression | whileExpression | forExpression ) [ ";" ] ;
+layerStatement      = "layer" ( IDENT | STRING ) [ ";" ] { statement } ;
 expressionStatement = expression end ;
 
 block      = "{" { statement } "}" ;
@@ -116,6 +118,19 @@ A color is `#` and then exactly 3, 6 or 8 hex digits: `#rgb`, `#rrggbb`, `#rrggb
 
 A point is `(x, y)` or `(x, y, z)`. A comma after the first expression inside parentheses is what makes it a point; `(x)` is still a grouped expression. `()` and four or more coordinates are the syntax error `a point has two or three coordinates`, reported at the `(`. A point is one argument: `f((1, 2))` passes a point, while `f(1, 2)` passes two numbers. A trailing comma, `(1, 2,)`, is an error.
 
+## Layers
+
+`layer` is not a reserved word. A statement is a layer when it starts with the identifier `layer` followed, on the same line, by a name (an identifier, or a string for a name with spaces) and then nothing else on that line except a `;` or a `-~>` comment. Two names side by side were never valid, so every program that worked before reads the same: `let layer = 1`, `layer + 1`, `layer = 2` and `f(layer)` use `layer` as the ordinary identifier it is.
+
+The `{ statement }` in the rule is the body, and it is measured by columns, not by tokens:
+
+- The body is every following statement that starts on a **later line** with its first token in a **column greater** than the column of `layer`. It ends at the first statement whose first token is in that column or a smaller one, at a `}` that closes the block around the layer, or at the end of the input. Further lines of a statement that is already open (`let x = 1 +` and the line after it) belong to that statement, whatever their column.
+- The body may be empty.
+- Layers nest: a `layer` inside a body is a child layer, and its own body is measured against its own column.
+- Columns are the ones the lexer reports, 1-based, where a tab counts as one column like any other character. A file that mixes tabs and spaces is measured as it is read, and getting it to line up is up to the author. The editor writes 2 spaces.
+- Inside a `{ }` block (a function body or a loop), a layer works the same way, measured from the column of its own `layer` word and not from the brace.
+- After the name, anything else on the line is the syntax error `a layer is "layer name" alone on its line, got ... after the name`.
+
 ## Rules that are not in the grammar
 
 - `break` must be inside a `while` or `for` of the same function. Otherwise it is a syntax error.
@@ -132,5 +147,6 @@ A point is `(x, y)` or `(x, y, z)`. A comma after the first expression inside pa
 - Identifiers and comments are ASCII. A non-ASCII character in code is a lexical error, although strings and comments can contain it.
 - `;` is optional at the end of a line, but a line break doesn't end an expression that can continue. A line starting with an operator, `(` or `[` continues the previous expression, so `x` followed by a line with `-1` is a subtraction.
 - For the same reason, `return` takes the expression on the next line as its value, unless a `;` or `}` comes first.
+- A layer's body is closed by indentation, the only place the language looks at columns. The REPL runs line by line, so a `layer` typed there is an empty layer and the indented lines after it run on their own; layers are meant for files and for hosts.
 - The smallest 64-bit integer can't be written as a literal: `-9223372036854775808` is a `-` applied to a number that is too large.
 - After a syntax error the rest of that statement is skipped, so a second mistake in the same statement shows up only after fixing the first. Recovery is a best effort: with a badly broken `for` header, like one with no `)`, the first error is right but a second one can follow it.

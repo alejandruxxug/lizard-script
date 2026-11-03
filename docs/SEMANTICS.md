@@ -140,6 +140,10 @@ A point is shown as `(1, 2)` or `(0.5, 2)`, each coordinate the way `puts` write
 
 In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break and `\t` is a tab. The value of the string holds the character, not the two source characters, so `len("a\nb")` is 3.
 
+## Layers
+
+`layer name` followed by an indented body (see [GRAMMAR.md](GRAMMAR.md) for how the body is measured) runs the body once, in a new scope like any other block: a `let` inside stays inside, while outer variables can be read and assigned. A layer is a statement and its value is `null`. A `return`, a `break` or an error inside the body goes on up exactly as it would from any block, so `return` in a layer ends the function around it. Layers have no effect of their own on a program; they are names for hosts, see the hooks below.
+
 ## Builtins
 
 | Builtin | Does |
@@ -179,6 +183,52 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break and `\t` is 
 `random` is deterministic: every run starts from the same default seed, so the same program makes the same numbers (and the same picture). `math.seed(n)` picks another sequence, and the same `n` always gives the same one. A host that runs programs one after another calls `evaluator.ResetMath()` before each run; the REPL and `Run` do it themselves, once per session or file.
 
 `math` is found after variables and the other builtins, so `let math = 1` hides it. The hash is made new for each run: a program can write `math.pi = 3`, but only that run sees it.
+
+## The text library
+
+`text` is a hash of builtins like `math`, for cutting and joining strings. Indexes count characters, not bytes, so `"é"` is one character. A wrong type or number of arguments is an error like in any builtin.
+
+| Name | Does |
+| --- | --- |
+| `text.slice(s, start, end)` | The characters from `start` up to `end`. Both are clamped to the string, and a negative one counts from the end (`-1` is the last character's end). `""` if `end` is not after `start`. |
+| `text.find(s, sub, [from])` | The index of the first `sub` at or after `from` (0 by default; negative counts from the end, clamped), or `-1`. An empty `sub` is found at `from`. |
+| `text.split(s, sep)` | An array of the pieces between each `sep`. An empty `sep` gives the characters. |
+| `text.join(list, sep)` | The strings of `list` joined with `sep`. Every element must be a string. |
+| `text.replace(s, old, new)` | Every `old` replaced by `new`. An empty `old` is an error. |
+| `text.trim(s)` | Without the white space at both ends. |
+| `text.lines(s)` | `s` cut at every `"\n"` or `"\r\n"`. Empty lines stay, and a trailing line break gives a last empty line, so `text.join(text.lines(s), "\n")` gives `s` back (with `"\n"` line breaks). |
+| `text.starts(s, prefix)`, `text.ends(s, suffix)` | Booleans. |
+| `text.upper(s)`, `text.lower(s)` | Case changed. |
+| `text.code(s, i)` | The character code of the character at index `i` (negative counts from the end), or `null` if there is none. |
+| `text.char(code)` | The one-character string with that code. An error for a code outside Unicode or a surrogate. |
+| `text.number(s)` | The number written in `s` (optional white space, sign, digits, fraction, exponent): an INTEGER when it has no fraction or exponent and fits, else a FLOAT. `null` if `s` isn't a number (`"12px"`, `""`, `"Inf"`, `"0x10"`), never an error for a string. |
+
+## The list library
+
+`list` is a hash of builtins for arrays, used like `math` and `text`. Indexes are integers; a negative one counts from the end.
+
+| Name | Does |
+| --- | --- |
+| `list.slice(a, start, end)` | A new array with the elements from `start` up to `end`, clamped like `text.slice`. |
+| `list.insert(a, i, x)` | Puts `x` before index `i` (`len(a)` adds at the end), changes `a` in place and returns it, like `push`. An index outside `0` to `len(a)` is an error. |
+| `list.remove(a, i)` | Takes out the element at `i`, changes `a` in place and returns `a`. An index that doesn't exist is an error. |
+| `list.index(a, x)` | The index of the first element that is `=== x`, or `-1`. |
+| `list.reverse(a)` | A new array in the opposite order. |
+| `list.sort(a, [less])` | A new array in order, keeping the order of equal elements. Without `less` the elements must be all numbers (by value) or all strings (by characters). `less(x, y)` is a lizard function with two parameters that says whether `x` goes before `y`. An error inside it stops the sort and is reported with the position inside `less`. |
+| `list.copy(a)` | A new array with the same elements (the elements themselves are shared). |
+
+`text` and `list` are found after variables and the other builtins, so `let text = 1` hides the library. They are made new for each run, like `math`, and `evaluator.ResetMath()` resets them too.
+
+## Hooks (for hosts)
+
+A host that embeds the interpreter can watch a program run. Both hooks are package variables of `evaluator`, `nil` by default, and cost one `nil` check per statement while they are `nil`. The REPL and `Run` never set them.
+
+| Hook | Called |
+| --- | --- |
+| `evaluator.OnStatement func(node ast.Statement)` | Right before every statement is evaluated: in the program, in blocks (if, loops, functions), and in layer bodies. A layer statement itself is announced first, then its body's statements. `node.TokenLiteral()` and the statement's token tell where in the source it is. |
+| `evaluator.OnLayer func(name string, enter bool, tok token.Token)` | With `enter` true when a layer's body starts, and with `enter` false when it ends, also when it ends by an error, a `return` or a `break`. `name` is the layer's name without quotes, and `tok` the `layer` word (its line and column). Layers nest, so exits come in the reverse order of the enters. |
+
+A host that tags what a program makes keeps a stack of names in `OnLayer` and reads the current top whenever a builtin it provides is called.
 
 ## Errors
 
