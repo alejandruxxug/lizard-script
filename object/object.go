@@ -355,6 +355,9 @@ func (b *Break) Inspect() string  { return "break" }
 // Error is a runtime error. It stops the program as it travels up.
 type Error struct {
 	Message string
+	// Line and Column are where the error happened, the same numbers that
+	// are in Message. They are 0 for an error that has no position yet.
+	Line, Column int
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }

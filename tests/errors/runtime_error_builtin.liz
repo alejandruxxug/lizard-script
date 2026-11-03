@@ -1,0 +1,6 @@
+let check = function(n) {
+  if (n > 1) { error("too big: " + str(n)) }
+  n
+}
+puts(check(1))
+check(2)

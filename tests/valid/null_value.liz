@@ -1,0 +1,11 @@
+-~> null can be written in code.
+let nothing = null
+puts(nothing)
+puts(type(null))
+puts(null == null, null == 0, null == false)
+if (nothing) { puts("true") } else { puts("false") }
+puts([null, 1])
+
+-~> A variable named null hides it.
+let null = 5
+puts(null)

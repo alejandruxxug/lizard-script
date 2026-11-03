@@ -778,3 +778,56 @@ func checkErrors(t *testing.T, tests []expectation) {
 		}
 	}
 }
+
+func TestNullValue(t *testing.T) {
+	checkAll(t, []expectation{
+		{"null", "null"},
+		{"type(null)", "\"NULL\""},
+		{"null == null", "true"},
+		{"null === null", "true"},
+		{"null == false", "false"},
+		{"null == 0", "false"},
+		{"if (null) { 1 } else { 2 }", "2"},
+		{"!null", "true"},
+		{"let x = null; x", "null"},
+		{"[null, 1]", "[null, 1]"},
+		{"let null = 5; null", "5"},
+		{"let f = function(null) { null }; f(7)", "7"},
+	})
+}
+
+func TestErrorBuiltin(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+		line  int
+		col   int
+	}{
+		{`error("boom")`, "[line 1, column 6] runtime error: boom", 1, 6},
+		{"let a = 1\n  error(\"no \" + \"way\")", "[line 2, column 8] runtime error: no way", 2, 8},
+		{"error(42)", "[line 1, column 6] runtime error: 42", 1, 6},
+		{"error(null)", "[line 1, column 6] runtime error: null", 1, 6},
+		{"error([1, 2])", "[line 1, column 6] runtime error: [1, 2]", 1, 6},
+		{"let f = function() { error(\"in f\") }\nf()", "[line 1, column 27] runtime error: in f", 1, 27},
+		{"error()", "[line 1, column 6] runtime error: error: wrong number of arguments: want 1, got 0", 1, 6},
+		{"error(1, 2)", "[line 1, column 6] runtime error: error: wrong number of arguments: want 1, got 2", 1, 6},
+	}
+	for _, tt := range tests {
+		result := run(t, tt.input)
+		err, ok := result.(*object.Error)
+		if !ok {
+			t.Errorf("input %q - expected an error, got %v", tt.input, result)
+			continue
+		}
+		if err.Message != tt.want {
+			t.Errorf("input %q - expected %q, got %q", tt.input, tt.want, err.Message)
+		}
+		if err.Line != tt.line || err.Column != tt.col {
+			t.Errorf("input %q - expected position %d:%d, got %d:%d", tt.input, tt.line, tt.col, err.Line, err.Column)
+		}
+	}
+}
+
+func TestErrorShadowed(t *testing.T) {
+	checkAll(t, []expectation{{"let error = function(m) { m }; error(\"fine\")", "\"fine\""}})
+}

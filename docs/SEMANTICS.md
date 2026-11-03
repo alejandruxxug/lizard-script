@@ -146,6 +146,8 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break and `\t` is 
 
 ## Builtins
 
+`null` can be written in code. It is the same `null` that functions without a value give, and it is found after variables and builtins, so `let null = 5` still works. `type(null)` is `"NULL"`; it is false in conditions and equal only to `null`.
+
 | Builtin | Does |
 | --- | --- |
 | `len(x)` | The number of characters of a string, or of elements of an array or hash. |
@@ -159,6 +161,7 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break and `\t` is 
 | `type(x)` | The name of the type of `x`, like `"INTEGER"`. |
 | `str(x)` | `x` as a string, the way `puts` shows it. |
 | `int(x)` | A string with a whole number, a boolean, an integer or a float as an integer. A float loses its decimals towards zero: `int(-1.9)` is `-1`. `int("1.5")` is an error. |
+| `error(message)` | Stops the program with the runtime error `[line L, column C] runtime error: message`, positioned at the call. A string is used as it is; any other value is turned into text like `str` does. |
 | `float(x)` | An integer, a float or a string with a number (`"2"`, `"-0.25"`) as a float. |
 | `range(end)`, `range(start, end)` | `[start, start + 1, ..., end - 1]`, with `start` 0 by default. Empty if `end <= start`. |
 
@@ -237,6 +240,8 @@ A runtime error stops the program. Its message has the position of the operator,
 ```
 [line 2, column 8] runtime error: type mismatch: INTEGER + BOOLEAN
 ```
+
+`object.Error` also has `Line` and `Column` fields with the same position, so a host can tell where an error was raised (for example by `error(...)` inside a library function) and show it at another line.
 
 Syntax errors are found before the program starts, so a program with one doesn't run at all.
 

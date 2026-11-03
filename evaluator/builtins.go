@@ -35,6 +35,7 @@ func init() {
 		"delete": builtinDelete,
 		"type":   builtinType,
 		"str":    builtinStr,
+		"error":  builtinError,
 		"int":    builtinInt,
 		"float":  builtinFloat,
 		"range":  builtinRange,
@@ -223,6 +224,17 @@ func builtinStr(args ...object.Object) object.Object {
 		return wrongCount("1", len(args))
 	}
 	return &object.String{Value: args[0].Inspect()}
+}
+
+// error(message) stops the program with a runtime error. The message is a
+// string; any other value is turned into one the way str does it. The
+// position is added where the call is made.
+func builtinError(args ...object.Object) object.Object {
+	if len(args) != 1 {
+		// A misuse of error itself is reported like any other builtin.
+		return argError("error: wrong number of arguments: want 1, got %d", len(args))
+	}
+	return argError("%s", args[0].Inspect())
 }
 
 // int(x) turns a string with a whole number, a boolean or a float into an

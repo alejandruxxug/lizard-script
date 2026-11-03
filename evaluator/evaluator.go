@@ -217,8 +217,12 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 
 // newError builds a runtime error at the position of tok.
 func newError(tok token.Token, format string, args ...any) *object.Error {
-	return &object.Error{Message: fmt.Sprintf("[line %d, column %d] runtime error: %s",
-		tok.Line, tok.Column, fmt.Sprintf(format, args...))}
+	return &object.Error{
+		Message: fmt.Sprintf("[line %d, column %d] runtime error: %s",
+			tok.Line, tok.Column, fmt.Sprintf(format, args...)),
+		Line:   tok.Line,
+		Column: tok.Column,
+	}
 }
 
 func isError(obj object.Object) bool {
@@ -301,6 +305,9 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 	}
 	if builtin, ok := builtins[node.Value]; ok {
 		return builtin
+	}
+	if node.Value == "null" {
+		return NULL
 	}
 	if node.Value == "math" {
 		return mathLibrary()
@@ -908,6 +915,11 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 		}
 		result := function.Fn(args...)
 		if err, ok := result.(*object.Error); ok {
+			// error(message) is the program's own error: its message
+			// is shown as it is, without the builtin name in front.
+			if function == builtins["error"] {
+				return newError(tok, "%s", err.Message)
+			}
 			return newError(tok, "%s: %s", function.Name, err.Message)
 		}
 		return result
