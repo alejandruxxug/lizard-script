@@ -2,9 +2,9 @@
 
 [← Previous: Errors, `try`/`catch` and `null`](14-errors.md) · [Index](../README.md) · [Next: Projects →](16-projects.md) · [Español](../es/15-builtins-reference.md)
 
-Every builtin function, and every member of the `math`, `text` and `list` libraries, with one example each. The **Result** column is the value of the example as the REPL shows it, so strings appear with quotes. When the example is an error, the result shows the message (without the `[line, column]` part).
+Every builtin function, and every member of the `math`, `text`, `list` and `hash` libraries, with one example each. The **Result** column is the value of the example as the REPL shows it, so strings appear with quotes. When the example is an error, the result shows the message (without the `[line, column]` part).
 
-Builtins are found **after** your variables, so `let len = 5` hides `len`. The same goes for `math`, `text`, `list` and `null`.
+Builtins are found **after** your variables, so `let len = 5` hides `len`. The same goes for `math`, `text`, `list`, `hash` and `null`.
 
 ## General
 
@@ -36,6 +36,7 @@ Builtins are found **after** your variables, so `let len = 5` hides `len`. The s
 | `keys(h)` | the keys, in the order they were added | `keys({"b": 1, "a": 2})` | `["b", "a"]` |
 | `values(h)` | the values, in the same order | `values({"b": 1, "a": 2})` | `[1, 2]` |
 | `delete(h, key)` | removes `key`, says whether it was there | `delete({"a": 1}, "a")` | `true` |
+| `same(a, b)` | whether `a` and `b` are the same array, hash or function (for other values, `===`) | `same([1], [1])` | `false` |
 
 ## Colors and points
 
@@ -110,6 +111,20 @@ A negative index counts from the end.
 | `list.sort(a)` | a new array, numbers by value or strings alphabetically | `list.sort([3, 1, 2])` | `[1, 2, 3]` |
 | `list.sort(a, less)` | sorted by your function `less(x, y)`: does `x` go first? | `list.sort([3, 1, 2], function(x, y) { x > y })` | `[3, 2, 1]` |
 | `list.copy(a)` | a new array with the same items | `list.copy([1, 2])` | `[1, 2]` |
+
+## `hash`
+
+None of these change the hash, except `hash.remove`.
+
+| Member | Does | Example | Result |
+| --- | --- | --- | --- |
+| `hash.copy(h)` | a new hash with the same keys and values, in the same order | `hash.copy({"a": 1})` | `{"a": 1}` |
+| `hash.keys(h)` | the keys, like `keys` | `hash.keys({"b": 1, "a": 2})` | `["b", "a"]` |
+| `hash.values(h)` | the values, like `values` | `hash.values({"b": 1, "a": 2})` | `[1, 2]` |
+| `hash.merge(a, b)` | a new hash with the keys of `a`, then the new ones of `b`; `b`'s values win | `hash.merge({"a": 1, "b": 2}, {"b": 3})` | `{"a": 1, "b": 3}` |
+| `hash.has(h, key)` | whether `key` is there, even holding `null` | `hash.has({"a": null}, "a")` | `true` |
+| | | `hash.has({}, [1])` | `runtime error: hash.has: unusable as hash key: ARRAY` |
+| `hash.remove(h, key)` | removes `key`, says whether it was there, like `delete` | `hash.remove({"a": 1}, "b")` | `false` |
 
 ## Values with dot access
 

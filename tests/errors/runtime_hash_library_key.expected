@@ -1,0 +1,2 @@
+true
+[line 3, column 9] runtime error: hash.has: unusable as hash key: ARRAY

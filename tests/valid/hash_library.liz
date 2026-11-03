@@ -1,0 +1,33 @@
+-~> The hash library, list.copy and same.
+let shape = {"kind": "circle", "x": 10, "y": 20}
+let moved = hash.copy(shape)
+moved.x = 15
+puts(shape, moved)
+puts(hash.keys(shape), hash.values(shape))
+
+let style = {"fill": #ff0000, "kind": "disc"}
+let merged = hash.merge(shape, style)
+puts(merged)
+puts(shape)
+
+puts(hash.has(shape, "x"), hash.has(shape, "fill"), hash.has({"empty": null}, "empty"))
+puts(hash.remove(moved, "y"), hash.remove(moved, "y"), moved)
+
+-~> same asks for the same container, not equal contents.
+let a = [1, 2]
+let b = a
+let c = list.copy(a)
+puts(same(a, b), same(a, c), a == c)
+puts(same(shape, hash.copy(shape)), shape == hash.copy(shape))
+puts(same(1, 1), same(1, 1.0), same("hi", "h" + "i"), same((1, 2), (1, 2)))
+
+-~> A cache keyed by identity.
+let seen = []
+function visit(h) {
+  for (let i = 0; i < len(seen); i += 1) {
+    if (same(seen[i], h)) { return "again" }
+  }
+  push(seen, h)
+  "new"
+}
+puts(visit(shape), visit(moved), visit(shape), visit(hash.copy(shape)))

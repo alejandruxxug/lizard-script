@@ -51,8 +51,10 @@ type symbol struct {
 	// captured is whether a closure uses it, which makes it a cell.
 	captured bool
 	// refs are the instructions that use it as a plain local, rewritten to
-	// the cell ones if it ends up captured.
-	refs []int
+	// the cell ones if it ends up captured, and leaves the formula leaves
+	// that do (see formulas.go).
+	refs   []int
+	leaves []*code.Leaf
 }
 
 // letNames are the names the lets of a block declare in its scope.
@@ -119,6 +121,9 @@ func (c *Compiler) closeScope() {
 		slots = append(slots, sym.slot)
 		for _, at := range sym.refs {
 			fs.ins[at] = byte(cellOpcode(code.Opcode(fs.ins[at])))
+		}
+		for _, leaf := range sym.leaves {
+			leaf.Kind = code.LeafCell
 		}
 	}
 	if s.enter >= 0 {

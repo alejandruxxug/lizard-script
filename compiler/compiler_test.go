@@ -205,3 +205,90 @@ func TestQuickening(t *testing.T) {
 		}
 	}
 }
+
+// TestFormulas checks which arithmetic gets an OpFormula: two operators or
+// more (or one under a comparison at the top) on names, number literals and
+// their dot accesses, and nothing else. The usual instructions follow it,
+// with no formula of their own.
+func TestFormulas(t *testing.T) {
+	tests := []struct {
+		input    string
+		formulas int
+		has      []string
+	}{
+		{"function f(x, y) { x * 2 + y }", 1, []string{"0010 OpFormula 0 44", "OpMul", "0039 OpAdd 3\n0044 OpReturnValue"}},
+		{"function f(p) { p.x * p.x + p.next.y }", 1, []string{"OpGetLocalField", "OpGetField"}},
+		{"function f() { math.pi * 2 + 1 }", 1, []string{"OpGetNameField"}},
+		{"function f(x) { x * 2 < 3 }", 1, []string{"OpLess"}},
+		{"function f(x) { let s = 0; s += x * 2 }", 1, []string{"OpAdd", "OpAssignLocal"}},
+		{"function f(x) { (x * 2 + 1) * (x - 1 - 2) }", 1, nil},
+		// One operator stays as it was.
+		{"function f(x) { x + 1 }", 0, []string{"OpAdd"}},
+		{"function f(x) { x < 1 }", 0, []string{"OpLess"}},
+		{"function f(x) { let s = 0; s += x }", 0, []string{"OpAdd"}},
+		// A comparison inside, other operators, other values: not formulas,
+		// though their parts can be.
+		{"function f(x) { (x < 2) < 3 + 1 }", 0, nil},
+		{"function f(x) { x == 2 * x + 1 }", 1, []string{"OpEqual"}},
+		{"function f(x) { x % 2 + 1 }", 0, []string{"OpMod"}},
+		{"function f(x) { f(x) * 2 + 1 }", 0, []string{"OpCall"}},
+		{"function f(x) { -x * 2 + 1 }", 0, []string{"OpMinus"}},
+		{"function f(x) { x * \"a\" + 1 }", 0, nil},
+		{"function f(x) { x[0] * 2 + 1 }", 0, []string{"OpIndex"}},
+		{"function f(x) { x * 2 * 3 + (1, 2) }", 1, nil},
+		{"function f(x) { [x * 2 + 1, x / 2 - 1] }", 2, nil},
+		// A long chain waits for one value at a time, one nested to the
+		// right waits for all: up to 8 of them, so one more leaves the
+		// first operator out.
+		{"function f(x) { x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x+x }", 1, nil},
+		{"function f(x) { x-(x-(x-(x-(x-(x-(x-x)))))) }", 1, []string{"0010 OpFormula"}},
+		{"function f(x) { x-(x-(x-(x-(x-(x-(x-(x-x))))))) }", 1, []string{"0010 OpGetLocal 0\n0015 OpFormula"}},
+		// An assignment of an operator's result needs no signal check.
+		{"function f() { let x = 0; x = x * 2 + 1; x = 5 }", 1, nil},
+		{"function f() { let x = 0; x = if (true) { 1 } }", 0, []string{"OpCheckSignal"}},
+	}
+	for _, tt := range tests {
+		_, unit := compile(t, tt.input)
+		text := unit.Functions[len(unit.Functions)-1].Instructions.String()
+		if got := strings.Count(text, "OpFormula"); got != tt.formulas || len(unit.Formulas) != tt.formulas {
+			t.Errorf("input %q - %d formulas, expected %d:\n%s", tt.input, got, tt.formulas, text)
+		}
+		for _, want := range tt.has {
+			if !strings.Contains(text, want) {
+				t.Errorf("input %q - expected %s in:\n%s", tt.input, want, text)
+			}
+		}
+	}
+	_, unit := compile(t, "function f() { let x = 0; x = x * 2 + 1; x = 5 }")
+	if text := unit.Functions[0].Instructions.String(); strings.Contains(text, "OpCheckSignal") {
+		t.Errorf("an assignment of an operator's result is checked for a signal:\n%s", text)
+	}
+}
+
+// TestFormulaLeaves checks where each leaf reads from, including a local
+// that a closure captures after the formula was compiled.
+func TestFormulaLeaves(t *testing.T) {
+	tests := []struct {
+		input string
+		kinds []code.LeafKind
+	}{
+		{"function f(a) { a * 2 + a }", []code.LeafKind{code.LeafLocal, code.LeafConstant, code.LeafLocal}},
+		{"function f() { let a = 1; let r = a * 2 + a; function() { a } }", []code.LeafKind{code.LeafCell, code.LeafConstant, code.LeafCell}},
+		{"function f(a) { function() { a * a + 1 } }", []code.LeafKind{code.LeafFree, code.LeafFree, code.LeafConstant}},
+		{"a * b + c", []code.LeafKind{code.LeafName, code.LeafName, code.LeafName}},
+	}
+	for _, tt := range tests {
+		_, unit := compile(t, tt.input)
+		if len(unit.Formulas) != 1 {
+			t.Errorf("input %q - %d formulas, expected 1", tt.input, len(unit.Formulas))
+			continue
+		}
+		leaves := unit.Formulas[0].Leaves
+		for i, kind := range tt.kinds {
+			if i >= len(leaves) || leaves[i].Kind != kind {
+				t.Errorf("input %q - leaves %+v, expected kinds %v", tt.input, leaves, tt.kinds)
+				break
+			}
+		}
+	}
+}

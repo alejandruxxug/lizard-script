@@ -77,7 +77,9 @@ func (c *Compiler) compileExpression(node ast.Expression, transparent bool) {
 		}
 
 	case *ast.InfixExpression:
-		c.compileInfix(node)
+		if !c.compileFormula(node) {
+			c.compileInfix(node)
+		}
 
 	case *ast.AssignExpression:
 		c.compileAssign(node)
@@ -167,6 +169,12 @@ func (c *Compiler) emitInfix(operator string, tok int) {
 func (c *Compiler) compileAssign(node *ast.AssignExpression) {
 	switch left := node.Left.(type) {
 	case *ast.Identifier:
+		// x += e on a formula e is the formula x + e.
+		if formulaOperators[node.Operator] &&
+			c.compileFormula(&ast.InfixExpression{Token: node.Token, Left: left, Operator: node.Operator, Right: node.Value}) {
+			c.assign(left.Value, left.Token)
+			return
+		}
 		if node.Operator != "" {
 			c.read(left.Value, left.Token)
 		}

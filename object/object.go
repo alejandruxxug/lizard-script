@@ -7,7 +7,9 @@ import (
 	"hash/fnv"
 	"lizardscript/ast"
 	"lizardscript/token"
+	"maps"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -233,14 +235,44 @@ type HashPair struct {
 
 // Hash is a dictionary. Like arrays, hashes are shared, not copied. Order
 // keeps the keys in the order they were first added.
+//
+// Pairs and Order can be read directly, but are changed only through Set
+// and Delete, which keep them in step and count the change in Version.
 type Hash struct {
 	Pairs map[HashKey]HashPair
 	Order []HashKey
+
+	// version counts the changes made by Set and Delete, for Version.
+	version uint64
 }
 
 // NewHash returns an empty hash.
 func NewHash() *Hash {
 	return &Hash{Pairs: map[HashKey]HashPair{}}
+}
+
+// NewHashSized returns an empty hash with room for size keys, for a hash
+// whose size is known, like a literal's.
+func NewHashSized(size int) *Hash {
+	return &Hash{Pairs: make(map[HashKey]HashPair, size), Order: make([]HashKey, 0, size)}
+}
+
+// Version changes whenever Set or Delete changes the hash. An engine that
+// remembers what a key read in this hash (the VM's dot access) can trust it
+// while the version stays.
+func (h *Hash) Version() uint64 {
+	return h.version
+}
+
+// Len is the number of keys.
+func (h *Hash) Len() int {
+	return len(h.Pairs)
+}
+
+// Get returns the value of key, and whether it is there.
+func (h *Hash) Get(key Hashable) (Object, bool) {
+	pair, ok := h.Pairs[key.HashKey()]
+	return pair.Value, ok
 }
 
 // Set adds or replaces the value of key.
@@ -250,6 +282,17 @@ func (h *Hash) Set(key Hashable, value Object) {
 		h.Order = append(h.Order, hashKey)
 	}
 	h.Pairs[hashKey] = HashPair{Key: key.(Object), Value: value}
+	h.version++
+}
+
+// Copy returns a new hash with the same keys and values, in the same order.
+// The values themselves are shared, not copied.
+func (h *Hash) Copy() *Hash {
+	pairs := maps.Clone(h.Pairs)
+	if pairs == nil {
+		pairs = map[HashKey]HashPair{}
+	}
+	return &Hash{Pairs: pairs, Order: slices.Clone(h.Order)}
 }
 
 // Delete removes key, and reports whether it was there.
@@ -259,6 +302,7 @@ func (h *Hash) Delete(key Hashable) bool {
 		return false
 	}
 	delete(h.Pairs, hashKey)
+	h.version++
 	for i, k := range h.Order {
 		if k == hashKey {
 			h.Order = append(h.Order[:i], h.Order[i+1:]...)

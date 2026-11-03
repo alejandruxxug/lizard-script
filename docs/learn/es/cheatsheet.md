@@ -64,11 +64,12 @@ false true
 | Grupo | Nombres |
 | --- | --- |
 | generales | `puts len type str int float range error` |
-| arreglos, hashes | `push pop first last rest keys values delete` |
+| arreglos, hashes | `push pop first last rest keys values delete same` |
 | colores, puntos | `rgb rgba hsl point` |
 | `math.` | `pi tau sqrt abs floor ceil round min max sin cos tan asin acos atan2 dist angle random seed` |
 | `text.` | `slice find split join replace trim lines starts ends upper lower code char number` |
 | `list.` | `slice insert remove index reverse sort copy` |
+| `hash.` | `copy keys values merge has remove` |
 
 ## El Terrario (capítulo 17)
 

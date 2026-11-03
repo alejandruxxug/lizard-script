@@ -111,6 +111,37 @@ function run() {
   same
 }
 run()`},
+	// Many small hashes, as a document's shapes: build them, copy each one
+	// and read fields of every copy (a different hash at each read).
+	{"Hashes10k", `
+function copy(h) {
+  let out = {}
+  let names = keys(h)
+  for (let i = 0; i < len(names); i += 1) { out[names[i]] = h[names[i]] }
+  out
+}
+function run() {
+  let shapes = []
+  for (let i = 0; i < 10000; i += 1) { push(shapes, {"kind": "dot", "x": i, "y": i * 2, "r": 1.5}) }
+  let copies = []
+  for (let i = 0; i < len(shapes); i += 1) { push(copies, copy(shapes[i])) }
+  let sum = 0
+  for (let i = 0; i < len(copies); i += 1) { let s = copies[i]; sum += s.x + s.y + s.r }
+  sum
+}
+run()`},
+	// The same with the hash library's copy.
+	{"Hashes10kLib", `
+function run() {
+  let shapes = []
+  for (let i = 0; i < 10000; i += 1) { push(shapes, {"kind": "dot", "x": i, "y": i * 2, "r": 1.5}) }
+  let copies = []
+  for (let i = 0; i < len(shapes); i += 1) { push(copies, hash.copy(shapes[i])) }
+  let sum = 0
+  for (let i = 0; i < len(copies); i += 1) { let s = copies[i]; sum += s.x + s.y + s.r }
+  sum
+}
+run()`},
 	{"Geometry", geometryBenchmark},
 }
 

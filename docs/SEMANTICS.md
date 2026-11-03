@@ -80,7 +80,7 @@ Byte by byte is not alphabetical order: every uppercase letter is before every l
 - `===` is exact: the two values have the same type and the same value. `!==` is its opposite.
 - `==` is loose: it works like `===`, but values of different types are first converted to numbers when possible. `true` is `1`, `false` is `0`, and a string that is a whole number is that number. So `1 == true` and `"5" == 5`, but `1 !== true`. Integers and floats are compared by value: `1 == 1.0` is true, and a string with a number such as `"1.5"` equals the float `1.5`. Only plain decimal strings count: `"1e3"`, `"inf"` and `"1."` are not numbers. `===` also needs the same type, so `1 === 1.0` is false. `!=` is its opposite.
 - Values that can't be converted are never `==` to a value of another type: `"five" == 5` is `false`, and `null == 0` is `false`.
-- Arrays and hashes are equal when their contents are, using the same kind of equality for the elements: `[1, "2"] == [1, 2]` but `[1, "2"] !== [1, 2]`.
+- Arrays and hashes are equal when their contents are, using the same kind of equality for the elements: `[1, "2"] == [1, 2]` but `[1, "2"] !== [1, 2]`. To ask whether two names hold the very same array or hash (one that a change through either name changes), use `same(a, b)`, see Builtins.
 - Functions and builtins are only equal to themselves.
 
 Equality never fails, whatever the types.
@@ -170,6 +170,7 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break, `\t` is a t
 | `rest(list)` | A new array with every element but the first, or `null` if `list` is empty. |
 | `keys(hash)`, `values(hash)` | Arrays with the keys or the values, in the order the keys were added. |
 | `delete(hash, key)` | Removes `key`, and returns whether it was there. |
+| `same(a, b)` | Whether `a` and `b` are the same value: the same array, hash, function, builtin or native, not two with equal contents (`same([1], [1])` is `false`, while `[1] === [1]` is `true`). Numbers, strings, booleans, colors, points and `null` have no identity of their own, so for them it is `===`: `same(1, 1)` is `true`, `same(1, 1.0)` is `false`. |
 | `type(x)` | The name of the type of `x`, like `"INTEGER"`. |
 | `str(x)` | `x` as a string, the way `puts` shows it. |
 | `int(x)` | A string with a whole number, a boolean, an integer or a float as an integer. A float loses its decimals towards zero: `int(-1.9)` is `-1`. `int("1.5")` is an error. |
@@ -233,11 +234,23 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break, `\t` is a t
 | `list.sort(a, [less])` | A new array in order, keeping the order of equal elements. Without `less` the elements must be all numbers (by value) or all strings (by characters). `less(x, y)` is a lizard function with two parameters that says whether `x` goes before `y`. An error inside it stops the sort and is reported with the position inside `less`. |
 | `list.copy(a)` | A new array with the same elements (the elements themselves are shared). |
 
-`text` and `list` are found after variables and the other builtins, so `let text = 1` hides the library. They are made new for each run, like `math`, and `evaluator.ResetMath()` resets them too.
+## The hash library
+
+`hash` is a hash of builtins for whole hashes, used like `list`. Keys follow the rules of indexing: a key that can't be one (a float, an array, ...) is the error `unusable as hash key`. Only `hash.remove` changes a hash.
+
+| Name | Does |
+| --- | --- |
+| `hash.copy(h)` | A new hash with the same keys and values, in the same order. The values themselves are shared, like `list.copy`. |
+| `hash.keys(h)`, `hash.values(h)` | The same arrays as `keys(h)` and `values(h)`. |
+| `hash.merge(a, b)` | A new hash with the keys of `a` in their order, then the keys of `b` that `a` doesn't have, in theirs. Where both have a key, the value is `b`'s. |
+| `hash.has(h, key)` | Whether `key` is in `h`, also when its value is `null` (both read as `null` with `h[key]`). |
+| `hash.remove(h, key)` | Removes `key`, and returns whether it was there, like `delete`. |
+
+`text`, `list` and `hash` are found after variables and the other builtins, so `let text = 1` hides the library. They are made new for each run, like `math`, and `evaluator.ResetMath()` resets them too.
 
 ## The Terrarium
 
-A program run by `lizardscript file.liz` (or `repl.Run`, on either engine) has the Terrarium, the standard library, installed: the names `fs`, `os`, `time`, `json`, `img`, `clip`, `window` and `pen` are modules, hashes of builtins used with dot access like `math`. The REPL has all of them but `window` and `pen`. Unlike `math`, `text` and `list`, they are ordinary variables of the program's top scope, so `let fs = 1` replaces the module for the rest of the program. They are made new for each run. Their errors are runtime errors that start with the builtin's name (`fs.read: can't read notes.txt: no such file or directory`) and a `try` catches them. Images and windows are values of type `NATIVE`, equal only to themselves. Every function is in [TERRARIUM.md](TERRARIUM.md).
+A program run by `lizardscript file.liz` (or `repl.Run`, on either engine) has the Terrarium, the standard library, installed: the names `fs`, `os`, `time`, `json`, `img`, `clip`, `window` and `pen` are modules, hashes of builtins used with dot access like `math`. The REPL has all of them but `window` and `pen`. Unlike `math`, `text`, `list` and `hash`, they are ordinary variables of the program's top scope, so `let fs = 1` replaces the module for the rest of the program. They are made new for each run. Their errors are runtime errors that start with the builtin's name (`fs.read: can't read notes.txt: no such file or directory`) and a `try` catches them. Images and windows are values of type `NATIVE`, equal only to themselves. Every function is in [TERRARIUM.md](TERRARIUM.md).
 
 ## Hooks (for hosts)
 

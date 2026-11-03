@@ -176,12 +176,28 @@ func (c *Compiler) emitStubs() {
 
 // mayBeSignal reports whether the value of an expression statement can be
 // a RETURN_VALUE, BREAK or CONTINUE value: one read from a variable, an
-// element or a call. An if in a statement's place has checked its own
-// statements already.
+// element or a call, or stored by an assignment. An if in a statement's
+// place has checked its own statements already.
 func mayBeSignal(expression ast.Expression) bool {
-	switch expression.(type) {
-	case *ast.Identifier, *ast.CallExpression, *ast.IndexExpression, *ast.AssignExpression:
+	switch expression := expression.(type) {
+	case *ast.Identifier, *ast.CallExpression, *ast.IndexExpression:
 		return true
+	case *ast.AssignExpression:
+		// x += e gives an operator's result, never one; x = e gives e.
+		return expression.Operator == "" && valueMayBeSignal(expression.Value)
 	}
 	return false
+}
+
+// valueMayBeSignal reports whether an expression used as a value can be a
+// signal value: anything but a literal or an operator's result. An if or
+// loop used as a value can be one.
+func valueMayBeSignal(expression ast.Expression) bool {
+	switch expression.(type) {
+	case *ast.IntegerLiteral, *ast.FloatLiteral, *ast.StringLiteral, *ast.ColorLiteral, *ast.Boolean,
+		*ast.PointLiteral, *ast.ArrayLiteral, *ast.HashLiteral, *ast.FunctionLiteral,
+		*ast.InfixExpression, *ast.PrefixExpression:
+		return false
+	}
+	return true
 }

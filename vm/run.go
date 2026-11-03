@@ -506,6 +506,15 @@ func (vm *VM) run() object.Object {
 			stack[sp-1] = value
 			ip += 5
 
+		case code.OpFormula:
+			if result, ok := formula(&unit.Formulas[operand(ins, ip+1)], unit, stack[bp:], free, cl.Globals); ok {
+				stack[sp] = result
+				sp++
+				ip = operand(ins, ip+5)
+			} else {
+				ip += 9
+			}
+
 		default:
 			def, _ := code.Lookup(byte(op))
 			name := "?"
@@ -564,7 +573,7 @@ func captureCells(captures []code.Capture, locals []object.Object, free []*Cell)
 // makeHash builds a hash from key, value pairs, in order. The keys were
 // checked with OpCheckKey.
 func makeHash(pairs []object.Object) *object.Hash {
-	hash := object.NewHash()
+	hash := object.NewHashSized(len(pairs) / 2)
 	for i := 0; i < len(pairs); i += 2 {
 		hash.Set(pairs[i].(object.Hashable), pairs[i+1])
 	}

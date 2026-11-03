@@ -4,7 +4,7 @@
 // results: the same values, output, errors (messages and positions), steps
 // and hook calls. It shares the evaluator's settings and state: MaxSteps and
 // the step count, Output, OnStatement and OnLayer, the builtins and the math,
-// text and list libraries.
+// text, list and hash libraries.
 //
 // The two engines work together: a program run with Run can call functions
 // a program run with evaluator.Eval left in the environment, and the other

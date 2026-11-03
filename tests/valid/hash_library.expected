@@ -1,0 +1,10 @@
+{"kind": "circle", "x": 10, "y": 20} {"kind": "circle", "x": 15, "y": 20}
+["kind", "x", "y"] ["circle", 10, 20]
+{"kind": "disc", "x": 10, "y": 20, "fill": #ff0000}
+{"kind": "circle", "x": 10, "y": 20}
+true false true
+true false {"kind": "circle", "x": 15}
+true false true
+false true
+true false true true
+new new again new

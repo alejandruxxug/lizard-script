@@ -27,6 +27,7 @@ func ResetMath() {
 	mathHash = nil
 	textHash = nil
 	listHash = nil
+	hashLibraryHash = nil
 	libraryResets++
 }
 

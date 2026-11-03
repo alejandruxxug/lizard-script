@@ -42,6 +42,7 @@ type Unit struct {
 	Captures   [][]Capture
 	Failures   []Failure
 	Fields     []Field
+	Formulas   []Formula
 }
 
 // Name is how a variable that is not a plain local is found. The captured
@@ -71,13 +72,79 @@ type Global struct {
 	Misses uint32
 }
 
-// Field is the constant name of a dot access (a.b, or a["b"]), ready for
-// the kinds of values it reads the most: Key for a hash, and Coord, the
-// coordinate of x, y or z for a point (-1 for any other name).
+// Field is the constant name of one dot access (a.b, or a["b"]) of the
+// code, ready for the kinds of values it reads the most: Key for a hash, and
+// Coord, the coordinate of x, y or z for a point (-1 for any other name).
 type Field struct {
 	Name  *object.String
 	Key   object.HashKey
 	Coord int
+	// Cache is the VM's memory of this dot access's last read of a hash.
+	Cache FieldCache
+}
+
+// FieldCache remembers that a dot access read Value in Hash, so the VM
+// doesn't look the key up again while Hash keeps its Version (see
+// object.Hash.Version). Hash is nil until the first read of a hash. The
+// cache keeps that hash alive while the unit is.
+type FieldCache struct {
+	Hash    *object.Hash
+	Version uint64
+	Value   object.Object
+}
+
+// Formula is arithmetic (+ - * /, with at most one comparison < > <= >= at
+// the top) on leaves, values that can be read without running any code:
+// variables, number constants and their dot accesses. The VM computes it
+// in one instruction, OpFormula, without making objects for the numbers in
+// the middle; when it can't, it runs the usual instructions of the
+// expression, which follow the OpFormula.
+type Formula struct {
+	Leaves []Leaf
+	// Steps are the leaves and operators in the order the instructions
+	// would run them: postfix.
+	Steps []Step
+	// Skip is the VM's: how many runs left go straight to the usual
+	// instructions, after one whose values were not all numbers.
+	Skip uint32
+}
+
+// MaxFormulaDepth bounds how many values a formula has waiting at once
+// while it is computed, so the VM computes it in a small fixed buffer.
+const MaxFormulaDepth = 8
+
+// LeafKind says where a formula's leaf starts.
+type LeafKind byte
+
+const (
+	LeafLocal    LeafKind = iota // Index is a slot, like OpGetLocal
+	LeafCell                     // Index is a slot, like OpGetCell
+	LeafFree                     // Index is a captured variable, like OpGetFree
+	LeafName                     // Index is in Unit.Names, like OpGetName
+	LeafConstant                 // Index is in Unit.Constants, like OpConstant
+)
+
+// Leaf is a value of a formula: a start and the dot accesses on it, in
+// order (p.next.z).
+type Leaf struct {
+	Kind   LeafKind
+	Index  int
+	Fields []FieldRead
+}
+
+// FieldRead is one dot access of a leaf, like OpGetField: Unit.Fields[Field]
+// with errors at Unit.Tokens[Token].
+type FieldRead struct {
+	Field, Token int
+}
+
+// Step is one step of a formula: push Leaves[Leaf], or, when Leaf is -1,
+// apply the infix operator Op to the two values on top, with errors at
+// Unit.Tokens[Token].
+type Step struct {
+	Leaf  int
+	Op    Opcode
+	Token int
 }
 
 // Scope lists the locals of a scope that closures capture: each gets a new

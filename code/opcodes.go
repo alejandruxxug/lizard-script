@@ -74,6 +74,9 @@ const (
 	OpAnd    // jump: if the top is falsy, replace it with false and jump; else drop it
 	OpOr     // jump: if the top is truthy, replace it with true and jump; else drop it
 	OpToBool // replace the top value with true or false
+	// formula, jump: push the value of Unit.Formulas[formula] and jump, or
+	// go on with the instructions that compute it one by one
+	OpFormula
 
 	// Control flow
 	OpJump          // jump
@@ -163,6 +166,7 @@ var definitions = map[Opcode]*Definition{
 	OpAnd:          {"OpAnd", []int{4}},
 	OpOr:           {"OpOr", []int{4}},
 	OpToBool:       {"OpToBool", []int{}},
+	OpFormula:      {"OpFormula", []int{4, 4}},
 
 	OpJump:          {"OpJump", []int{4}},
 	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{4}},

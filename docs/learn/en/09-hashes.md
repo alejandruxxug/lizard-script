@@ -209,6 +209,83 @@ puts(liz)
 {"name": "Liz", "age": 4}
 ```
 
+## The `hash` library: copying and merging
+
+`hash` is a library like `list` (chapter 8), with helpers for whole hashes. `hash.copy(h)` makes an independent hash with the same keys, in the same order, and `hash.merge(a, b)` makes a new hash with the keys of both, where `b` wins when both have a key. Neither changes the hashes you give it:
+
+```
+let liz = {"name": "Liz", "age": 3}
+let twin = hash.copy(liz)
+twin.name = "Iggy"
+puts(liz)
+puts(twin)
+let defaults = {"color": "green", "age": 1}
+puts(hash.merge(defaults, liz))
+```
+
+**Output:**
+
+```text
+{"name": "Liz", "age": 3}
+{"name": "Iggy", "age": 3}
+{"color": "green", "age": 3, "name": "Liz"}
+```
+
+A key that both have keeps its place from `a` (`age` above), and the new keys of `b` come after.
+
+The copy is shallow, like `list.copy`: the values themselves are shared, so an array inside is the same array in both:
+
+```
+let liz = {"name": "Liz", "colors": ["green"]}
+let twin = hash.copy(liz)
+push(twin.colors, "brown")
+puts(liz.colors)
+```
+
+**Output:**
+
+```text
+["green", "brown"]
+```
+
+`hash.has(h, key)` tells a key that holds `null` from a key that isn't there (both read as `null`), and `hash.remove(h, key)` is `delete`: it removes the key and says whether it was there. `hash.keys` and `hash.values` are `keys` and `values`:
+
+```
+let h = {"tail": null}
+puts(h.tail, hash.has(h, "tail"), hash.has(h, "wings"))
+puts(hash.remove(h, "tail"), hash.remove(h, "tail"), h)
+puts(hash.keys({"b": 1, "a": 2}), hash.values({"b": 1, "a": 2}))
+```
+
+**Output:**
+
+```text
+null true false
+true false {}
+["b", "a"] [1, 2]
+```
+
+## The same hash, or an equal one?
+
+`==` and `===` compare **contents**: a copy is equal to the original. `same(a, b)` asks whether two values are **the same** array, hash or function, the one you'd change through either name:
+
+```
+let a = {"name": "Liz"}
+let b = a
+let c = hash.copy(a)
+puts(a == c, same(a, b), same(a, c))
+puts(same([1], [1]), same(1, 1), same("hi", "h" + "i"))
+```
+
+**Output:**
+
+```text
+true true false
+false true true
+```
+
+Numbers, strings, booleans, colors, points and `null` have no identity of their own, so for them `same` is `===`. Use `same` to remember which hashes you have already seen, for example in a cache.
+
 ## Records: arrays of hashes
 
 An array of hashes is the usual way to store a table of things:
@@ -261,6 +338,7 @@ Combined with closures (chapter 7), this lets you keep data private. See the ban
 - `h.key = v` adds or replaces; `delete(h, key)` removes.
 - Keys: strings, integers, booleans. `1` and `"1"` are different.
 - `keys` and `values` keep the order the keys were added in.
-- Hashes are shared, like arrays.
+- Hashes are shared, like arrays: `hash.copy` makes an independent one, `hash.merge(a, b)` a new one with both (`b` wins).
+- `hash.has` and `hash.remove` ask for and remove keys; `same(a, b)` asks whether two values are the same hash or array, not just equal.
 
 [← Previous: Arrays](08-arrays.md) · [Index](../README.md) · [Next: Strings and `text` →](10-strings-and-text.md)

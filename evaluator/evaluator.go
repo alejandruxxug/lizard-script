@@ -374,6 +374,9 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 	if node.Value == "list" {
 		return listLibrary()
 	}
+	if node.Value == "hash" {
+		return hashLibrary()
+	}
 	return newError(node.Token, "identifier not found: %s", node.Value)
 }
 
@@ -1135,7 +1138,7 @@ func evalIndexExpression(tok token.Token, left, index object.Object) object.Obje
 }
 
 func evalHashLiteral(node *ast.HashLiteral, env *object.Environment) object.Object {
-	hash := object.NewHash()
+	hash := object.NewHashSized(len(node.Pairs))
 
 	for _, pair := range node.Pairs {
 		key := Eval(pair.Key, env)

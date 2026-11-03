@@ -42,6 +42,7 @@ func init() {
 		"rgba":   builtinRGBA,
 		"hsl":    builtinHSL,
 		"point":  builtinPoint,
+		"same":   builtinSame,
 	} {
 		builtins[name] = &object.Builtin{Name: name, Fn: fn}
 	}
@@ -207,6 +208,22 @@ func builtinDelete(args ...object.Object) object.Object {
 		return argError("unusable as hash key: %s", args[1].Type())
 	}
 	return nativeBoolToBooleanObject(hash.Delete(key))
+}
+
+// same(a, b) reports whether a and b are the same value: the same array,
+// hash, function or native, not two with equal contents. Numbers, strings,
+// booleans, colors, points and null have no identity of their own, so for
+// them it is ===.
+func builtinSame(args ...object.Object) object.Object {
+	if len(args) != 2 {
+		return wrongCount("2", len(args))
+	}
+	a, b := args[0], args[1]
+	switch a.(type) {
+	case *object.Array, *object.Hash, *object.Function, *object.Builtin, *object.Native, object.Callable:
+		return nativeBoolToBooleanObject(a == b)
+	}
+	return nativeBoolToBooleanObject(strictEquals(a, b))
 }
 
 // type(x) is the name of the type of x, like "INTEGER".

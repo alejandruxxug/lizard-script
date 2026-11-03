@@ -2,9 +2,9 @@
 
 [← Anterior: Errores, `try`/`catch` y `null`](14-errors.md) · [Índice](../README.md) · [Siguiente: Proyectos →](16-projects.md) · [English](../en/15-builtins-reference.md)
 
-Todas las funciones integradas (*builtins*) y todos los miembros de las bibliotecas `math`, `text` y `list`, con un ejemplo cada uno. La columna **Resultado** es el valor del ejemplo tal como lo muestra el REPL, así que las cadenas aparecen con comillas. Cuando el ejemplo es un error, el resultado muestra el mensaje (sin la parte `[line, column]`).
+Todas las funciones integradas (*builtins*) y todos los miembros de las bibliotecas `math`, `text`, `list` y `hash`, con un ejemplo cada uno. La columna **Resultado** es el valor del ejemplo tal como lo muestra el REPL, así que las cadenas aparecen con comillas. Cuando el ejemplo es un error, el resultado muestra el mensaje (sin la parte `[line, column]`).
 
-Las funciones integradas se buscan **después** de tus variables, así que `let len = 5` oculta `len`. Lo mismo pasa con `math`, `text`, `list` y `null`.
+Las funciones integradas se buscan **después** de tus variables, así que `let len = 5` oculta `len`. Lo mismo pasa con `math`, `text`, `list`, `hash` y `null`.
 
 ## Generales
 
@@ -36,6 +36,7 @@ Las funciones integradas se buscan **después** de tus variables, así que `let 
 | `keys(h)` | las claves, en el orden en que se agregaron | `keys({"b": 1, "a": 2})` | `["b", "a"]` |
 | `values(h)` | los valores, en el mismo orden | `values({"b": 1, "a": 2})` | `[1, 2]` |
 | `delete(h, clave)` | quita `clave` y dice si estaba | `delete({"a": 1}, "a")` | `true` |
+| `same(a, b)` | si `a` y `b` son el mismo arreglo, hash o función (para otros valores, `===`) | `same([1], [1])` | `false` |
 
 ## Colores y puntos
 
@@ -110,6 +111,20 @@ Un índice negativo cuenta desde el final.
 | `list.sort(a)` | un arreglo nuevo, números por valor o cadenas alfabéticamente | `list.sort([3, 1, 2])` | `[1, 2, 3]` |
 | `list.sort(a, less)` | ordenado según tu función `less(x, y)`: ¿va `x` primero? | `list.sort([3, 1, 2], function(x, y) { x > y })` | `[3, 2, 1]` |
 | `list.copy(a)` | un arreglo nuevo con los mismos elementos | `list.copy([1, 2])` | `[1, 2]` |
+
+## `hash`
+
+Ninguna cambia el hash, salvo `hash.remove`.
+
+| Miembro | Hace | Ejemplo | Resultado |
+| --- | --- | --- | --- |
+| `hash.copy(h)` | un hash nuevo con las mismas claves y valores, en el mismo orden | `hash.copy({"a": 1})` | `{"a": 1}` |
+| `hash.keys(h)` | las claves, como `keys` | `hash.keys({"b": 1, "a": 2})` | `["b", "a"]` |
+| `hash.values(h)` | los valores, como `values` | `hash.values({"b": 1, "a": 2})` | `[1, 2]` |
+| `hash.merge(a, b)` | un hash nuevo con las claves de `a` y luego las nuevas de `b`; ganan los valores de `b` | `hash.merge({"a": 1, "b": 2}, {"b": 3})` | `{"a": 1, "b": 3}` |
+| `hash.has(h, clave)` | si `clave` está, aunque guarde `null` | `hash.has({"a": null}, "a")` | `true` |
+| | | `hash.has({}, [1])` | `runtime error: hash.has: unusable as hash key: ARRAY` |
+| `hash.remove(h, clave)` | quita `clave` y dice si estaba, como `delete` | `hash.remove({"a": 1}, "b")` | `false` |
 
 ## Valores con acceso con punto
 

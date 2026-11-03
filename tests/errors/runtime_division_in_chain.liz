@@ -1,0 +1,5 @@
+function ratio(a, b) {
+  a * 2 + 1 / b
+}
+puts(ratio(3, 4))
+puts(ratio(3, 0))

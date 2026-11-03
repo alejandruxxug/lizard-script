@@ -73,7 +73,7 @@ func NativeBool(value bool) *object.Boolean {
 }
 
 // Builtin finds a name that no variable has: a builtin, null, or the math,
-// text and list libraries, in that order, like a name in a program.
+// text, list and hash libraries, in that order, like a name in a program.
 func Builtin(name string) (object.Object, bool) {
 	if builtin, ok := builtins[name]; ok {
 		return builtin, true
@@ -87,6 +87,8 @@ func Builtin(name string) (object.Object, bool) {
 		return textLibrary(), true
 	case "list":
 		return listLibrary(), true
+	case "hash":
+		return hashLibrary(), true
 	}
 	return nil, false
 }

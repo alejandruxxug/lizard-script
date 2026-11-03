@@ -209,6 +209,83 @@ puts(liz)
 {"name": "Liz", "age": 4}
 ```
 
+## La biblioteca `hash`: copiar y combinar
+
+`hash` es una biblioteca como `list` (capítulo 8), con ayudas para hashes enteros. `hash.copy(h)` hace un hash independiente con las mismas claves, en el mismo orden, y `hash.merge(a, b)` hace un hash nuevo con las claves de los dos, donde gana `b` cuando ambos tienen una clave. Ninguna cambia los hashes que le das:
+
+```
+let liz = {"name": "Liz", "age": 3}
+let twin = hash.copy(liz)
+twin.name = "Iggy"
+puts(liz)
+puts(twin)
+let defaults = {"color": "green", "age": 1}
+puts(hash.merge(defaults, liz))
+```
+
+**Salida:**
+
+```text
+{"name": "Liz", "age": 3}
+{"name": "Iggy", "age": 3}
+{"color": "green", "age": 3, "name": "Liz"}
+```
+
+Una clave que tienen los dos conserva su lugar de `a` (`age` arriba), y las claves nuevas de `b` van después.
+
+La copia es superficial, como `list.copy`: los valores mismos se comparten, así que un arreglo de adentro es el mismo arreglo en los dos:
+
+```
+let liz = {"name": "Liz", "colors": ["green"]}
+let twin = hash.copy(liz)
+push(twin.colors, "brown")
+puts(liz.colors)
+```
+
+**Salida:**
+
+```text
+["green", "brown"]
+```
+
+`hash.has(h, clave)` distingue una clave que guarda `null` de una que no está (las dos se leen como `null`), y `hash.remove(h, clave)` es `delete`: quita la clave y dice si estaba. `hash.keys` y `hash.values` son `keys` y `values`:
+
+```
+let h = {"tail": null}
+puts(h.tail, hash.has(h, "tail"), hash.has(h, "wings"))
+puts(hash.remove(h, "tail"), hash.remove(h, "tail"), h)
+puts(hash.keys({"b": 1, "a": 2}), hash.values({"b": 1, "a": 2}))
+```
+
+**Salida:**
+
+```text
+null true false
+true false {}
+["b", "a"] [1, 2]
+```
+
+## ¿El mismo hash, o uno igual?
+
+`==` y `===` comparan el **contenido**: una copia es igual al original. `same(a, b)` pregunta si dos valores son **el mismo** arreglo, hash o función, el que cambiarías con cualquiera de los dos nombres:
+
+```
+let a = {"name": "Liz"}
+let b = a
+let c = hash.copy(a)
+puts(a == c, same(a, b), same(a, c))
+puts(same([1], [1]), same(1, 1), same("hi", "h" + "i"))
+```
+
+**Salida:**
+
+```text
+true true false
+false true true
+```
+
+Los números, las cadenas, los booleanos, los colores, los puntos y `null` no tienen identidad propia, así que para ellos `same` es `===`. Usa `same` para recordar qué hashes ya viste, por ejemplo en una caché.
+
 ## Registros: arreglos de hashes
 
 Un arreglo de hashes es la forma usual de guardar una tabla de cosas:
@@ -261,6 +338,7 @@ Combinado con las clausuras (capítulo 7), esto permite mantener datos privados.
 - `h.clave = v` agrega o reemplaza; `delete(h, clave)` quita.
 - Claves: cadenas, enteros, booleanos. `1` y `"1"` son distintas.
 - `keys` y `values` conservan el orden en que se agregaron las claves.
-- Los hashes se comparten, igual que los arreglos.
+- Los hashes se comparten, igual que los arreglos: `hash.copy` hace uno independiente, `hash.merge(a, b)` uno nuevo con los dos (gana `b`).
+- `hash.has` y `hash.remove` preguntan por claves y las quitan; `same(a, b)` pregunta si dos valores son el mismo hash o arreglo, no solo iguales.
 
 [← Anterior: Arreglos](08-arrays.md) · [Índice](../README.md) · [Siguiente: Cadenas y `text` →](10-strings-and-text.md)

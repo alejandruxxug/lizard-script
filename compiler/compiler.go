@@ -26,7 +26,7 @@ func Compile(program *ast.Program) (unit *code.Unit, err error) {
 		integers:  map[int64]int{},
 		strings:   map[string]int{},
 		floats:    map[uint64]int{},
-		fields:    map[string]int{},
+		fieldKeys: map[string]*object.String{},
 		statement: map[ast.Statement]int{},
 		names:     map[*ast.FunctionLiteral]string{},
 	}
@@ -57,11 +57,15 @@ type Compiler struct {
 	integers  map[int64]int
 	strings   map[string]int
 	floats    map[uint64]int
-	fields    map[string]int
+	fieldKeys map[string]*object.String
 	statement map[ast.Statement]int
 
 	// names are the functions a let names, for code.Function.Name.
 	names map[*ast.FunctionLiteral]string
+
+	// inFormula is set while the usual instructions of a formula are
+	// compiled (see formulas.go).
+	inFormula bool
 }
 
 // funcState is one function being compiled (the program is one too).
@@ -238,18 +242,20 @@ func (c *Compiler) float(value float64) int {
 // evaluator's.
 var pointCoords = map[string]int{"x": 0, "y": 1, "z": 2}
 
-// field is the entry of the name of a dot access in the unit's fields.
+// field is a new entry of the unit's fields for a dot access with this
+// name. Each dot access gets its own, so the VM's cache of what it read
+// (code.FieldCache) is about that place of the code only.
 func (c *Compiler) field(name string) int {
-	if i, ok := c.fields[name]; ok {
-		return i
+	key, ok := c.fieldKeys[name]
+	if !ok {
+		key = &object.String{Value: name}
+		c.fieldKeys[name] = key
 	}
-	key := &object.String{Value: name}
 	coord, ok := pointCoords[name]
 	if !ok {
 		coord = -1
 	}
 	c.unit.Fields = append(c.unit.Fields, code.Field{Name: key, Key: key.HashKey(), Coord: coord})
-	c.fields[name] = len(c.unit.Fields) - 1
 	return len(c.unit.Fields) - 1
 }
 
