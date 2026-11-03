@@ -1,0 +1,75 @@
+-~> regions: the parts of a picture that must be painted again, as boxes
+-~> [x0, y0, x1, y1] of whole pixels that never overlap. A new box swallows
+-~> every region it overlaps or is close to (where painting both as one
+-~> costs about as much as apart), so a change is painted once however many
+-~> boxes it marked. Past max_regions, a new box joins the region it makes
+-~> grow least.
+
+let max_regions = 24
+
+-~> A region has a cost of its own, about that of painting this many pixels.
+let slack = 64 * 64
+
+function box_area(b) {
+  (b[2] - b[0]) * (b[3] - b[1])
+}
+
+function box_union(a, b) {
+  [math.min(a[0], b[0]), math.min(a[1], b[1]), math.max(a[2], b[2]), math.max(a[3], b[3])]
+}
+
+function boxes_overlap(a, b) {
+  a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+}
+
+function boxes_close(a, b) {
+  box_area(box_union(a, b)) <= box_area(a) + box_area(b) + slack
+}
+
+-~> The box cut to whole pixels inside size (w, h), or null when nothing is
+-~> left: a box that touches a pixel at all covers it.
+function pixel_box(box, size) {
+  let x0 = math.max(0, math.floor(box[0]))
+  let y0 = math.max(0, math.floor(box[1]))
+  let x1 = math.min(size.x, math.ceil(box[2]))
+  let y1 = math.min(size.y, math.ceil(box[3]))
+  if (x1 <= x0 || y1 <= y0) {
+    return null
+  }
+  [x0, y0, x1, y1]
+}
+
+-~> The regions with box added (a new list).
+function add_region(regions, box) {
+  let rs = regions
+  let grown = true
+  while (grown) {
+    grown = false
+    let keep = []
+    for (let i = 0; i < len(rs); i += 1) {
+      if (boxes_overlap(rs[i], box) || boxes_close(rs[i], box)) {
+        box = box_union(rs[i], box)
+        grown = true
+      } else {
+        push(keep, rs[i])
+      }
+    }
+    rs = keep
+  }
+  if (len(rs) >= max_regions) {
+    let best = 0
+    let cost = null
+    for (let i = 0; i < len(rs); i += 1) {
+      let c = box_area(box_union(rs[i], box)) - box_area(rs[i])
+      if (cost === null || c < cost) {
+        best = i
+        cost = c
+      }
+    }
+    let joined = box_union(rs[best], box)
+    list.remove(rs, best)
+    return add_region(rs, joined)
+  }
+  push(rs, box)
+  rs
+}

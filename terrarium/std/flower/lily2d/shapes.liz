@@ -1,0 +1,575 @@
+-~> shapes: the shapes lily2d draws, as values. A shape is a hash:
+-~>   kind    "circle", "rect", "path", "text", "brush", "group", ...
+-~>   path    [["M", p], ["L", p], ["C", c1, c2, p], ["Z"]], absolute points
+-~>   and every key of its style (see style.liz): fill, stroke, width, join,
+-~>   cap, miter, dash, dash_offset, rule, opacity and blend.
+-~> A group is {"kind": "group", "shapes": [...], "opacity", "blend"}.
+-~> Changing a key of a shape changes how it is drawn next time.
+
+use "check"
+use "geometry"
+use "matrix"
+use "paint"
+use "style"
+use "pens"
+use "font_data"
+
+-~> A shape of kind with path and the full style.
+function make(kind, path, style) {
+  let shape = hash.copy(style)
+  shape.kind = kind
+  shape.path = path
+  shape
+}
+
+function circle(center, r, style) {
+  need_point("circle", "center", center)
+  need_number("circle", "r", r)
+  make("circle", ellipse_path(center, (r, r)), read_style("circle", style, "fill"))
+}
+
+function ellipse(center, radii, style) {
+  need_point("ellipse", "center", center)
+  need_point("ellipse", "radii", radii)
+  make("ellipse", ellipse_path(center, radii), read_style("ellipse", style, "fill"))
+}
+
+-~> A rectangle; radius rounds its corners (it is cut to half the shorter side).
+function rect(pos, size, style, radius = 0) {
+  need_point("rect", "pos", pos)
+  need_point("rect", "size", size)
+  need_number("rect", "radius", radius)
+  let r = math.max(0, math.min(radius, math.abs(size.x) / 2.0, math.abs(size.y) / 2.0))
+  let x0 = pos.x
+  let y0 = pos.y
+  let x1 = pos.x + size.x
+  let y1 = pos.y + size.y
+  let path = []
+  if (r == 0) {
+    path = [["M", pos], ["L", (x1, y0)], ["L", pos + size], ["L", (x0, y1)], ["Z"]]
+  } else {
+    let k = r * (1 - 0.5522847498)
+    path = [["M", (x0 + r, y0)], ["L", (x1 - r, y0)], ["C", (x1 - k, y0), (x1, y0 + k), (x1, y0 + r)],
+            ["L", (x1, y1 - r)], ["C", (x1, y1 - k), (x1 - k, y1), (x1 - r, y1)],
+            ["L", (x0 + r, y1)], ["C", (x0 + k, y1), (x0, y1 - k), (x0, y1 - r)],
+            ["L", (x0, y0 + r)], ["C", (x0, y0 + k), (x0 + k, y0), (x0 + r, y0)], ["Z"]]
+  }
+  make("rect", path, read_style("rect", style, "fill"))
+}
+
+function line(a, b, style) {
+  need_point("line", "a", a)
+  need_point("line", "b", b)
+  make("line", [["M", a], ["L", b]], read_style("line", style, "stroke"))
+}
+
+-~> Straight segments through the points, not closed.
+function polyline(points, style) {
+  need_points("polyline", "points", points)
+  let path = [["M", points[0]]]
+  for (let i = 1; i < len(points); i += 1) {
+    push(path, ["L", points[i]])
+  }
+  if (len(points) == 1) {
+    push(path, ["L", points[0]])
+  }
+  make("polyline", path, read_style("polyline", style, "stroke"))
+}
+
+function polygon(points, style) {
+  need_points("polygon", "points", points)
+  let path = [["M", points[0]]]
+  for (let i = 1; i < len(points); i += 1) {
+    push(path, ["L", points[i]])
+  }
+  push(path, ["Z"])
+  make("polygon", path, read_style("polygon", style, "fill"))
+}
+
+let path_options = ["closed", "smooth", "corner", "holes"]
+
+-~> A path through points (smooth, with sharp corners, and holes) or from
+-~> commands (M, L, C, Q, Z). See lily2d.path.
+function path(items, style) {
+  if (type(items) != "ARRAY" || len(items) == 0) {
+    fail("path", "points must be a list of points, or of commands like [\"M\", (0, 0)]")
+  }
+  let closed = option(style, "closed", true)
+  let filled = read_style("path", style, "fill", path_options)
+  if (type(items[0]) == "ARRAY") {
+    return make("path", read_commands(items), filled)
+  }
+  need_points("path", "points", items)
+  let smooth = option(style, "smooth", true)
+  let corner = option(style, "corner", 55)
+  let holes = option(style, "holes", [])
+  if (type(closed) != "BOOLEAN" || type(smooth) != "BOOLEAN") {
+    fail("path", "closed and smooth must be true or false")
+  }
+  need_number("path", "corner", corner)
+  if (type(holes) != "ARRAY") {
+    fail("path", "holes must be a list of point lists")
+  }
+  if (len(holes) > 0 && !closed) {
+    fail("path", "holes need closed = true")
+  }
+  if (!smooth) {
+    corner = 0
+  }
+  let outline = smooth_outline(items, closed, corner)
+  let sign = area2(items) > 0
+  for (let h = 0; h < len(holes); h += 1) {
+    need_points("path", "holes item " + str(h), holes[h])
+    let ring = holes[h]
+    -~> a hole goes the other way round, so nonzero cuts it out
+    if ((area2(ring) > 0) == sign) {
+      ring = list.reverse(ring)
+    }
+    let sub = smooth_outline(ring, true, corner)
+    for (let i = 0; i < len(sub); i += 1) {
+      push(outline, sub[i])
+    }
+  }
+  make("path", outline, filled)
+}
+
+-~> Path commands checked, with each Q turned into a C.
+function read_commands(items) {
+  let counts = {"M": 1, "L": 1, "C": 3, "Q": 2, "Z": 0}
+  let out = []
+  let cur = null
+  let start = null
+  for (let i = 0; i < len(items); i += 1) {
+    let cmd = items[i]
+    let where = "command " + str(i)
+    if (type(cmd) != "ARRAY" || len(cmd) == 0 || counts[cmd[0]] === null) {
+      fail("path", where + " must be a list that starts with \"M\", \"L\", \"C\", \"Q\" or \"Z\"")
+    }
+    let op = cmd[0]
+    if (len(cmd) != counts[op] + 1) {
+      fail("path", where + ": " + op + " takes " + str(counts[op]) + " points, got " + str(len(cmd) - 1))
+    }
+    for (let k = 1; k < len(cmd); k += 1) {
+      need_point("path", where + " point " + str(k), cmd[k])
+    }
+    if (i == 0 && op != "M") {
+      fail("path", "the commands must start with [\"M\", point]")
+    }
+    if (op == "Q") {
+      push(out, ["C", cur + (cmd[1] - cur) * (2 / 3.0), cmd[2] + (cmd[1] - cmd[2]) * (2 / 3.0), cmd[2]])
+      cur = cmd[2]
+    } elif (op == "Z") {
+      push(out, ["Z"])
+      cur = start
+    } else {
+      push(out, list.copy(cmd))
+      cur = cmd[len(cmd) - 1]
+      if (op == "M") {
+        start = cur
+      }
+    }
+  }
+  out
+}
+
+-~> Part of a circle, from angle from to angle to (clockwise on the screen
+-~> from "to the right"). With a fill it is a pie slice.
+function arc(center, r, from, to, style) {
+  need_point("arc", "center", center)
+  need_number("arc", "r", r)
+  need_number("arc", "from", from)
+  need_number("arc", "to", to)
+  let full = read_style("arc", style, "stroke")
+  let commands = arc_commands(center, r, from, to)
+  if (full.fill !== null) {
+    commands[0] = ["L", commands[0][1]]
+    return make("arc", [["M", center]] + commands + [["Z"]], full)
+  }
+  commands[0] = ["M", commands[0][1]]
+  make("arc", commands, full)
+}
+
+-~> A star with count points, its tips at outer and its dents at inner from
+-~> the center; the first tip points straight up.
+function star(center, count, outer, inner, style) {
+  need_point("star", "center", center)
+  if (type(count) != "INTEGER" || count < 2) {
+    fail("star", "count must be a whole number from 2 up, not " + str(count))
+  }
+  need_number("star", "outer", outer)
+  need_number("star", "inner", inner)
+  let points = []
+  for (let i = 0; i < count * 2; i += 1) {
+    let a = -math.pi / 2 + i * math.pi / count
+    let r = outer
+    if (i % 2 == 1) {
+      r = inner
+    }
+    push(points, center + (math.cos(a) * r, math.sin(a) * r))
+  }
+  let path = [["M", points[0]]]
+  for (let i = 1; i < len(points); i += 1) {
+    push(path, ["L", points[i]])
+  }
+  push(path, ["Z"])
+  make("star", path, read_style("star", style, "fill"))
+}
+
+let text_options = ["size", "align", "valign"]
+
+function text_size(call, size) {
+  if (type(size) != "INTEGER" || size < 1 || size > 8) {
+    fail(call, "size must be a whole number from 1 to 8 (each font pixel is size by size), not " + str(size))
+  }
+  size
+}
+
+-~> The size of text in the bitmap font, as a point: the longest line's
+-~> width and the height of all the lines.
+function measure(s, size = 1) {
+  if (type(s) != "STRING") {
+    fail("measure", "text must be a string, not " + type(s))
+  }
+  size = text_size("measure", size)
+  let lines = text.lines(s)
+  let widest = 0
+  for (let i = 0; i < len(lines); i += 1) {
+    widest = math.max(widest, len(lines[i]))
+  }
+  (widest * font_data.width * size, math.max(1, len(lines)) * font_data.height * size)
+}
+
+-~> Text in the 7x13 bitmap font, as a path of the font's pixels. align
+-~> ("left", "center", "right") says where pos is across each line, valign
+-~> ("top", "middle", "bottom", "baseline") where it is up and down.
+function text_shape(pos, s, style) {
+  need_point("text", "pos", pos)
+  if (type(s) != "STRING") {
+    fail("text", "text must be a string, not " + type(s))
+  }
+  let full = read_style("text", style, "fill", text_options)
+  let size = text_size("text", option(style, "size", 1))
+  let align = option(style, "align", "left")
+  let valign = option(style, "valign", "top")
+  need_choice("text", "align", align, ["left", "center", "right"])
+  need_choice("text", "valign", valign, ["top", "middle", "bottom", "baseline"])
+  let lines = text.lines(s)
+  let box = measure(s, size)
+  let top = pos.y
+  if (valign == "middle") {
+    top = pos.y - box.y / 2.0
+  } elif (valign == "bottom") {
+    top = pos.y - box.y
+  } elif (valign == "baseline") {
+    top = pos.y - font_data.ascent * size
+  }
+  let adv = font_data.width * size
+  let path = []
+  for (let l = 0; l < len(lines); l += 1) {
+    let row = lines[l]
+    let left = pos.x
+    if (align == "center") {
+      left = pos.x - len(row) * adv / 2.0
+    } elif (align == "right") {
+      left = pos.x - len(row) * adv
+    }
+    let y = top + l * font_data.height * size
+    for (let i = 0; i < len(row); i += 1) {
+      let glyph = font_data.glyphs[row[i]]
+      if (glyph === null) {
+        glyph = font_data.glyphs["fallback"]
+      }
+      let x = left + i * adv
+      for (let g = 0; g < len(glyph); g += 1) {
+        let run = glyph[g]
+        let a = (x + run[1] * size, y + run[0] * size)
+        let b = (x + run[2] * size, y + (run[0] + 1) * size)
+        push(path, ["M", a])
+        push(path, ["L", (b.x, a.y)])
+        push(path, ["L", b])
+        push(path, ["L", (a.x, b.y)])
+        push(path, ["Z"])
+      }
+    }
+  }
+  let shape = make("text", path, full)
+  shape.text = s
+  shape
+}
+
+-~> A group of shapes drawn together, then mixed onto what is below with
+-~> one opacity and blend mode (so a group at half opacity doesn't show its
+-~> own overlaps).
+function group(shapes, style = {}) {
+  if (type(shapes) != "ARRAY") {
+    fail("group", "shapes must be a list of shapes")
+  }
+  for (let i = 0; i < len(shapes); i += 1) {
+    need_shape("group", "shapes item " + str(i), shapes[i])
+  }
+  let out = read_group_style("group", style)
+  out.kind = "group"
+  out.shapes = shapes
+  out
+}
+
+function is_shape(v) {
+  type(v) == "HASH" && type(v["kind"]) == "STRING" && (type(v["path"]) == "ARRAY" || type(v["shapes"]) == "ARRAY")
+}
+
+function need_shape(call, name, v) {
+  if (!is_shape(v)) {
+    fail(call, name + " must be a shape, like the value of lily2d.circle, not " + type(v))
+  }
+}
+
+-~> ---- brush ----
+
+-~> Where a brush outline gets its points: {"pos", "w", "op"} along the
+-~> smooth curve, 8 for each piece.
+function brush_samples(points, widths, opacities) {
+  let n = len(points)
+  let steps = 8
+  let samples = []
+  let pieces = catmull_rom(points)
+  for (let i = 0; i < len(pieces); i += 1) {
+    let piece = pieces[i]
+    for (let s = 0; s < steps; s += 1) {
+      let t = s / float(steps)
+      push(samples, {"pos": bezier_point(points[i], piece[0], piece[1], piece[2], t),
+                     "w": lerp(widths[i], widths[i + 1], t), "op": lerp(opacities[i], opacities[i + 1], t)})
+    }
+  }
+  push(samples, {"pos": points[n - 1], "w": widths[n - 1], "op": opacities[n - 1]})
+  samples
+}
+
+-~> The unit vector along v, or (1, 0) when v has no length.
+function unit_vector(v) {
+  let l = math.sqrt(float(v.x * v.x + v.y * v.y))
+  if (l == 0) {
+    return (1.0, 0.0)
+  }
+  v / l
+}
+
+-~> The filled outline of a stroke whose width changes: down the left side,
+-~> round the end, back up the right side, round the start.
+function brush_outline(samples, pen) {
+  let n = len(samples)
+  let along = [0.0]
+  for (let i = 1; i < n; i += 1) {
+    push(along, along[i - 1] + math.dist(samples[i - 1].pos, samples[i].pos))
+  }
+  let total = along[n - 1]
+  let left = []
+  let right = []
+  let tangents = []
+  let halves = []
+  for (let i = 0; i < n; i += 1) {
+    let tan = unit_vector(samples[math.min(i + 1, n - 1)].pos - samples[math.max(i - 1, 0)].pos)
+    let frac = 0.0
+    if (total > 0) {
+      frac = along[i] / total
+    }
+    let half = samples[i].w * pen_taper(pen, frac) / 2.0
+    if (pen.grain > 0) {
+      half = half + pen.grain * (pen_noise(i) - 0.5)
+    }
+    half = math.max(0.1, half)
+    let normal = (-tan.y, tan.x)
+    push(tangents, tan)
+    push(halves, half)
+    push(left, samples[i].pos + normal * half)
+    push(right, samples[i].pos - normal * half)
+  }
+
+  let path = [["M", left[0]]]
+  for (let i = 1; i < n; i += 1) {
+    push(path, ["L", left[i]])
+  }
+  let end = samples[n - 1].pos
+  let endn = (-tangents[n - 1].y, tangents[n - 1].x)
+  for (let j = 1; j < 6; j += 1) {
+    let a = j / 6.0 * math.pi
+    push(path, ["L", end + (endn * math.cos(a) + tangents[n - 1] * math.sin(a)) * halves[n - 1]])
+  }
+  for (let i = n - 1; i >= 0; i -= 1) {
+    push(path, ["L", right[i]])
+  }
+  let begin = samples[0].pos
+  let beginn = (-tangents[0].y, tangents[0].x)
+  for (let j = 1; j < 6; j += 1) {
+    let a = j / 6.0 * math.pi
+    push(path, ["L", begin - (beginn * math.cos(a) + tangents[0] * math.sin(a)) * halves[0]])
+  }
+  push(path, ["Z"])
+  path
+}
+
+-~> A smooth stroke whose width and opacity follow the pressure at each
+-~> point, styled by a pen (see pens.liz). source is the device the
+-~> pressures came from ("mouse", "trackpad", "tablet"), for the pen's
+-~> inputs block, or null.
+function brush(points, pressures, color, pen = pens.ink, source = null) {
+  need_points("brush", "points", points)
+  if (type(pressures) != "ARRAY" || len(pressures) != len(points)) {
+    fail("brush", "pressures must be a list with one number for each point")
+  }
+  for (let i = 0; i < len(pressures); i += 1) {
+    need_number("brush", "pressures item " + str(i), pressures[i])
+  }
+  need_color("brush", "color", color)
+  if (type(pen) != "HASH" || !is_number(pen["min"]) || !is_number(pen["max"])) {
+    fail("brush", "pen must be a pen like lily2d.pens.ink")
+  }
+
+  let n = len(points)
+  let widths = []
+  let opacities = []
+  let ps = pen_prepare(pen, points, pressures, source)
+  for (let i = 0; i < n; i += 1) {
+    let a = points[math.min(i + 1, n - 1)] - points[math.max(i - 1, 0)]
+    let angle = 0.0
+    if (a.x != 0 || a.y != 0) {
+      angle = math.atan2(a.y, a.x)
+    }
+    let r = pen_response(pen, ps[i], angle, source)
+    push(widths, r[0])
+    push(opacities, r[1])
+  }
+
+  let mean = 0.0
+  for (let i = 0; i < n; i += 1) {
+    mean = mean + opacities[i] / n
+  }
+  let outline = null
+  if (n == 1) {
+    let r = math.max(0.1, widths[0] / 2.0)
+    outline = ellipse_path(points[0], (r, r))
+  } else {
+    outline = brush_outline(brush_samples(points, widths, opacities), pen)
+  }
+  let shape = make("brush", outline, read_style("brush", fade_color(color, mean), "fill"))
+  shape.points = points
+  shape.pressures = pressures
+  shape.widths = widths
+  shape.opacities = opacities
+  shape
+}
+
+-~> ---- what shapes are ----
+
+-~> A copy of a shape moved by the matrix m: its path, its pinned
+-~> gradients, its stroke width and dashes (scaled by the matrix's
+-~> stretch). A group moves every shape in it.
+function transform(shape, m) {
+  need_shape("transform", "shape", shape)
+  need_matrix("transform", m)
+  let out = hash.copy(shape)
+  if (shape.kind == "group") {
+    let moved = []
+    for (let i = 0; i < len(shape.shapes); i += 1) {
+      push(moved, transform(shape.shapes[i], m))
+    }
+    out.shapes = moved
+    return out
+  }
+  let k = stretch(m)
+  out.path = transform_path(shape.path, m)
+  out.fill = transform_paint(shape.fill, m)
+  out.stroke = transform_paint(shape.stroke, m)
+  out.width = shape.width * k
+  if (shape.dash !== null) {
+    let dash = []
+    for (let i = 0; i < len(shape.dash); i += 1) {
+      push(dash, shape.dash[i] * k)
+    }
+    out.dash = dash
+    out.dash_offset = shape.dash_offset * k
+  }
+  out
+}
+
+-~> How far a shape's paint reaches past its path: half its stroke width,
+-~> more for miter corners and square caps.
+function stroke_reach(shape) {
+  if (shape.stroke === null || shape.width <= 0) {
+    return 0.0
+  }
+  let half = shape.width / 2.0
+  let k = 1.0
+  if (shape.join == "miter") {
+    k = math.max(k, shape.miter)
+  }
+  if (shape.cap == "square") {
+    k = math.max(k, math.sqrt(2.0))
+  }
+  half * k
+}
+
+-~> The box a shape paints, as [x0, y0, x1, y1], or null when it paints
+-~> nothing. Soft edges are inside it.
+function paint_box(shape) {
+  if (shape.kind == "group") {
+    let box = null
+    for (let i = 0; i < len(shape.shapes); i += 1) {
+      box = union_box(box, paint_box(shape.shapes[i]))
+    }
+    return box
+  }
+  let b = path_box(shape.path)
+  if (b === null) {
+    return null
+  }
+  let r = stroke_reach(shape)
+  [b.min.x - r, b.min.y - r, b.max.x + r, b.max.y + r]
+}
+
+-~> The smallest box holding both (null is empty).
+function union_box(a, b) {
+  if (a === null) {
+    return b
+  }
+  if (b === null) {
+    return a
+  }
+  [math.min(a[0], b[0]), math.min(a[1], b[1]), math.max(a[2], b[2]), math.max(a[3], b[3])]
+}
+
+-~> The box a shape paints as [x, y, w, h], or null.
+function bounds(shape) {
+  need_shape("bounds", "shape", shape)
+  let b = paint_box(shape)
+  if (b === null) {
+    return null
+  }
+  [b[0], b[1], b[2] - b[0], b[3] - b[1]]
+}
+
+-~> Whether point p is on what the shape paints: inside its fill (by its
+-~> rule) or within half the width of its stroke. A group asks its shapes.
+function contains(shape, p) {
+  need_shape("contains", "shape", shape)
+  need_point("contains", "p", p)
+  hit(shape, p)
+}
+
+function hit(shape, p) {
+  if (shape.kind == "group") {
+    for (let i = 0; i < len(shape.shapes); i += 1) {
+      if (hit(shape.shapes[i], p)) {
+        return true
+      }
+    }
+    return false
+  }
+  if (shape.fill !== null && point_in_path(shape.path, p, shape.rule)) {
+    return true
+  }
+  if (shape.stroke !== null && shape.width > 0) {
+    let d = distance_to_path(shape.path, p)
+    return d !== null && d <= shape.width / 2.0
+  }
+  false
+}

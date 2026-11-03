@@ -48,7 +48,7 @@ let f = s.value
 		{"assign", `let e = lizard.parse("x += 1").program.statements[0].expression; [e.kind, e.operator, e.target.value]`,
 			`["assign", "+=", "x"]`, false},
 		{"errors", `lizard.parse("let = 1;\nlet y = 5kg").errors`,
-			`[{"kind": "syntax", "message": "expected identifier, got \"=\"", "line": 1, "column": 5}, {"kind": "syntax", "message": "unknown unit \"kg\"", "line": 2, "column": 9}]`, false},
+			`[{"kind": "syntax", "message": "let needs a name before the \"=\", like let x = 1", "line": 1, "column": 5}, {"kind": "syntax", "message": "unknown unit \"kg\"", "line": 2, "column": 9}]`, false},
 		{"a lexical error", `lizard.parse("x = \"open").errors[0].kind`, "lexical", false},
 		{"what parsed stays", `len(lizard.parse("let a = 1;\nlet = 2;\nlet c = 3").program.statements)`, "2", false},
 		{"a name", `lizard.parse("x", "a.liz").errors`, "[]", false},
@@ -64,7 +64,7 @@ func TestLizardRun(t *testing.T) {
 		{"a runtime error", `lizard.run("let a = 1\na + \"x\"", {"name": "drawing"}).error`,
 			`{"kind": "runtime", "message": "type mismatch: INTEGER + STRING", "line": 2, "column": 3, "source": "drawing"}`, false},
 		{"a syntax error", `lizard.run("let = 1").error`,
-			`{"kind": "syntax", "message": "expected identifier, got \"=\"", "line": 1, "column": 5, "source": ""}`, false},
+			`{"kind": "syntax", "message": "let needs a name before the \"=\", like let x = 1", "line": 1, "column": 5, "source": ""}`, false},
 		{"the step limit", `let r = lizard.run("while (true) {}", {"steps": 100}); [r.error.message, r.steps]`,
 			`["the program ran too long (more than 100 steps)", 101]`, false},
 		{"steps are counted", `lizard.run("for (let i = 0; i < 10; i += 1) {}", {"steps": 1000}).steps`, "11", false},
@@ -142,5 +142,21 @@ func TestLizardDocs(t *testing.T) {
 		{"no comment", `lizard.docs(` + quote(code) + `).plain`,
 			`{"name": "plain", "line": 12, "summary": "", "params": [{"name": "a", "default": null, "doc": null}], "example": null}`, false},
 		{"a broken file", `keys(lizard.docs("function a() {}\nlet = 1"))`, `["a"]`, false},
+	})
+}
+
+func TestLizardCheck(t *testing.T) {
+	check(t, []testCase{
+		{"nothing to say", `lizard.check("let x = 1\nputs(x)")`, "[]", false},
+		{"an unknown name", `lizard.check("puts(lenn([1]))")[0]`,
+			`{"severity": "error", "rule": "unknown-name", "message": "identifier not found: lenn", "hint": "did you mean ` + "`len`" + `?", "line": 1, "column": 6, "end_line": 1, "end_column": 10}`, false},
+		{"a warning has no hint", `let d = lizard.check("puts(1 == 1)")[0]; [d.severity, d.rule, d.hint, d.column, d.end_column]`,
+			`["warning", "literals", null, 6, 12]`, false},
+		{"the Terrarium is known", `lizard.check("puts(fs.read(\"a\"), lizard.check)")`, "[]", false},
+		{"a member of a module", `lizard.check("fs.raed(\"a\")")[0].hint`, "did you mean `fs.read`?", false},
+		{"names of the host", `[len(lizard.check("draw(canvas)")), len(lizard.check("draw(canvas)", "", ["draw", "canvas"]))]`, "[2, 0]", false},
+		{"syntax errors", `let d = lizard.check("let = 1")[0]; [d.rule, d.line, d.column]`, `["syntax", 1, 5]`, false},
+		{"a wrong name", `lizard.check("x", 1)`, "want a STRING name, got INTEGER", true},
+		{"wrong names", `lizard.check("x", "", [1])`, "want names as STRING, got INTEGER", true},
 	})
 }

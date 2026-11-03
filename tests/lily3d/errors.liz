@@ -1,0 +1,33 @@
+-~> Wrong arguments stop with a message that names the call.
+use "flower/lily3d" as lily3d
+
+let calls = [
+  function() { lily3d.cube("big") },
+  function() { lily3d.cube(0) },
+  function() { lily3d.sphere(1, 2) },
+  function() { lily3d.translate((1, 2)) },
+  function() { lily3d.rotate_y("x") },
+  function() { lily3d.compose(5) },
+  function() { lily3d.compose([lily3d.identity(), [1, 2]]) },
+  function() { lily3d.mesh([(0, 0, 0)], [[0, 1, 2]]) },
+  function() { lily3d.mesh([(0, 0, 0)], [[0, 0]]) },
+  function() { lily3d.camera((0, 0, 1), (0, 0, 0), 200deg) },
+  function() { lily3d.camera((0, 0, 1), (0, 0, 0), 60deg, {"near": 1, "far": 0.5}) },
+  function() { lily3d.camera((0, 0, 1), (0, 0, 0), 60deg, {"zoom": 2}) },
+  function() { lily3d.scene({"sky": #fff}) },
+  function() { lily3d.scene({"fog": {"color": #fff, "near": 5, "far": 1}}) },
+  function() { lily3d.add(lily3d.scene(), "cube") },
+  function() { lily3d.add(lily3d.scene(), lily3d.cube(), lily3d.identity(), {"colour": #fff}) },
+  function() { lily3d.light(lily3d.scene(), {"color": #fff}) },
+  function() { lily3d.directional((0, -1)) },
+  function() { lily3d.render(lily3d.scene(), {}, img.new(1, 1)) },
+  function() { lily3d.render(lily3d.scene({"lights": [5]}), lily3d.camera((0, 0, 1), (0, 0, 0)), img.new(1, 1)) },
+  function() { lily3d.load_obj(5) }]
+for (let i = 0; i < len(calls); i += 1) {
+  try {
+    calls[i]()
+    puts("no error")
+  } catch (e) {
+    puts(e.message)
+  }
+}

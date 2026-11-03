@@ -25,6 +25,8 @@ The Go code only reaches the system. What to draw, and every pixel of it, is dec
 
 [Drawing targets](#drawing-targets) explains the drawing functions that `img`, `window` and surfaces share.
 
+[Standard modules](#standard-modules) are bigger libraries written in lizard-script that come with every `lizardscript` but are loaded only with `use`, like the [flower](flower/README.md) graphics family: `use "flower/lily2d" as lily2d`.
+
 ## Errors
 
 A builtin that can't do its work stops the program with a runtime error whose message starts with the builtin's name. Every one of them can be caught with `try`:
@@ -234,7 +236,7 @@ fs.write("liz.json", json.write({"name": "Liz", "toes": [5, 5, 5, 5]}, 2))
 Images. An image keeps every pixel's color as it was set, alpha included. An image is a [drawing target](#drawing-targets), so every drawing function (`img.fill`, `img.spans`, `img.span_gradient`, `img.push_layer`, ...) works on it too. While a [layer](#push_layertarget) is open on an image, `img.get`, `img.set` and `img.pixels` use the layer.
 
 ### img.load(path, max_side = 0)
-Reads a PNG, JPEG or GIF file. With a `max_side` above 0, an image longer than that on its longer side is shrunk to fit, averaging the pixels (it is never enlarged). Errors when the file can't be read, isn't an image, or is more than 32768 pixels on a side.
+Reads a PNG, JPEG or GIF file (a [built program](#built-programs)'s own files too). With a `max_side` above 0, an image longer than that on its longer side is shrunk to fit, averaging the pixels (it is never enlarged). Errors when the file can't be read, isn't an image, or is more than 32768 pixels on a side.
 ```
 let photo = img.load("photo.jpg", 256)
 ```
@@ -414,11 +416,46 @@ function circle(center, radius = 1) { ... }
 ```
 gives `{"circle": {"name": "circle", "line": 4, "summary": "A circle around center.", "params": [{"name": "center", "default": null, "doc": null}, {"name": "radius", "default": "1", "doc": "how big, in pixels"}], "example": "circle((10, 10), 5)"}}`. Code with syntax errors gives the functions that parsed.
 
+## Standard modules
+
+A standard module is a library written in lizard-script that is part of every `lizardscript` (and of every built program), but is not installed into every program like the modules above: it is big, so only a program that asks for it with [`use`](SEMANTICS.md#modules) pays for loading it. `use` finds it after the program's own folder and the folders of `$LIZARD_PATH`, so a file of the program's own with the same path wins.
+
+```
+use "flower/lily2d" as lily2d
+lily2d.circle(picture, (50, 50), 20, #f2a65a)
+```
+
+| Module | What it is for |
+| --- | --- |
+| [`flower/lily2d`](flower/LILY2D.md) | anti-aliased 2D vector graphics on any drawing target (the [flower](flower/README.md) family) |
+| [`flower/lily3d`](flower/LILY3D.md) | 3D graphics on any drawing target: meshes, `.obj` files, cameras, lights, fog, flat and smooth shading, drawn with [`triangles`](#trianglestarget-list-options--) |
+
+The files are in `terrarium/std/`, built into the binary: `use "flower/lily2d"` runs `terrarium/std/flower/lily2d.liz`, and that file uses its own parts next to it (`use "lily2d/raster"` is `terrarium/std/flower/lily2d/raster.liz`). A standard module's source name starts with `std:`, so its errors show where they come from: `std:/flower/lily2d/check.liz: [line 7, column 8] runtime error: ...`. It runs like any module, with the Terrarium around it, and `lizardscript build` leaves it out of the bundle, since every `lizardscript` has it. In Go, `evaluator.StandardModules` is the file system they are read from (the Terrarium sets it in `std.go`) and `evaluator.IsStandardModule(path)` tells their source names.
+
+### lizard.check(code, name = "", names = [])
+Finds mistakes in `code` without running it, the way `lizardscript check` does (package `check`): an array with one hash per finding, in the order of the code.
+
+| Key | What it is |
+| --- | --- |
+| `severity` | `"error"` (the code fails when it runs, or doesn't run at all) or `"warning"` (probably a mistake) |
+| `rule` | which check found it: `"syntax"`, `"lexical"`, `"unknown-name"`, `"assign"`, `"arguments"`, `"member"`, `"module"`, `"return"` (errors); `"unused"`, `"shadow"`, `"unreachable"`, `"literals"`, `"unused-module"`, `"self-assign"` (warnings). `member` is an error when the member is called (`math.sine(1)`), a warning when it is only read |
+| `message` | what is wrong, without the position |
+| `hint` | how to fix it, like ``"did you mean `size`?"``, or `null` |
+| `line`, `column`, `end_line`, `end_column` | what it is about |
+
+The code has the Terrarium's names (and the builtins and libraries); `names` lists more that the host running it will define, so they aren't unknown. `name` is its source name, where its `use` statements look for modules; a module that can't be found is an error, and then any name may come from it. With syntax errors, only the syntax errors and the rules that need no names are reported.
+
+```
+let found = lizard.check("let size = 10\nputs(siz * 2)")
+puts(found[0].severity, found[0].message, found[0].hint)   -~> error identifier not found: siz did you mean `size`?
+puts(lizard.check("draw(canvas)", "", ["draw", "canvas"]))   -~> []
+```
+
 ## Built programs
 
 `lizardscript build dir -o app` makes one executable of the program in `dir`: its `main.liz`, every module it uses (and the ones they use, which must be inside `dir`) and the data files that `dir/bundle.txt` lists, one path or pattern per line (`assets/*.png`; a folder takes everything in it; a line that starts with `-~>` is a comment). `--os` and `--arch` build it for another system (`--os windows --arch amd64`, `--os linux --arch arm64`), `--vm` runs it on the VM, and `--runtime FILE` gives a `lizardscript` built for the target. The executable is a copy of `lizardscript` with the files appended, so it needs nothing installed. For this system it copies the running `lizardscript`; for another one it builds `lizardscript` from its source with Go (it looks for the source in and above the current folder and the program's, or in `$LIZARD_SRC`).
 
-While a built program runs, its files are at paths that start with `bundle:`: `os.program_dir()` is `"bundle:"`, its main file is `bundle:/main.liz`, its modules are found there, and `fs.read`, `fs.exists`, `fs.list`, `fs.info` and `fs.copy` (as the source) read them. They can't be changed: `fs.write` and the others are the error `the files of a built program can't be changed`. A program that finds its files with `fs.join(os.program_dir(), ...)` works the same way built or not. In Go, `bundle.ReadFile`, `bundle.Stat` and `bundle.ReadDir` read such a path, or one on disk.
+While a built program runs, its files are at paths that start with `bundle:`: `os.program_dir()` is `"bundle:"`, its main file is `bundle:/main.liz`, its modules are found there, and `fs.read`, `fs.exists`, `fs.list`, `fs.info`, `fs.copy` (as the source) and `img.load` read them. They can't be changed: `fs.write` and the others are the error `the files of a built program can't be changed`. A program that finds its files with `fs.join(os.program_dir(), ...)` works the same way built or not. In Go, `bundle.ReadFile`, `bundle.Stat` and `bundle.ReadDir` read such a path, or one on disk.
 
 `lizardscript run dir args...` runs `dir/main.liz` without building it.
 
@@ -520,6 +557,22 @@ Mixes `source`, any target, onto `target` with its top left at `pos`, with a ble
 ```
 img.composite(w, glow, "screen", 0.6, (40, 40))
 ```
+
+### triangles(target, list, options = {})
+Fills every triangle of `list`, keeping the nearest pixel: the one step of 3D drawing done pixel by pixel (the [lily3d](flower/LILY3D.md) library does everything else in lizard-script). A triangle is `[a, b, c, color]` in one color, or `[a, color_a, b, color_b, c, color_c]` with the colors mixed from its corners. A corner is a point `(x, y, z)`: `x` and `y` in pixels, `z` its depth, smaller nearer (`(x, y)` is depth 0). A pixel is filled when its middle is inside the triangle, or on a top or left edge, so two triangles that share an edge never both fill a pixel of it, or both miss one. Its depth and color are mixed from the corners' by how near the middle is to each.
+
+The target keeps a depth buffer: a pixel is only painted when it is nearer than what was painted there before, and then it keeps its depth. Colors with alpha are painted over what is there. Either turn of the corners is drawn (leaving out the backs is the program's job), and what is outside the target or its clip is cut. The options:
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `depth` | `true` | `false` paints in order, with no depth test |
+| `clear_depth` | `false` | `true` makes the depth buffer empty first: call it once per frame, before the first triangles |
+
+```
+img.triangles(picture, [[(10, 10, 0.5), (90, 20, 0.5), (40, 80, 0.5), #f2a65a]], {"clear_depth": true})
+img.triangles(picture, [[(0, 0, 0.2), #ff0000, (100, 0, 0.9), #00ff00, (0, 100, 0.9), #0000ff]])
+```
+A malformed triangle is the error `triangle 0 must be [a, b, c, color] or [a, color, b, color, c, color] with points (x, y, z), got ...`. In Go it is `pixels.Image.Triangle` and `ClearDepth` (`internal/pixels/triangles.go`).
 
 ### Blend modes
 
@@ -804,12 +857,13 @@ terrarium.Install(env)
 
 | Package | What is in it |
 | --- | --- |
-| `terrarium` | `Install`, the core modules (one file each: `fs.go`, `os.go`, `time.go`, `img.go`, `clip.go`, `io.go`; `lizard` in `lizard_tree.go`, `lizard_run.go` and `lizard_docs.go`), the system parts (`sys_*.go` for the clipboard and the locale; `shell.go` and `shell_*.go` for the Trash, the file manager, the browser and the memory) and the modules in lizard-script (`lib/*.liz`, run by `lizard.go`) |
+| `terrarium` | `Install`, the core modules (one file each: `fs.go`, `os.go`, `time.go`, `img.go`, `clip.go`, `io.go`; `lizard` in `lizard_tree.go`, `lizard_run.go`, `lizard_docs.go` and `lizard_check.go`), the system parts (`sys_*.go` for the clipboard and the locale; `shell.go` and `shell_*.go` for the Trash, the file manager, the browser and the memory) and the modules in lizard-script (`lib/*.liz`, run by `lizard.go`) |
 | `terrarium/window` | the window module (`window.go`), events (`events.go`), surfaces and composing (`surface.go`), the Ebitengine loop (`ebiten.go`), the headless loop (`headless.go`), focus and the pointer leaving (`presence.go`), automation (`automation.go`) and `lizardscript drive` (`drive.go`) |
 | `terrarium/pen` | pressure: macOS (`pen_darwin.go`), Windows Ink (`pen_windows.go`), none (`pen_other.go`); the response curve (`curve.go`) and the pen file (`config.go`) |
 | `terrarium/internal/arg` | checking a builtin's arguments, making values, building a module hash |
 | `terrarium/internal/pixels` | the pixel buffer under images, windows and surfaces: clip and layers (`pixels.go`, `blend.go`), blend modes (`blend.go`), gradients (`gradient.go`) |
 | `terrarium/internal/canvas` | the drawing functions every target shares (`canvas.go`, and the per-pixel ones in `paint.go`) |
+| `terrarium/std` | the [standard modules](#standard-modules), lizard-script files built in by `std.go` (`flower/lily2d.liz` and its parts in `flower/lily2d/`) |
 
 ## Adding a module
 

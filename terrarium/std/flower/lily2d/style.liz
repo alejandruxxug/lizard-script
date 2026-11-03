@@ -1,0 +1,114 @@
+-~> style: how a shape is painted. Every drawing call takes a style, which
+-~> is a paint (a color or a gradient) or a hash of these keys:
+-~>   fill         a paint for the inside, or null
+-~>   stroke       a paint for the outline, or null
+-~>   width        the outline's thickness in pixels (1)
+-~>   join         "round", "miter" or "bevel": the outline's corners ("round")
+-~>   cap          "round", "butt" or "square": an open outline's ends ("round")
+-~>   miter        the longest a miter corner gets, in half widths, before it
+-~>                is cut flat (4)
+-~>   dash         a list of lengths, on and off, like [8, 4], or null
+-~>   dash_offset  how far into the dash pattern the outline starts (0)
+-~>   rule         "nonzero" or "evenodd": which parts of a shape that
+-~>                crosses itself are inside ("nonzero")
+-~>   opacity      0 to 1: how see-through the whole shape is (1)
+-~>   blend        how it mixes with what is below: "normal", "multiply",
+-~>                "screen", "overlay", "darken", "lighten" or "add" ("normal")
+-~> A paint alone fills a closed shape and strokes a line.
+
+use "check"
+use "paint"
+
+let blend_modes = ["normal", "multiply", "screen", "overlay", "darken", "lighten", "add"]
+let style_keys = ["fill", "stroke", "width", "join", "cap", "miter", "dash", "dash_offset", "rule", "opacity", "blend"]
+
+-~> A style hash that is not a gradient.
+function is_style_hash(v) {
+  type(v) == "HASH" && !is_gradient(v)
+}
+
+-~> The style of a call as a full hash with every key. role is what a paint
+-~> alone does, "fill" or "stroke"; extra lists the keys of the call's own
+-~> options (like "radius"), which may be in the hash too.
+function read_style(call, style, role, extra = []) {
+  let out = {"fill": null, "stroke": null, "width": 1, "join": "round", "cap": "round", "miter": 4,
+             "dash": null, "dash_offset": 0, "rule": "nonzero", "opacity": 1.0, "blend": "normal"}
+  if (is_paint(style)) {
+    out[role] = style
+    return out
+  }
+  if (!is_style_hash(style)) {
+    fail(call, "style must be a color, a gradient or a hash like {\"fill\": #f2a65a, \"stroke\": #1a1418}, not " + type(style))
+  }
+  let names = keys(style)
+  for (let i = 0; i < len(names); i += 1) {
+    let name = names[i]
+    if (list.index(style_keys, name) < 0 && list.index(extra, name) < 0) {
+      fail(call, "the style has no key " + str(name) + "; it can have " + text.join(style_keys + extra, ", "))
+    }
+    if (list.index(style_keys, name) >= 0) {
+      out[name] = style[name]
+    }
+  }
+  if (out.fill !== null) {
+    need_paint(call, "fill", out.fill)
+  }
+  if (out.stroke !== null) {
+    need_paint(call, "stroke", out.stroke)
+  }
+  if (out.fill === null && out.stroke === null) {
+    fail(call, "the style needs a fill or a stroke")
+  }
+  need_number(call, "width", out.width)
+  if (out.width < 0) {
+    fail(call, "width can't be below 0, got " + str(out.width))
+  }
+  need_choice(call, "join", out.join, ["round", "miter", "bevel"])
+  need_choice(call, "cap", out.cap, ["round", "butt", "square"])
+  need_number(call, "miter", out.miter)
+  need_choice(call, "rule", out.rule, ["nonzero", "evenodd"])
+  need_fraction(call, "opacity", out.opacity)
+  out.opacity = float(out.opacity)
+  need_choice(call, "blend", out.blend, blend_modes)
+  need_number(call, "dash_offset", out.dash_offset)
+  if (out.dash !== null) {
+    if (type(out.dash) != "ARRAY" || len(out.dash) == 0) {
+      fail(call, "dash must be a list of lengths like [8, 4], or null")
+    }
+    for (let i = 0; i < len(out.dash); i += 1) {
+      need_number(call, "dash item " + str(i), out.dash[i])
+      if (out.dash[i] < 0) {
+        fail(call, "dash lengths can't be below 0, got " + str(out.dash[i]))
+      }
+    }
+  }
+  out
+}
+
+-~> A group's style: only opacity and blend.
+function read_group_style(call, style) {
+  if (type(style) != "HASH") {
+    fail(call, "style must be a hash like {\"opacity\": 0.5, \"blend\": \"multiply\"}, not " + type(style))
+  }
+  let out = {"opacity": 1.0, "blend": "normal"}
+  let names = keys(style)
+  for (let i = 0; i < len(names); i += 1) {
+    if (names[i] != "opacity" && names[i] != "blend") {
+      fail(call, "a group's style has only opacity and blend, not " + str(names[i]))
+    }
+    out[names[i]] = style[names[i]]
+  }
+  need_fraction(call, "opacity", out.opacity)
+  out.opacity = float(out.opacity)
+  need_choice(call, "blend", out.blend, blend_modes)
+  out
+}
+
+-~> The call's own option name from a style hash, or default when the
+-~> style is a paint or doesn't have it.
+function option(style, name, default) {
+  if (is_style_hash(style) && style[name] !== null) {
+    return style[name]
+  }
+  default
+}

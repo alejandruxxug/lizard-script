@@ -13,6 +13,11 @@
 //	                                       (see tools/build)
 //	lizardscript drive [--pid N] Command   sends a command to a running window
 //	                                       that has automation on (try List)
+//	lizardscript fmt [-w] [--check] path...
+//	                                       lays out the code of files and folders
+//	                                       one way (see docs/STYLE.md)
+//	lizardscript check [--json] path...    finds mistakes in them without running
+//	                                       them (see package check)
 //
 // A program has the Terrarium, the standard library, installed, and
 // os.args() gives its args. Its use statements look for modules next to the
@@ -22,10 +27,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"lizardscript/bundle"
+	"lizardscript/check"
 	"lizardscript/evaluator"
+	"lizardscript/format"
 	"lizardscript/repl"
 	"lizardscript/terrarium"
 	"lizardscript/terrarium/window" // adds window and pen to terrarium.Install
@@ -60,6 +69,10 @@ func main() {
 		os.Exit(buildCommand(args[1:]))
 	case "drive":
 		os.Exit(driveCommand(args[1:]))
+	case "fmt":
+		os.Exit(fmtCommand(args[1:]))
+	case "check":
+		os.Exit(checkCommand(args[1:]))
 	}
 
 	onVM, profile := false, false
@@ -90,7 +103,9 @@ func usage() {
        lizardscript run [--vm] dir [args...]
        lizardscript test [--vm] [--bench] [--update] [dir]
        lizardscript build [--vm] [--os OS] [--arch ARCH] [--runtime FILE] dir -o FILE
-       lizardscript drive [--pid N] Command [args...]`)
+       lizardscript drive [--pid N] Command [args...]
+       lizardscript fmt [-w] [--check] path...
+       lizardscript check [--json] path...`)
 	os.Exit(2)
 }
 
@@ -189,6 +204,139 @@ func driveCommand(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// fmtCommand is lizardscript fmt: it prints the formatted code of each
+// file, or with -w writes it back, or with --check lists the files that are
+// not formatted and ends with 1 if there is any. A file with syntax errors
+// is left alone and ends it with 2.
+func fmtCommand(args []string) int {
+	flags := flag.NewFlagSet("fmt", flag.ContinueOnError)
+	write := flags.Bool("w", false, "write the result back to each file")
+	list := flags.Bool("check", false, "list the files that are not formatted")
+	if err := flags.Parse(args); err != nil || flags.NArg() == 0 {
+		usage()
+	}
+	files, err := lizFiles(flags.Args())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	status := 0
+	for _, file := range files {
+		source, err := os.ReadFile(file)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			status = 2
+			continue
+		}
+		formatted, err := format.Source(string(source))
+		if err != nil {
+			for _, line := range strings.Split(err.Error(), "\n") {
+				fmt.Fprintf(os.Stderr, "%s: %s\n", filepath.ToSlash(file), line)
+			}
+			status = 2
+			continue
+		}
+		changed := formatted != string(source)
+		switch {
+		case *list:
+			if changed {
+				fmt.Println(filepath.ToSlash(file))
+				status = max(status, 1)
+			}
+		case *write:
+			if changed {
+				if err := os.WriteFile(file, []byte(formatted), 0o644); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					status = 2
+				}
+			}
+		default:
+			fmt.Print(formatted)
+		}
+	}
+	return status
+}
+
+// checkCommand is lizardscript check: the findings of each file, one per
+// line, or as JSON with --json. It ends with 1 when there is an error (a
+// warning is not one), 2 when a file can't be read.
+func checkCommand(args []string) int {
+	flags := flag.NewFlagSet("check", flag.ContinueOnError)
+	asJSON := flags.Bool("json", false, "write the findings as a JSON array")
+	if err := flags.Parse(args); err != nil || flags.NArg() == 0 {
+		usage()
+	}
+	files, err := lizFiles(flags.Args())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	check.Globals = terrarium.CheckGlobals()
+
+	type finding struct {
+		File string `json:"file"`
+		check.Diagnostic
+	}
+	findings := []finding{}
+	status := 0
+	for _, file := range files {
+		diagnostics, err := check.File(file)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			status = 2
+			continue
+		}
+		for _, d := range diagnostics {
+			findings = append(findings, finding{filepath.ToSlash(file), d})
+			if d.Severity == check.Error && status == 0 {
+				status = 1
+			}
+		}
+	}
+
+	if *asJSON {
+		out, _ := json.MarshalIndent(findings, "", "  ")
+		fmt.Println(string(out))
+		return status
+	}
+	for _, f := range findings {
+		fmt.Printf("%s: [line %d, column %d] %s: %s (%s)\n", f.File, f.Line, f.Column, f.Severity, f.Message, f.Rule)
+		if f.Hint != "" {
+			fmt.Printf("    hint: %s\n", f.Hint)
+		}
+	}
+	return status
+}
+
+// lizFiles are the files of paths: each file as it is, and the .liz files
+// inside each folder and the folders in it, in order.
+func lizFiles(paths []string) ([]string, error) {
+	var files []string
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() {
+			files = append(files, path)
+			continue
+		}
+		err = filepath.WalkDir(path, func(file string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() && strings.HasSuffix(file, ".liz") {
+				files = append(files, file)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
 }
 
 // builtProgram is the program built into this executable, or nil for a

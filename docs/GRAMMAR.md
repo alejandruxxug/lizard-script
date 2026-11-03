@@ -82,7 +82,7 @@ arguments       = expression { "," expression } ;
 pointLiteral    = "(" expression "," expression [ "," expression ] ")" ;
 arrayLiteral    = "[" [ arguments ] "]" ;
 hashLiteral     = "{" [ pair { "," pair } [ "," ] ] "}" ;
-pair            = expression ":" expression ;
+pair            = logicalOr ":" expression ;   (* a key that assigns needs parentheses: {(x = 1): 2} *)
 functionLiteral = "function" "(" [ parameters ] ")" block ;
 
 ifExpression    = "if" expression block { ( "elif" | "else" "if" ) expression block } [ "else" block ] ;
@@ -187,6 +187,7 @@ A parameter can have a default value, `function t(key, values = null)`, also in 
 ## Rules that are not in the grammar
 
 - `break` and a lone `continue` must be inside a `while` or `for` of the same function. Otherwise it is a syntax error. (`continue` inside a larger expression is still an ordinary name.)
+- The condition of an `if`, `elif`, `while` or `for` can't be a plain assignment: `if (x = 1)` is the syntax error `"=" in a condition gives x a value; did you mean "=="?`. An assignment inside a larger condition (`if ((x = f()) > 0)`) and a compound one (`while (n -= 1)`) still work.
 - `return` is allowed outside of a function, where it ends the program. What programs do when they run is in [SEMANTICS.md](SEMANTICS.md).
 - `elif` has no node of its own: it is an `if` inside the `else` block of the previous one. `else if` is the same thing, written with two words.
 - `function add(x) { ... }` builds the same tree as `let add = function(x) { ... };`
@@ -195,10 +196,35 @@ A parameter can have a default value, `function t(key, values = null)`, also in 
 - A `{` where an expression is expected is always a hash. There are no standalone blocks.
 - Nesting is limited to 10000 levels, where every expression, block and `if` inside another one counts as a level. That allows around 10000 parentheses or 3000 `if`s inside each other. Deeper code is the syntax error `the program is nested too deeply`, because the parser and the evaluator call themselves once per level and would otherwise crash.
 
+## Syntax errors
+
+A program with syntax errors gets all of them in one run: one error for each mistake, and none for the good lines around it. After an error the parser skips the rest of the broken statement and goes on with the next one, which starts where LEP 0001 says a statement ends:
+
+- It skips the brackets the statement opened, whole, and stops at a `;`, at the `}` of a block the statement opened (unless `else`, `elif` or `catch` follows), at the end of the line, or before the `}` of the block around it.
+- A `(`, `[` or hash `{` that is never closed would hide the rest of the program, so a line that can't be inside it ends it: the end of the input, a closer of another kind (the `}` in `f(a }`), a line that starts with `let`, `return` or `break`, or one that starts as far left as the line where the bracket was opened. The error goes right after the last token before it: `the "(" at line 3, column 5 is never closed`.
+- A missing `{` of a block (`if (x)` and then the body) is reported once, and the body and its `}` are skipped with it. A `{` doubled right after the `{` of a block is forgotten, so it doesn't take the block's `}`. A `}` that a broken statement leaves in the middle of a line doesn't end a block that began on an earlier line.
+- A `}` that is never closed is only found at the end of the input; the error goes to the `{` of the first block closed by a `}` that starts its line left of the line of that `{`, which is where the `}` was most likely forgotten. After a mistake inside a block, such a `}` ends that block and is left to the block around it.
+- A line gets at most one error, and the blocks still open when an error is found at the end of the input are not reported again.
+
+Some messages say what was probably meant:
+
+| Mistake | Message |
+| --- | --- |
+| `fucntion f() { }`, `retrun x`, `whlie (a) { }` | `"fucntion" is not a keyword; did you mean "function"?` (a word one letter from a keyword, two for the long ones, at the start of a broken statement) |
+| `elseif`, `elsif`, `var`, `const`, `def`, `func`, `fn` | `"elseif" is not a keyword; did you mean "elif"?` (`let` for `var` and `const`, `function` for the others) |
+| `if (x = 1) { }` | `"=" in a condition gives x a value; did you mean "=="?` |
+| `let = 5` | `let needs a name before the "=", like let x = 1` |
+| `let if = 1`, `function f(let) { }` | `"if" is a reserved word, it can't be a name` |
+| `let x: 1` | `a let gives its value with "=", not ":"` |
+| `{"a" = 1}` | `a hash puts ":" between a key and its value, not "="` |
+| `puts(1` then a new line | `the "(" at line 1, column 5 is never closed` |
+| `}` with nothing open | `this "}" has nothing to close` (also `)` and `]`) |
+| `"abc` | the lexical error `unterminated string: this " is never closed`, at the `"` |
+
 ## Known limitations
 
 - Strings can span several lines. Inside a string, `\"` is a quote, `\\` a backslash, `\n` a line break, `\t` a tab and `\r` a carriage return. `\uXXXX` (exactly 4 hex digits) and `\u{X...}` (1 to 6 hex digits) are that code point, so `"\u00e9"` and `"\u{E9}"` are `é` and `"\u{1F98E}"` is a lizard. A `\u` that is malformed, a surrogate half (D800 to DFFF) or a value above 10FFFF is the lexical error `invalid unicode escape \u12: ...` with the reason. Any other backslash sequence, like `\q`, is the lexical error `unknown escape \q in string`, and a string that ends in a lone `\` is unterminated.
 - Identifiers and comments are ASCII. A non-ASCII character in code is a lexical error, although strings and comments can contain it.
 - A layer's body is closed by indentation, the only place the language looks at columns. The REPL runs line by line, so a `layer` typed there is an empty layer and the indented lines after it run on their own; layers are meant for files and for hosts.
 - The smallest 64-bit integer can't be written as a literal: `-9223372036854775808` is a `-` applied to a number that is too large.
-- After a syntax error the rest of that statement is skipped, so a second mistake in the same statement shows up only after fixing the first. Recovery is a best effort: with a badly broken `for` header, like one with no `)`, the first error is right but a second one can follow it.
+- After a syntax error the rest of that statement is skipped (see [Syntax errors](#syntax-errors)), and a line gets at most one error, so a second mistake in the same statement or on the same line shows up only after fixing the first. Recovery is a heuristic: when one random token of a valid program is deleted, doubled or replaced, about 0.04% of the broken programs give three or more errors, and an extra or missing `{` or `}` in an unusual place can put the error a few lines away from the mistake.

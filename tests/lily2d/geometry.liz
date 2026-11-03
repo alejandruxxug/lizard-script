@@ -1,0 +1,18 @@
+-~> Béziers, bounds, hit tests, flattening, nearest points and simplify.
+use "flower/lily2d" as lily2d
+
+puts(lily2d.bezier((0, 0), (0, 100), (100, 100), (100, 0), 0.5))
+let c = lily2d.circle(null, (50, 50), 20, {"fill": #000, "stroke": #f00, "width": 4})
+puts(lily2d.bounds(c))
+puts(lily2d.contains(c, (50, 50)), lily2d.contains(c, (71, 50)), lily2d.contains(c, (73, 50)))
+let ring = lily2d.path(null, [(0, 0), (100, 0), (100, 100), (0, 100)], {"fill": #000, "smooth": false, "holes": [[(25, 25), (75, 25), (75, 75), (25, 75)]]})
+puts(lily2d.contains(ring, (10, 10)), lily2d.contains(ring, (50, 50)))
+let line = lily2d.line(null, (0, 0), (100, 0), {"stroke": #000, "width": 10, "cap": "square", "join": "miter"})
+puts(lily2d.bounds(line))
+let flat = lily2d.flatten(c)
+puts(len(flat), flat[0].closed, len(flat[0].points) > 8)
+puts(lily2d.nearest(lily2d.line(null, (0, 0), (100, 0), #000), (30, 12)))
+puts(lily2d.simplify([(0, 0), (10, 0.2), (20, -0.1), (30, 0), (30, 30)], 1))
+puts(lily2d.smooth([(0, 0), (50, 40), (100, 0)]))
+puts(lily2d.bounds(lily2d.group(null, [c, line])))
+puts(lily2d.spans(lily2d.rect(null, (1, 1), (2.5, 2), #000)))

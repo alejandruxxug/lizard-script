@@ -178,14 +178,15 @@ func RunFile(name, source string, out, errOut io.Writer, onVM bool) bool {
 // PrintError writes err the way the command line shows it: its message,
 // and for an error from another file than main (a module) that file in
 // front of each line, from main's folder: "draw/shapes.liz: [line 2,
-// column 5] runtime error: ...".
+// column 5] runtime error: ...". A standard module shows its own name,
+// like "std:/lily2d/shapes.liz".
 func PrintError(out io.Writer, err *object.Error, main string) {
 	if err.Source == "" || err.Source == main {
 		fmt.Fprintln(out, err.Message)
 		return
 	}
 	source := err.Source
-	if rel, rerr := filepath.Rel(filepath.Dir(main), source); rerr == nil {
+	if rel, rerr := filepath.Rel(filepath.Dir(main), source); rerr == nil && !evaluator.IsStandardModule(source) {
 		source = filepath.ToSlash(rel)
 	}
 	for _, line := range strings.Split(err.Message, "\n") {

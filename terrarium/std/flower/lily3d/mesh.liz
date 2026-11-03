@@ -1,0 +1,155 @@
+-~> mesh: a shape made of triangles. A mesh is a hash:
+-~>
+-~>   {"positions": [(x, y, z), ...],   its corners
+-~>    "normals": [(x, y, z), ...],     the way the surface faces at each
+-~>                                     corner, 1 long
+-~>    "faces": [[a, b, c], ...]}       triangles, by the indexes of their
+-~>                                     corners
+-~>
+-~> A face's corners go counterclockwise seen from outside, which is how a
+-~> renderer tells its front from its back. A corner where faces meet at an
+-~> edge (a cube's) is in the list once per face, each with that face's
+-~> normal, so the edge stays sharp.
+
+use "check"
+use "vec"
+use "matrix"
+
+-~> A mesh of positions and faces. Without normals, each corner gets the
+-~> average of the faces around it (see smooth_normals).
+-~> example: mesh([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [[0, 1, 2]])
+function mesh(positions, faces, normals = null) {
+  if (type(positions) != "ARRAY" || type(faces) != "ARRAY") {
+    fail("mesh", "want a list of positions and a list of faces")
+  }
+  for (let i = 0; i < len(faces); i += 1) {
+    let f = faces[i]
+    if (type(f) != "ARRAY" || len(f) != 3) {
+      fail("mesh", "face " + str(i) + " must be [a, b, c], not " + str(f))
+    }
+    for (let k = 0; k < 3; k += 1) {
+      if (type(f[k]) != "INTEGER" || f[k] < 0 || f[k] >= len(positions)) {
+        fail("mesh", "face " + str(i) + " has no corner " + str(f[k]) + ": the corners are 0 to " + str(len(positions) - 1))
+      }
+    }
+  }
+  let m = {"positions": positions, "faces": faces, "normals": normals}
+  if (normals == null) {
+    m.normals = smooth_normals(m)
+  }
+  m
+}
+
+-~> The normal of the triangle a, b, c: at right angles to it, out of the
+-~> side its corners turn counterclockwise on.
+function face_normal(a, b, c) {
+  normalize(cross(b - a, c - a))
+}
+
+-~> A normal for each corner: the faces around it added up, each by its
+-~> area, then made 1 long. A round shape then looks round.
+function smooth_normals(m) {
+  let sums = []
+  for (let i = 0; i < len(m.positions); i += 1) {
+    push(sums, (0.0, 0.0, 0.0))
+  }
+  let p = m.positions
+  for (let i = 0; i < len(m.faces); i += 1) {
+    let f = m.faces[i]
+    -~> Not made 1 long: a bigger face counts more.
+    let n = cross(p[f[1]] - p[f[0]], p[f[2]] - p[f[0]])
+    sums[f[0]] = sums[f[0]] + n
+    sums[f[1]] = sums[f[1]] + n
+    sums[f[2]] = sums[f[2]] + n
+  }
+  for (let i = 0; i < len(sums); i += 1) {
+    sums[i] = normalize(sums[i])
+  }
+  sums
+}
+
+-~> The same mesh with every face on its own corners, each with the face's
+-~> normal: it looks cut from facets, whatever the shading.
+function facets(m) {
+  let positions = []
+  let normals = []
+  let faces = []
+  let p = m.positions
+  for (let i = 0; i < len(m.faces); i += 1) {
+    let f = m.faces[i]
+    let n = face_normal(p[f[0]], p[f[1]], p[f[2]])
+    let k = len(positions)
+    push(positions, p[f[0]])
+    push(positions, p[f[1]])
+    push(positions, p[f[2]])
+    push(normals, n)
+    push(normals, n)
+    push(normals, n)
+    push(faces, [k, k + 1, k + 2])
+  }
+  {"positions": positions, "faces": faces, "normals": normals}
+}
+
+-~> The box round the mesh: {"min": (x, y, z), "max": (x, y, z)}.
+function bounds(m) {
+  let p = m.positions
+  if (len(p) == 0) {
+    return {"min": (0.0, 0.0, 0.0), "max": (0.0, 0.0, 0.0)}
+  }
+  let lo = p[0]
+  let hi = p[0]
+  for (let i = 1; i < len(p); i += 1) {
+    let q = p[i]
+    lo = (math.min(lo.x, q.x), math.min(lo.y, q.y), math.min(lo.z, q.z))
+    hi = (math.max(hi.x, q.x), math.max(hi.y, q.y), math.max(hi.z, q.z))
+  }
+  {"min": lo, "max": hi}
+}
+
+-~> The matrix that moves the mesh's box to the origin and sizes it so its
+-~> longest side is size: a model from a file, whatever its units, then
+-~> fits the view.
+function fit(m, size = 1) {
+  let b = bounds(m)
+  let d = b.max - b.min
+  let longest = math.max(d.x, math.max(d.y, d.z))
+  let k = 1.0
+  if (longest > 0) {
+    k = size / float(longest)
+  }
+  compose(translate((b.min + b.max) * -0.5), scale(k))
+}
+
+-~> The mesh with every position moved by the matrix t and its normals
+-~> turned to match: a mesh made once in its place, like the parts of a
+-~> bigger shape.
+function transformed(m, t) {
+  let positions = []
+  let normals = []
+  let nm = normal_matrix(t)
+  for (let i = 0; i < len(m.positions); i += 1) {
+    push(positions, apply(t, m.positions[i]))
+    push(normals, normalize(apply_direction(nm, m.normals[i])))
+  }
+  {"positions": positions, "faces": m.faces, "normals": normals}
+}
+
+-~> One mesh of all the meshes of a list.
+function merge(meshes) {
+  let positions = []
+  let normals = []
+  let faces = []
+  for (let i = 0; i < len(meshes); i += 1) {
+    let m = meshes[i]
+    let k = len(positions)
+    for (let j = 0; j < len(m.positions); j += 1) {
+      push(positions, m.positions[j])
+      push(normals, m.normals[j])
+    }
+    for (let j = 0; j < len(m.faces); j += 1) {
+      let f = m.faces[j]
+      push(faces, [f[0] + k, f[1] + k, f[2] + k])
+    }
+  }
+  {"positions": positions, "faces": faces, "normals": normals}
+}

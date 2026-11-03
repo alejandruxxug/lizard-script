@@ -1,0 +1,164 @@
+-~> shapes: the meshes lily3d makes for you, each centered on the origin
+-~> and as big as a box 1 on a side unless asked otherwise: cube, sphere,
+-~> plane, cylinder, cone and torus. The round ones take a detail, how many
+-~> steps go round them; more is smoother and slower.
+-~>
+-~> They are all made by surface, which a program can use for its own.
+
+use "check"
+use "vec"
+use "mesh"
+
+-~> A mesh from a function of two numbers: at(u, v), with u and v from 0
+-~> to 1, gives [position, normal]. The mesh has rows steps along u and
+-~> cols steps along v, and its front is the side towards which u's
+-~> direction turns counterclockwise into v's (the side of cross(du, dv)).
+-~> A face with no area (at a pole, where a row shrinks to a point) is
+-~> left out.
+-~> example: surface(1, 1, function(u, v) { [(v, 0, u), (0, 1, 0)] }) is a
+-~> square facing up
+function surface(rows, cols, at) {
+  need_steps("surface", "rows", rows, 1)
+  need_steps("surface", "cols", cols, 1)
+  let positions = []
+  let normals = []
+  for (let i = 0; i <= rows; i += 1) {
+    for (let j = 0; j <= cols; j += 1) {
+      let corner = at(i / float(rows), j / float(cols))
+      push(positions, corner[0])
+      push(normals, corner[1])
+    }
+  }
+  let faces = []
+  let across = cols + 1
+  for (let i = 0; i < rows; i += 1) {
+    for (let j = 0; j < cols; j += 1) {
+      let a = i * across + j
+      let b = a + across
+      let c = b + 1
+      let d = a + 1
+      _face(faces, positions, a, b, c)
+      _face(faces, positions, a, c, d)
+    }
+  }
+  {"positions": positions, "faces": faces, "normals": normals}
+}
+
+-~> Adds the face a, b, c when it has an area.
+function _face(faces, positions, a, b, c) {
+  let n = cross(positions[b] - positions[a], positions[c] - positions[a])
+  if (dot(n, n) > 1e-18) {
+    push(faces, [a, b, c])
+  }
+}
+
+-~> A square face of a box: centered on center, facing n, across u and
+-~> v = cross(n, u), half long each way.
+function _side(center, n, u, half) {
+  let v = cross(n, u)
+  surface(1, 1, function(s, t) {
+    [center + u * ((s * 2 - 1) * half) + v * ((t * 2 - 1) * half), n]
+  })
+}
+
+-~> A cube size on a side, each face flat.
+-~> example: cube(1)
+function cube(size = 1) {
+  need_positive("cube", "size", size)
+  let h = size / 2.0
+  merge([
+    _side((h, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, -1.0), h),
+    _side((-h, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 0.0, 1.0), h),
+    _side((0.0, h, 0.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0), h),
+    _side((0.0, -h, 0.0), (0.0, -1.0, 0.0), (1.0, 0.0, 0.0), h),
+    _side((0.0, 0.0, h), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0), h),
+    _side((0.0, 0.0, -h), (0.0, 0.0, -1.0), (-1.0, 0.0, 0.0), h)])
+}
+
+-~> A flat square size on a side lying on the ground (y = 0), facing up,
+-~> cut into divisions by divisions squares.
+function plane(size = 1, divisions = 1) {
+  need_positive("plane", "size", size)
+  need_steps("plane", "divisions", divisions, 1)
+  let h = size / 2.0
+  surface(divisions, divisions, function(u, v) {
+    [((v * 2 - 1) * h, 0.0, (u * 2 - 1) * h), (0.0, 1.0, 0.0)]
+  })
+}
+
+-~> A ball of the radius, detail steps round and detail / 2 from pole to
+-~> pole.
+function sphere(radius = 0.5, detail = 24) {
+  need_positive("sphere", "radius", radius)
+  need_steps("sphere", "detail", detail, 3)
+  surface(math.max(2, detail // 2), detail, function(u, v) {
+    let down = u * math.pi
+    let round = v * math.tau
+    let n = (math.sin(down) * math.cos(round), math.cos(down), -math.sin(down) * math.sin(round))
+    [n * radius, n]
+  })
+}
+
+-~> The point at angle a round the y axis, r from it, at height y.
+function _round(a, r, y) {
+  (r * math.cos(a), y, -r * math.sin(a))
+}
+
+-~> A disc of the radius at height y, facing up (or down when up is false).
+function _disc(radius, y, up, detail) {
+  let n = (0.0, 1.0, 0.0)
+  if (!up) {
+    n = (0.0, -1.0, 0.0)
+  }
+  surface(1, detail, function(u, v) {
+    let r = u
+    if (!up) {
+      r = 1 - u
+    }
+    [_round(v * math.tau, r * radius, y), n]
+  })
+}
+
+-~> A tube of the radius and height along the y axis, closed at both ends.
+function cylinder(radius = 0.5, height = 1, detail = 24) {
+  need_positive("cylinder", "radius", radius)
+  need_positive("cylinder", "height", height)
+  need_steps("cylinder", "detail", detail, 3)
+  let h = height / 2.0
+  let side = surface(1, detail, function(u, v) {
+    let a = v * math.tau
+    [_round(a, radius, h - u * height), _round(a, 1.0, 0.0)]
+  })
+  merge([side, _disc(radius, h, true, detail), _disc(radius, -h, false, detail)])
+}
+
+-~> A cone of the radius and height along the y axis, its point up, its
+-~> base closed.
+function cone(radius = 0.5, height = 1, detail = 24) {
+  need_positive("cone", "radius", radius)
+  need_positive("cone", "height", height)
+  need_steps("cone", "detail", detail, 3)
+  let h = height / 2.0
+  let side = surface(1, detail, function(u, v) {
+    let a = v * math.tau
+    -~> The side leans in: its normal leans up by radius / height.
+    [_round(a, u * radius, h - u * height), normalize(_round(a, height, radius))]
+  })
+  merge([side, _disc(radius, -h, false, detail)])
+}
+
+-~> A ring round the y axis: radius from its middle to the middle of the
+-~> tube, tube the tube's radius.
+function torus(radius = 0.35, tube = 0.15, detail = 32, tube_detail = 16) {
+  need_positive("torus", "radius", radius)
+  need_positive("torus", "tube", tube)
+  need_steps("torus", "detail", detail, 3)
+  need_steps("torus", "tube_detail", tube_detail, 3)
+  surface(detail, tube_detail, function(u, v) {
+    let a = u * math.tau
+    let b = v * math.tau
+    let out = _round(a, 1.0, 0.0)
+    let n = out * math.cos(b) + (0.0, math.sin(b), 0.0)
+    [out * radius + n * tube, n]
+  })
+}

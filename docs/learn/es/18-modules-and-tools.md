@@ -1,8 +1,8 @@
 # 18. Módulos y herramientas
 
-[← Anterior: El Terrario](17-terrarium.md) · [Índice](../README.md) · [Hoja de referencia →](cheatsheet.md) · [English](../en/18-modules-and-tools.md)
+[← Anterior: El Terrario](17-terrarium.md) · [Índice](../README.md) · [Siguiente: lily2d →](19-lily2d.md) · [English](../en/18-modules-and-tools.md)
 
-Un programa pronto deja de caber en un archivo. Este capítulo lo divide en **módulos** con `use` y luego muestra las herramientas para un programa de varios archivos: `lizardscript run`, `lizardscript test` y `lizardscript build`, que hace de él un solo ejecutable. Termina con dos módulos del Terrario para programas que trabajan con código y con otros programas: `lizard` (el lenguaje mismo, como datos) e `io`.
+Un programa pronto deja de caber en un archivo. Este capítulo lo divide en **módulos** con `use` y luego muestra las herramientas para un programa de varios archivos: `lizardscript run`, `lizardscript test`, `lizardscript build`, que hace de él un solo ejecutable, y `lizardscript fmt` y `lizardscript check`, que ordenan el código y encuentran errores antes de que corra. Termina con dos módulos del Terrario para programas que trabajan con código y con otros programas: `lizard` (el lenguaje mismo, como datos) e `io`.
 
 Los ejemplos viven en una carpeta llamada `garden`:
 
@@ -228,6 +228,45 @@ function setup() {
 [line 2, column 3] syntax error: use must be at the top level of a file, not inside a block or a layer
 ```
 
+### Módulos estándar
+
+Algunos módulos vienen con lizard-script: están dentro de `lizardscript`, así que cualquier programa puede usarlos, pero solo se cargan en los programas que los piden. Se llaman **módulos estándar**. Los primeros son la familia **flower** de bibliotecas gráficas, y la de 2D es `flower/lily2d` (el capítulo 19 trata de ella):
+
+```
+use "flower/lily2d" as lily2d
+
+let picture = img.new(40, 20, #ffffff)
+lily2d.circle(picture, (10, 10), 6, #2d6a8f)
+puts(img.get(picture, 10, 10))
+puts(lily2d.measure("hi"))
+```
+
+**Salida:**
+
+```text
+#2d6a8f
+(14, 13)
+```
+
+- `use` busca un módulo estándar **al final**: después de la carpeta del archivo y de las carpetas de `LIZARD_PATH`. Así que si tu programa tiene su propio `flower/lily2d.liz`, gana ese.
+- Ponle nombre con `as`. `use "flower/lily2d" as lily2d` da el hash `lily2d`; sirve cualquier nombre (`as g` da `g.circle`).
+- El archivo de un módulo estándar se llama `std:/` y su ruta, y sus errores lo dicen. El mensaje igual empieza con la función que llamaste:
+
+```
+use "flower/lily2d" as lily2d
+
+let picture = img.new(40, 20, #ffffff)
+lily2d.circle(picture, (10, 10), "six", #2d6a8f)
+```
+
+**Salida:**
+
+```text
+std:/flower/lily2d/check.liz: [line 7, column 8] runtime error: lily2d.circle: r must be a number, not STRING
+```
+
+La línea es la del módulo, no la tuya: busca en tu programa la llamada que nombra el mensaje (`lily2d.circle`). La [referencia del Terrario](../../TERRARIUM.md#standard-modules) lista los módulos estándar.
+
 ## `lizardscript test`: programas que se revisan solos
 
 Una prueba es un programa con un archivo `.expected` a su lado que contiene exactamente lo que debe imprimir (errores incluidos). Ponlas en una carpeta:
@@ -299,6 +338,92 @@ Water on Mondays.
 - `--vm` hace que el programa corra en la máquina virtual de bytecode.
 - Cada módulo que usa el programa debe estar dentro de su carpeta.
 
+## `lizardscript fmt`: una sola forma de escribir el código
+
+`lizardscript fmt` acomoda el código de una sola forma: el mismo programa sale igual, lo haya escrito quien lo haya escrito, así que nadie tiene que discutir por espacios. Este es `pond.liz`, escrito con prisa:
+
+```
+let frogs = [ "ana","leo" ]
+function count(list)
+{
+    let total=0
+    for(let i=0;i<len(list);i+=1){ total += 1 }
+    return total
+}
+if (count(frogs) > 1) {
+puts("a crowd") -~> more than one
+}
+else { puts("alone") } -~> just one
+let pond = {"frogs": frogs, "lilies": 3,
+            "deep": true}
+
+
+
+puts(pond.lilies)
+```
+
+```text
+$ lizardscript fmt pond.liz
+let frogs = ["ana", "leo"]
+function count(list) {
+  let total = 0
+  for (let i = 0; i < len(list); i += 1) { total += 1 }
+  return total
+}
+if (count(frogs) > 1) {
+  puts("a crowd")        -~> more than one
+} else { puts("alone") } -~> just one
+let pond = {
+  "frogs": frogs,
+  "lilies": 3,
+  "deep": true
+}
+
+puts(pond.lilies)
+```
+
+- Dos espacios por cada bloque, un espacio alrededor de cada operador y después de cada coma, la `{` de un bloque en la línea de su `if` o su `function`, `} else {` en una línea, un hash que ocupa varias líneas con un par por línea, los comentarios del final de las líneas uno debajo del otro, y nunca dos líneas en blanco seguidas. [STYLE.md](../../STYLE.md) tiene todas las reglas (en inglés).
+- Imprime el resultado. `-w` lo escribe de vuelta en los archivos, y `--check` solo lista los archivos que cambiarían y termina con código de salida 1 si hay alguno, para un script que revisa un proyecto. Una carpeta quiere decir cada `.liz` que hay en ella y en las carpetas de adentro: `lizardscript fmt -w garden`.
+- Solo mueve espacios, y saltos de línea donde el parser lee un salto de línea como un espacio, así que el programa hace exactamente lo mismo que antes. No te parte una línea larga, y un bloque corto se queda en su línea (`if (a) { 1 }` y luego `else { 2 }` en la siguiente se quedan así).
+- Un archivo con un error de sintaxis se deja como está: fmt muestra el error y termina con código de salida 2.
+
+## `lizardscript check`: errores antes de correr
+
+`lizardscript check` lee un programa sin ejecutarlo y te dice qué va a salir mal. `bugs.liz`:
+
+```
+let frogs = ["ana", "leo"]
+
+function area(w, h) {
+  let unit = "cm"
+  return w * h
+}
+
+puts(area(3))
+puts(len(forgs))
+puts(math.sine(1))
+if (len(frogs) == 2) { total = 5 }
+```
+
+```text
+$ lizardscript check bugs.liz
+bugs.liz: [line 4, column 7] warning: unit is never used (unused)
+    hint: start its name with _ if that is on purpose
+bugs.liz: [line 8, column 6] error: wrong number of arguments to area: want 2, got 1 (arguments)
+bugs.liz: [line 9, column 10] error: identifier not found: forgs (unknown-name)
+    hint: did you mean `frogs`?
+bugs.liz: [line 10, column 6] error: math has no sine (member)
+    hint: did you mean `math.sin`?
+bugs.liz: [line 11, column 24] error: can't assign to total: it was never declared, use let total = ... (assign)
+```
+
+- Un **error** (`error`) es algo con lo que el programa se toparía al correr, o un error de sintaxis que no lo deja correr: un nombre que no está definido en ninguna parte, `=` a un nombre que no tiene `let`, una llamada con el número equivocado de argumentos, una función que un módulo no tiene, un `use` cuyo archivo no existe, un `return` cuyo valor está en la línea siguiente.
+- Una **advertencia** (`warning`) es probablemente un error: una variable o un parámetro que nunca se usa (empieza su nombre con `_` para decir que es a propósito), un `let` que oculta una variable de un alcance de afuera, código después de un `return`, `break` o `continue` que nunca corre, `==` entre dos literales, `x = x`, un `use` del que no se usa ningún nombre.
+- La palabra entre paréntesis es el nombre de la revisión. Termina con código de salida 1 cuando encuentra un error, para que un script se detenga ahí; si solo hay advertencias termina con 0. `--json` escribe lo que encontró como JSON, para un editor.
+- Sabe cuándo ya corrió un `let`. Una función puede usar un nombre cuyo `let` viene más abajo, porque la función corre después; leer un nombre en la misma función antes de su `let` es un error: `identifier not found: x: its let, at line 4, comes later`.
+- Lee los módulos que usa el programa, así que conoce sus nombres: `use "plants/flowers"` y luego `flowr("rose")` es un nombre desconocido con la pista `` did you mean `flower`? ``.
+- Que no haya errores no quiere decir que el programa no pueda fallar: check no lo ejecuta, así que un tipo equivocado o un archivo que falta solo aparecen al correr.
+
 ## `lizard`: el código como datos
 
 El módulo `lizard` lee código de lizard-script como lo lee el lenguaje, así que un editor, un revisor o una herramienta para enseñar se pueden escribir en lizard-script.
@@ -345,7 +470,7 @@ puts(lizard.parse("let = 1").errors)
 let size
 infix * 10 2
 12 18
-[{"kind": "syntax", "message": "expected identifier, got \"=\"", "line": 1, "column": 5}]
+[{"kind": "syntax", "message": "let needs a name before the \"=\", like let x = 1", "line": 1, "column": 5}]
 ```
 
 Cada nodo es un hash con su `kind`, sus campos y sus posiciones: `10 * 2` va de la columna 12 hasta justo antes de la 18. [TERRARIUM.md](../../TERRARIUM.md#lizard) (en inglés) lista cada tipo de nodo.
@@ -386,6 +511,29 @@ the program ran too long (more than 1000 steps)
 - `steps` detiene el código que correría para siempre. Un error no detiene tu programa: vuelve en `error`.
 - `on_statement` se llama antes de cada instrucción, y `on_layer` cuando una capa empieza y termina: un editor los usa para saber qué línea hizo qué.
 - El Terrario no está a menos que lo pases: `{"globals": {"fs": fs}}` le da `fs` al código.
+
+### Revisar código
+
+`lizard.check(code)` encuentra errores en el código igual que `lizardscript check`, y los da como hashes, para un editor que los subraya:
+
+```
+let found = lizard.check("let size = 10\nputs(siz * 2)")
+puts(len(found))
+puts(found[0].severity, found[0].message)
+puts(found[0].hint, found[0].line, found[0].column)
+puts(lizard.check("draw(canvas)", "", ["draw", "canvas"]))
+```
+
+**Salida:**
+
+```text
+1
+error identifier not found: siz
+did you mean `size`? 2 6
+[]
+```
+
+Cada hallazgo tiene también su `rule` y dónde termina (`end_line`, `end_column`). El código conoce los nombres del Terrario; el tercer argumento lista más nombres que el código tendrá al correr, como los que un editor les da a los programas que ejecuta.
 
 ### Comentarios de documentación
 
@@ -436,9 +584,10 @@ done
 
 - `use "ruta"` ejecuta un módulo una vez por programa, en su propio alcance, y deja que el archivo vea sus nombres, vivos: `=` cambia la variable del módulo, un `let` la oculta. Los nombres que empiezan con `_` son privados.
 - `use "ruta" as nombre` da un hash con los nombres del módulo, hecho cuando terminó de correr.
-- Las rutas son relativas al archivo que dice el `use`, y luego a las carpetas de `LIZARD_PATH`. Un `use` va en el nivel superior de un archivo.
+- Las rutas son relativas al archivo que dice el `use`, luego a las carpetas de `LIZARD_PATH` y al final a los módulos estándar (`flower/lily2d`). Un `use` va en el nivel superior de un archivo.
 - `lizardscript test carpeta` ejecuta cada programa que tiene un archivo `.expected` y compara; `--update`, `--vm`, `--bench`.
 - `lizardscript build carpeta -o archivo` hace un ejecutable con los módulos y los archivos de `bundle.txt`; encuentra tus archivos con `os.program_dir()`. `--os` y `--arch` construyen para otros sistemas.
-- `lizard.tokens`, `lizard.parse`, `lizard.run` y `lizard.docs` leen, revisan y ejecutan código; `io` lee líneas y escribe en la salida y en la salida de errores.
+- `lizardscript fmt` acomoda el código de una sola forma (`-w` lo escribe, `--check` lista lo que cambiaría); `lizardscript check` encuentra errores y advertencias sin ejecutar el programa (`--json` para editores).
+- `lizard.tokens`, `lizard.parse`, `lizard.check`, `lizard.run` y `lizard.docs` leen, revisan y ejecutan código; `io` lee líneas y escribe en la salida y en la salida de errores.
 
-[← Anterior: El Terrario](17-terrarium.md) · [Índice](../README.md) · [Hoja de referencia →](cheatsheet.md)
+[← Anterior: El Terrario](17-terrarium.md) · [Índice](../README.md) · [Siguiente: lily2d →](19-lily2d.md)

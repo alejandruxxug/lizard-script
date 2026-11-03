@@ -1,0 +1,44 @@
+-~> A poster made of gradients: a sky with hard bands, a sun with stepped
+-~> rings, hills that fit their own boxes, and a title. Esc quits.
+-~> Run it with: lizardscript examples/lily2d/poster.liz
+-~> or save it: lizardscript examples/lily2d/poster.liz --save poster.png
+
+use "flower/lily2d" as lily2d
+
+let size = (420, 560)
+
+function poster(target) {
+  let sky = lily2d.linear([#2b1d3f, #6b2f5f, #e0607a, lily2d.hard(#f2a65a), #f6c453], 90deg)
+  lily2d.rect(target, (0, 0), size, sky)
+  lily2d.circle(target, (210, 300), 110, lily2d.radial_at((210, 300), 110, [#fff3c4, #f6c453, #e0607a], 6))
+  -~> three hills, back to front, each with a gradient across its own box
+  let colors = [[#6b2f5f, #3b2a5c], [#3b2a5c, #2b1d3f], [#2b1d3f, #140d1f]]
+  for (let i = 0; i < 3; i += 1) {
+    let top = 330 + i * 50
+    let hill = [(-10, top + 40), (90, top - 10 + i * 15), (210, top + 30), (330, top - 20), (430, top + 20), (430, 570), (-10, 570)]
+    lily2d.path(target, hill, {"fill": lily2d.linear(colors[i], 90deg), "corner": 80})
+  }
+  -~> stars in the dark part of the sky
+  for (let i = 0; i < 24; i += 1) {
+    let at = ((i * 97) % 400 + 10, (i * 53) % 150 + 10)
+    lily2d.star(target, at, 4, 2 + i % 3, 0.8, rgba(255, 243, 196, 150 + (i * 13) % 100))
+  }
+  lily2d.text(target, (210, 525), "LILY", {"fill": lily2d.linear([#fff3c4, #f2a65a], 0deg), "size": 6, "align": "center", "valign": "bottom"})
+  lily2d.text(target, (210, 540), "gradients · steps · hard stops", {"fill": #fff3c4, "align": "center"})
+}
+
+let args = os.args()
+let saving = len(args) == 2 && args[0] == "--save"
+let w = window.open(size.x, size.y, "lily2d poster", {"headless": saving})
+poster(w)
+if (saving) {
+  img.save(window.screenshot(w), args[1])
+} else {
+  window.run(w, function(events) {
+    for (let i = 0; i < len(events); i += 1) {
+      if (events[i].type == "key" && events[i].key == "Escape") {
+        return false
+      }
+    }
+  })
+}

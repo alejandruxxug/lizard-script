@@ -227,18 +227,18 @@ func TestErrors(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"let = 5", `[line 1, column 5] syntax error: expected identifier, got "="`},
+		{"let = 5", `[line 1, column 5] syntax error: let needs a name before the "=", like let x = 1`},
 		{"let x 5", `[line 1, column 7] syntax error: expected "=", got "5"`},
 		{"let x = ;", `[line 1, column 9] syntax error: expected an expression, got ";"`},
-		{"let", `[line 1, column 4] syntax error: expected identifier, got end of input`},
+		{"let", `[line 1, column 4] syntax error: expected a name after let, got end of input`},
 		{"let x = 5 6;", `[line 1, column 11] syntax error: expected end of statement, got "6"`},
 		{"x y", `[line 1, column 3] syntax error: expected end of statement, got identifier "y"`},
 		{"return 1 2", `[line 1, column 10] syntax error: expected end of statement, got "2"`},
-		{"(1 + 2", `[line 1, column 7] syntax error: expected ")", got end of input`},
+		{"(1 + 2", `[line 1, column 7] syntax error: the "(" at line 1, column 1 is never closed`},
 		{"1 +", `[line 1, column 4] syntax error: expected an expression, got end of input`},
 		{"* 2", `[line 1, column 1] syntax error: expected an expression, got "*"`},
-		{")", `[line 1, column 1] syntax error: expected an expression, got ")"`},
-		{"}", `[line 1, column 1] syntax error: expected an expression, got "}"`},
+		{")", `[line 1, column 1] syntax error: this ")" has nothing to close`},
+		{"}", `[line 1, column 1] syntax error: this "}" has nothing to close`},
 		{"else { }", `[line 1, column 1] syntax error: expected an expression, got "else"`},
 
 		{"if (x {", `[line 1, column 7] syntax error: expected ")", got "{"`},
@@ -256,14 +256,14 @@ func TestErrors(t *testing.T) {
 		{"function f(a, ) { }", `[line 1, column 15] syntax error: expected identifier, got ")"`},
 		{"function f(a b) { }", `[line 1, column 14] syntax error: expected ")", got identifier "b"`},
 		{"function f() return", `[line 1, column 14] syntax error: expected "{", got "return"`},
-		{"f(1, 2", `[line 1, column 7] syntax error: expected ")", got end of input`},
+		{"f(1, 2", `[line 1, column 7] syntax error: the "(" at line 1, column 2 is never closed`},
 		{"f(1,)", `[line 1, column 5] syntax error: expected an expression, got ")"`},
-		{"[1, 2", `[line 1, column 6] syntax error: expected "]", got end of input`},
-		{"a[1", `[line 1, column 4] syntax error: expected "]", got end of input`},
+		{"[1, 2", `[line 1, column 6] syntax error: the "[" at line 1, column 1 is never closed`},
+		{"a[1", `[line 1, column 4] syntax error: the "[" at line 1, column 2 is never closed`},
 		{"a[]", `[line 1, column 3] syntax error: expected an expression, got "]"`},
 		{`{"a" 1}`, `[line 1, column 6] syntax error: expected ":", got "1"`},
 		{`{"a": 1 "b": 2}`, `[line 1, column 9] syntax error: expected ",", got "b"`},
-		{`{"a": 1`, `[line 1, column 8] syntax error: expected ",", got end of input`},
+		{`{"a": 1`, `[line 1, column 8] syntax error: the "{" at line 1, column 1 is never closed`},
 		{"{ let x = 1; }", `[line 1, column 3] syntax error: expected an expression, got "let"`},
 
 		{"1 = 2", `[line 1, column 3] syntax error: cannot assign to 1`},
@@ -290,7 +290,7 @@ func TestErrors(t *testing.T) {
 		{"while (a) { for (break;;) { } }", `[line 1, column 18] syntax error: expected an expression, got "break"`},
 		{"for (; @; i) { a; }", `[line 1, column 8] lexical error: unexpected character "@"`},
 		{"for (f(1 2); ;) { a; }", `[line 1, column 10] syntax error: expected ")", got "2"`},
-		{`let s = "open;`, `[line 1, column 9] lexical error: unterminated string`},
+		{`let s = "open;`, `[line 1, column 9] lexical error: unterminated string: this " is never closed`},
 	}
 
 	for _, tt := range tests {
@@ -320,14 +320,14 @@ func TestErrorRecovery(t *testing.T) {
 		{
 			"let = 1;\nlet y = 2;\nlet z = ;\nlet w = 3;",
 			[]string{
-				`[line 1, column 5] syntax error: expected identifier, got "="`,
+				`[line 1, column 5] syntax error: let needs a name before the "=", like let x = 1`,
 				`[line 3, column 9] syntax error: expected an expression, got ";"`,
 			},
 			2,
 		},
 		{
 			"function f() {\n  let = 1;\n  return 2;\n}\nlet y = 1;",
-			[]string{`[line 2, column 7] syntax error: expected identifier, got "="`},
+			[]string{`[line 2, column 7] syntax error: let needs a name before the "=", like let x = 1`},
 			2,
 		},
 		{
@@ -337,7 +337,7 @@ func TestErrorRecovery(t *testing.T) {
 		},
 		{
 			"while (a) { let = 1 }\nlet z = 1;",
-			[]string{`[line 1, column 17] syntax error: expected identifier, got "="`},
+			[]string{`[line 1, column 17] syntax error: let needs a name before the "=", like let x = 1`},
 			2,
 		},
 		{
@@ -352,23 +352,23 @@ func TestErrorRecovery(t *testing.T) {
 		},
 		{
 			"for (let = 0; i < 3; i = i + 1) {\n  a;\n  b;\n}\nlet z = 1;",
-			[]string{`[line 1, column 10] syntax error: expected identifier, got "="`},
+			[]string{`[line 1, column 10] syntax error: let needs a name before the "=", like let x = 1`},
 			1,
 		},
 		{
 			"let h = {\"f\": function() { let = 1; }};\nlet z = 1;",
-			[]string{`[line 1, column 32] syntax error: expected identifier, got "="`},
+			[]string{`[line 1, column 32] syntax error: let needs a name before the "=", like let x = 1`},
 			2,
 		},
 		{
 			"let h = {\"a\": if (x) { let = 1; }, \"b\": 2};\nlet z = 1;",
-			[]string{`[line 1, column 28] syntax error: expected identifier, got "="`},
+			[]string{`[line 1, column 28] syntax error: let needs a name before the "=", like let x = 1`},
 			2,
 		},
 		{
 			"}\nlet h = {\"a\": 1 2; \"b\": 3};\nlet z = 1;",
 			[]string{
-				`[line 1, column 1] syntax error: expected an expression, got "}"`,
+				`[line 1, column 1] syntax error: this "}" has nothing to close`,
 				`[line 2, column 17] syntax error: expected ",", got "2"`,
 			},
 			1,
@@ -376,7 +376,7 @@ func TestErrorRecovery(t *testing.T) {
 		{
 			"1 +\n@\nlet z = 1;",
 			[]string{`[line 2, column 1] lexical error: unexpected character "@"`},
-			0,
+			1,
 		},
 	}
 
@@ -740,7 +740,7 @@ func TestColorAndPointErrors(t *testing.T) {
 		{"(1, 2, 3, 4)", `[line 1, column 1] syntax error: a point has two or three coordinates`},
 		{"(1, 2, 3, 4, 5)", `[line 1, column 1] syntax error: a point has two or three coordinates`},
 		{"(1, )", `[line 1, column 5] syntax error: expected an expression, got ")"`},
-		{"(1, 2", `[line 1, column 6] syntax error: expected ")", got end of input`},
+		{"(1, 2", `[line 1, column 6] syntax error: the "(" at line 1, column 1 is never closed`},
 		{"(, 1)", `[line 1, column 2] syntax error: expected an expression, got ","`},
 	}
 	for _, tt := range tests {
@@ -849,7 +849,7 @@ func TestLayerErrors(t *testing.T) {
 		{"layer sun 1", `[line 1, column 11] syntax error: a layer is "layer name" alone on its line, got "1" after the name`},
 		{"layer \"sun\" + 1", `[line 1, column 13] syntax error: a layer is "layer name" alone on its line, got "+" after the name`},
 		{"layer a b c\n  1", `[line 1, column 9] syntax error: a layer is "layer name" alone on its line, got identifier "b" after the name`},
-		{"layer sun\n  let = 1", `[line 2, column 7] syntax error: expected identifier, got "="`},
+		{"layer sun\n  let = 1", `[line 2, column 7] syntax error: let needs a name before the "=", like let x = 1`},
 		{"layer sun\n  break", `[line 2, column 3] syntax error: break outside of a loop`},
 	}
 	for _, tt := range tests {
@@ -1193,7 +1193,7 @@ func TestLeadingOperatorErrors(t *testing.T) {
 		{"a -~> comment\n+ b", []string{message(2, 1, "+")}},
 		// The parse goes on, so a mistake after it is found too.
 		{"a\n+ b\nlet = 1", []string{message(2, 1, "+"),
-			`[line 3, column 5] syntax error: expected identifier, got "="`}},
+			`[line 3, column 5] syntax error: let needs a name before the "=", like let x = 1`}},
 		// A statement that starts with an operator is still an ordinary
 		// error: no line before it went on.
 		{"* 2", []string{`[line 1, column 1] syntax error: expected an expression, got "*"`}},

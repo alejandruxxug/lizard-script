@@ -1,0 +1,94 @@
+-~> matrix: 2D transforms. A matrix is a list of six numbers [a, b, c, d,
+-~> e, f] that takes the point (x, y) to (a*x + c*y + e, b*x + d*y + f),
+-~> the same six numbers as SVG's matrix(). Shapes are moved, turned and
+-~> sized with lily2d.transform(shape, m).
+
+use "check"
+
+function identity() {
+  [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+}
+
+function need_matrix(call, m) {
+  if (type(m) != "ARRAY" || len(m) != 6) {
+    fail(call, "a matrix must be a list of six numbers like lily2d.identity(), not " + type(m))
+  }
+  for (let i = 0; i < 6; i += 1) {
+    need_number(call, "matrix item " + str(i), m[i])
+  }
+}
+
+-~> The matrix that does first and then second.
+function combine(first, second) {
+  need_matrix("combine", first)
+  need_matrix("combine", second)
+  let a = first
+  let b = second
+  [b[0] * a[0] + b[2] * a[1], b[1] * a[0] + b[3] * a[1],
+   b[0] * a[2] + b[2] * a[3], b[1] * a[2] + b[3] * a[3],
+   b[0] * a[4] + b[2] * a[5] + b[4], b[1] * a[4] + b[3] * a[5] + b[5]]
+}
+
+function translate(offset) {
+  need_point("translate", "offset", offset)
+  [1.0, 0.0, 0.0, 1.0, float(offset.x), float(offset.y)]
+}
+
+-~> A turn by angle (radians, clockwise on the screen) round the point around.
+function rotate(angle, around = (0, 0)) {
+  need_number("rotate", "angle", angle)
+  need_point("rotate", "around", around)
+  let c = math.cos(angle)
+  let s = math.sin(angle)
+  [c, s, -s, c, around.x - c * around.x + s * around.y, around.y - s * around.x - c * around.y]
+}
+
+-~> A resize by k (a number, or a point for x and y apart) from the point around.
+function scale(k, around = (0, 0)) {
+  need_point("scale", "around", around)
+  let kx = k
+  let ky = k
+  if (type(k) == "POINT") {
+    kx = k.x
+    ky = k.y
+  } else {
+    need_number("scale", "k", k)
+  }
+  [float(kx), 0.0, 0.0, float(ky), around.x * (1 - kx), around.y * (1 - ky)]
+}
+
+-~> The matrix that undoes m.
+function invert(m) {
+  need_matrix("invert", m)
+  let det = m[0] * m[3] - m[1] * m[2]
+  if (det == 0) {
+    fail("invert", "this matrix squashes everything flat, so it can't be undone")
+  }
+  [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det,
+   (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det]
+}
+
+-~> The point p moved by m.
+function apply(m, p) {
+  (m[0] * p.x + m[2] * p.y + m[4], m[1] * p.x + m[3] * p.y + m[5])
+}
+
+-~> How much m stretches lengths, on average: the square root of its area
+-~> factor. A stroke width or a radius is scaled by it.
+function stretch(m) {
+  math.sqrt(math.abs(m[0] * m[3] - m[1] * m[2]))
+}
+
+-~> A path with every point moved by m.
+function transform_path(path, m) {
+  let out = []
+  for (let i = 0; i < len(path); i += 1) {
+    let cmd = path[i]
+    let moved = [cmd[0]]
+    for (let k = 1; k < len(cmd); k += 1) {
+      push(moved, apply(m, cmd[k]))
+    }
+    push(out, moved)
+  }
+  out
+}

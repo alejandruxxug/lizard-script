@@ -1,0 +1,422 @@
+-~> geometry: the maths of paths that the shapes, the rasterizer and the
+-~> hit tests share. A path is a list of commands with absolute points:
+-~>   ["M", p]  ["L", p]  ["C", c1, c2, p]  ["Z"]
+-~> (lily2d.path also takes ["Q", c, p], which it turns into a "C").
+
+-~> How far a flattened curve may stray from the real one, in pixels.
+let tolerance = 0.25
+
+-~> Blends two numbers or two points: a at t = 0, b at t = 1.
+function lerp(a, b, t) {
+  a + (b - a) * t
+}
+
+-~> The point at t (0 to 1) on the cubic Bézier p0, c1, c2, p3.
+function bezier_point(p0, c1, c2, p3, t) {
+  let u = 1 - t
+  p0 * (u * u * u) + c1 * (3 * u * u * t) + c2 * (3 * u * t * t) + p3 * (t * t * t)
+}
+
+-~> The distance from point p to the infinite line through a and b.
+function point_line_distance(p, a, b) {
+  let d = b - a
+  let len2 = float(d.x * d.x + d.y * d.y)
+  if (len2 == 0) {
+    return math.dist(p, a)
+  }
+  let cross = d.x * (p.y - a.y) - d.y * (p.x - a.x)
+  math.abs(cross) / math.sqrt(len2)
+}
+
+-~> The closest point to p on the segment a-b:
+-~> {"point": q, "t": 0 to 1 along the segment, "dist": from p to q}.
+function closest_on_segment(p, a, b) {
+  let d = b - a
+  let len2 = float(d.x * d.x + d.y * d.y)
+  let t = 0.0
+  if (len2 > 0) {
+    t = ((p.x - a.x) * d.x + (p.y - a.y) * d.y) / len2
+    t = math.max(0.0, math.min(1.0, t))
+  }
+  let q = a + d * t
+  {"point": q, "t": t, "dist": math.dist(p, q)}
+}
+
+-~> Catmull-Rom through the points as cubic Bézier pieces: piece i goes
+-~> from points[i] to points[i + 1] and is [c1, c2, end]. The ends use their
+-~> own point as the missing neighbour, so the curve has open ends.
+function catmull_rom(points) {
+  let n = len(points)
+  let pieces = []
+  for (let i = 0; i < n - 1; i += 1) {
+    let p0 = points[math.max(i - 1, 0)]
+    let p1 = points[i]
+    let p2 = points[i + 1]
+    let p3 = points[math.min(i + 2, n - 1)]
+    push(pieces, [p1 + (p2 - p0) / 6.0, p2 - (p3 - p1) / 6.0, p2])
+  }
+  pieces
+}
+
+-~> How far the direction changes at p, walking from a through p to b, in
+-~> radians: 0 for straight on, pi for turning right back.
+function turn_angle(a, p, b) {
+  let u = p - a
+  let v = b - p
+  math.abs(math.atan2(u.x * v.y - u.y * v.x, u.x * v.x + u.y * v.y))
+}
+
+-~> Twice the signed area of a polygon (the shoelace sum), as a float. It
+-~> is positive when the points go clockwise on the screen (y points down).
+function area2(points) {
+  let n = len(points)
+  let sum = 0.0
+  for (let i = 0; i < n; i += 1) {
+    let a = points[i]
+    let b = points[(i + 1) % n]
+    sum = sum + a.x * b.y - b.x * a.y
+  }
+  sum
+}
+
+-~> The path of a smooth outline through the points, with sharp corners:
+-~> Catmull-Rom, except that a point where the line turns by more than
+-~> `corner` degrees stays a sharp corner, and the piece between two sharp
+-~> corners is straight. A closed outline wraps round and ends with ["Z"];
+-~> an open one has sharp ends. Fewer than 3 points are straight lines.
+function smooth_outline(points, closed, corner) {
+  let n = len(points)
+  let path = [["M", points[0]]]
+  if (n < 3) {
+    for (let i = 1; i < n; i += 1) {
+      push(path, ["L", points[i]])
+    }
+    if (closed) {
+      push(path, ["Z"])
+    }
+    return path
+  }
+  let limit = corner * math.pi / 180.0
+  let sharp = []
+  for (let i = 0; i < n; i += 1) {
+    if (!closed && (i == 0 || i == n - 1)) {
+      push(sharp, true)
+    } else {
+      push(sharp, turn_angle(points[(i + n - 1) % n], points[i], points[(i + 1) % n]) > limit)
+    }
+  }
+  let pieces = n - 1
+  if (closed) {
+    pieces = n
+  }
+  for (let i = 0; i < pieces; i += 1) {
+    let j = (i + 1) % n
+    if (sharp[i] && sharp[j]) {
+      push(path, ["L", points[j]])
+    } else {
+      let before = points[i]
+      if (!sharp[i]) {
+        before = points[(i + n - 1) % n]
+      }
+      let after = points[j]
+      if (!sharp[j]) {
+        after = points[(j + 1) % n]
+      }
+      push(path, ["C", points[i] + (points[j] - before) / 6.0, points[j] - (after - points[i]) / 6.0, points[j]])
+    }
+  }
+  if (closed) {
+    push(path, ["Z"])
+  }
+  path
+}
+
+-~> The path of a smooth open curve through the points (Catmull-Rom with
+-~> open ends). One point is a dot: a segment of no length, which a round
+-~> cap draws.
+function smooth_path(points) {
+  let n = len(points)
+  if (n == 1) {
+    return [["M", points[0]], ["L", points[0]]]
+  }
+  if (n == 2) {
+    return [["M", points[0]], ["L", points[1]]]
+  }
+  let path = [["M", points[0]]]
+  let pieces = catmull_rom(points)
+  for (let i = 0; i < len(pieces); i += 1) {
+    push(path, ["C", pieces[i][0], pieces[i][1], pieces[i][2]])
+  }
+  path
+}
+
+-~> Adds the points of a cubic Bézier to out (not its start) and their t
+-~> values to ts, halving it until each piece is within tol pixels of its
+-~> segment. t0 and t1 are the t range of this piece.
+function flatten_cubic(p0, c1, c2, p3, tol, out, ts, t0, t1, depth) {
+  let flat = math.max(point_line_distance(c1, p0, p3), point_line_distance(c2, p0, p3)) * 0.75 <= tol
+  if (flat || depth >= 16) {
+    push(out, p3)
+    push(ts, t1)
+    return
+  }
+  let m01 = (p0 + c1) / 2.0
+  let m12 = (c1 + c2) / 2.0
+  let m23 = (c2 + p3) / 2.0
+  let m012 = (m01 + m12) / 2.0
+  let m123 = (m12 + m23) / 2.0
+  let mid = (m012 + m123) / 2.0
+  let tm = (t0 + t1) / 2.0
+  flatten_cubic(p0, m01, m012, mid, tol, out, ts, t0, tm, depth + 1)
+  flatten_cubic(mid, m123, m23, p3, tol, out, ts, tm, t1, depth + 1)
+}
+
+-~> A path as straight lines: a list of {"points": [...], "closed": bool},
+-~> one for each sub-path (an M starts one, a Z closes it).
+function flatten_path(path, tol = tolerance) {
+  let subs = []
+  let points = []
+  let open = false
+  let start = (0, 0)
+  let cur = (0, 0)
+  for (let i = 0; i < len(path); i += 1) {
+    let cmd = path[i]
+    let op = cmd[0]
+    if (op == "M") {
+      if (open) {
+        push(subs, {"points": points, "closed": false})
+      }
+      points = [cmd[1]]
+      open = true
+      start = cmd[1]
+      cur = cmd[1]
+    } elif (op == "Z") {
+      if (open) {
+        push(subs, {"points": points, "closed": true})
+        open = false
+      }
+      cur = start
+    } else {
+      if (!open) {
+        points = [cur]
+        open = true
+      }
+      if (op == "L") {
+        push(points, cmd[1])
+        cur = cmd[1]
+      } else {
+        flatten_cubic(cur, cmd[1], cmd[2], cmd[3], tol, points, [], 0.0, 1.0, 0)
+        cur = cmd[3]
+      }
+    }
+  }
+  if (open) {
+    push(subs, {"points": points, "closed": false})
+  }
+  subs
+}
+
+-~> The box around a path, {"min": (x, y), "max": (x, y)}, or null for an
+-~> empty one.
+function path_box(path) {
+  subs_box(flatten_path(path))
+}
+
+-~> The box around flattened sub-paths, or null when they have no points.
+function subs_box(subs) {
+  let lo = null
+  let hi = null
+  for (let i = 0; i < len(subs); i += 1) {
+    let pts = subs[i].points
+    for (let j = 0; j < len(pts); j += 1) {
+      let p = pts[j]
+      if (lo === null) {
+        lo = p
+        hi = p
+      } else {
+        lo = (math.min(lo.x, p.x), math.min(lo.y, p.y))
+        hi = (math.max(hi.x, p.x), math.max(hi.y, p.y))
+      }
+    }
+  }
+  if (lo === null) {
+    return null
+  }
+  {"min": lo, "max": hi}
+}
+
+-~> Whether p is inside the path, by the rule "nonzero" or "evenodd".
+-~> Every sub-path counts as closed.
+function point_in_path(path, p, rule = "nonzero") {
+  let subs = flatten_path(path)
+  let winding = 0
+  let crossings = 0
+  for (let i = 0; i < len(subs); i += 1) {
+    let pts = subs[i].points
+    let n = len(pts)
+    for (let j = 0; j < n; j += 1) {
+      let a = pts[j]
+      let b = pts[(j + 1) % n]
+      let side = (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y)
+      if (a.y <= p.y) {
+        if (b.y > p.y && side > 0) {
+          winding += 1
+          crossings += 1
+        }
+      } elif (b.y <= p.y && side < 0) {
+        winding -= 1
+        crossings += 1
+      }
+    }
+  }
+  if (rule == "evenodd") {
+    return crossings % 2 == 1
+  }
+  winding != 0
+}
+
+-~> The distance from p to a polyline; closed adds the segment from the
+-~> last point back to the first.
+function distance_to_polyline(points, p, closed) {
+  let n = len(points)
+  let best = math.dist(p, points[0])
+  let count = n - 1
+  if (closed) {
+    count = n
+  }
+  for (let i = 0; i < count; i += 1) {
+    best = math.min(best, closest_on_segment(p, points[i], points[(i + 1) % n]).dist)
+  }
+  best
+}
+
+-~> The distance from p to the outline of a path, or null for an empty one.
+function distance_to_path(path, p) {
+  let subs = flatten_path(path)
+  let best = null
+  for (let i = 0; i < len(subs); i += 1) {
+    let d = distance_to_polyline(subs[i].points, p, subs[i].closed)
+    if (best === null || d < best) {
+      best = d
+    }
+  }
+  best
+}
+
+-~> The closest spot on a path to p: {"point": q, "dist": d, "command":
+-~> the index of the L, C or Z that holds it, "t": 0 to 1 along it}, or
+-~> null for an empty path.
+function nearest_on_path(path, p) {
+  let best = null
+  let start = (0, 0)
+  let cur = (0, 0)
+  for (let i = 0; i < len(path); i += 1) {
+    let cmd = path[i]
+    let op = cmd[0]
+    let pts = [cur]
+    let ts = [0.0]
+    if (op == "M") {
+      start = cmd[1]
+      cur = cmd[1]
+      pts = []
+    } elif (op == "L") {
+      push(pts, cmd[1])
+      push(ts, 1.0)
+      cur = cmd[1]
+    } elif (op == "C") {
+      flatten_cubic(cur, cmd[1], cmd[2], cmd[3], tolerance, pts, ts, 0.0, 1.0, 0)
+      cur = cmd[3]
+    } else {
+      push(pts, start)
+      push(ts, 1.0)
+      cur = start
+    }
+    for (let k = 0; k + 1 < len(pts); k += 1) {
+      let hit = closest_on_segment(p, pts[k], pts[k + 1])
+      if (best === null || hit.dist < best.dist) {
+        best = {"point": hit.point, "dist": hit.dist, "command": i, "t": ts[k] + (ts[k + 1] - ts[k]) * hit.t}
+      }
+    }
+  }
+  best
+}
+
+-~> Ramer-Douglas-Peucker: a new list of the points without the ones that
+-~> bend the line by less than tol pixels. The ends always stay.
+function simplify(points, tol) {
+  let n = len(points)
+  if (n < 3) {
+    return list.copy(points)
+  }
+  let keep = []
+  for (let i = 0; i < n; i += 1) {
+    push(keep, false)
+  }
+  keep[0] = true
+  keep[n - 1] = true
+  let todo = [[0, n - 1]]
+  while (len(todo) > 0) {
+    let piece = pop(todo)
+    let a = piece[0]
+    let b = piece[1]
+    let far = 0.0
+    let at = -1
+    for (let i = a + 1; i < b; i += 1) {
+      let d = point_line_distance(points[i], points[a], points[b])
+      if (d > far) {
+        far = d
+        at = i
+      }
+    }
+    if (at >= 0 && far > tol) {
+      keep[at] = true
+      push(todo, [a, at])
+      push(todo, [at, b])
+    }
+  }
+  let out = []
+  for (let i = 0; i < n; i += 1) {
+    if (keep[i]) {
+      push(out, points[i])
+    }
+  }
+  out
+}
+
+-~> The closed path of an ellipse as four cubic Béziers (0.5523 is the
+-~> constant that makes them round).
+function ellipse_path(center, radii) {
+  let k = 0.5522847498
+  let cx = center.x
+  let cy = center.y
+  let rx = radii.x
+  let ry = radii.y
+  [["M", (cx + rx, cy)],
+   ["C", (cx + rx, cy + ry * k), (cx + rx * k, cy + ry), (cx, cy + ry)],
+   ["C", (cx - rx * k, cy + ry), (cx - rx, cy + ry * k), (cx - rx, cy)],
+   ["C", (cx - rx, cy - ry * k), (cx - rx * k, cy - ry), (cx, cy - ry)],
+   ["C", (cx + rx * k, cy - ry), (cx + rx, cy - ry * k), (cx + rx, cy)],
+   ["Z"]]
+}
+
+-~> The commands of a circular arc round center, from angle a0 to a1
+-~> (radians, clockwise on the screen from "to the right"), as cubics of at
+-~> most a quarter turn each. The first command is ["L", start] so it can
+-~> go on a path; the caller replaces it with an "M" to start one.
+function arc_commands(center, r, a0, a1) {
+  let sweep = a1 - a0
+  let pieces = math.max(1, math.ceil(math.abs(sweep) / (math.pi / 2) - 0.000001))
+  let step = sweep / pieces
+  let k = 4.0 / 3.0 * math.tan(step / 4)
+  let out = [["L", center + (math.cos(a0) * r, math.sin(a0) * r)]]
+  for (let i = 0; i < pieces; i += 1) {
+    let s = a0 + step * i
+    let e = s + step
+    let p0 = center + (math.cos(s) * r, math.sin(s) * r)
+    let p3 = center + (math.cos(e) * r, math.sin(e) * r)
+    let c1 = p0 + (-math.sin(s), math.cos(s)) * (k * r)
+    let c2 = p3 - (-math.sin(e), math.cos(e)) * (k * r)
+    push(out, ["C", c1, c2, p3])
+  }
+  out
+}

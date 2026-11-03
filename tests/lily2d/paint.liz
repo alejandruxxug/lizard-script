@@ -1,0 +1,19 @@
+-~> Gradients, steps, opacity and blend modes.
+use "flower/lily2d" as lily2d
+use "golden"
+
+let w = img.new(400, 260, #f4efe6)
+let stops = [#f2a65a, #e0607a, #3b2a5c]
+lily2d.rect(w, (10, 10), (120, 70), lily2d.linear(stops))
+lily2d.rect(w, (140, 10), (120, 70), lily2d.linear(stops, 45deg, 5))
+lily2d.rect(w, (270, 10), (120, 70), lily2d.linear([[0, #fff3c4], [0.5, #e0607a, "hard"], [1, #3b2a5c]], 180deg))
+lily2d.circle(w, (70, 140), 50, lily2d.radial([#fff3c4, #e0607a], (0.3, 0.3), 0.8))
+lily2d.ellipse(w, (200, 140), (60, 35), lily2d.radial([#ffffff, #2d6a8f], (0.5, 0.5), 0.5, 4))
+lily2d.rect(w, (270, 100), (120, 80), {"fill": lily2d.linear_at((270, 0), (390, 0), [#2d6a8f, #8fb996]), "stroke": lily2d.linear([#000000, #e0607a]), "width": 6})
+let modes = ["normal", "multiply", "screen", "overlay", "darken", "lighten", "add"]
+for (let i = 0; i < len(modes); i += 1) {
+  lily2d.rect(w, (10 + i * 55, 200), (50, 50), lily2d.linear([#3b2a5c, #f2a65a]))
+  lily2d.circle(w, (35 + i * 55, 225), 18, {"fill": #e0607a, "blend": modes[i], "opacity": 0.8})
+}
+lily2d.circle(w, (380, 230), 25, {"fill": #2d6a8f, "stroke": #1a1418, "width": 8, "opacity": 0.5})
+check("paint", w)

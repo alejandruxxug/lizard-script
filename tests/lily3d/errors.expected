@@ -1,0 +1,21 @@
+lily3d.cube: size must be a number, not STRING
+lily3d.cube: size must be above 0, not 0
+lily3d.sphere: detail must be a whole number from 3 up, not 2
+lily3d.translate: offset must be a 3D point like (0, 1, 2), not (1, 2)
+lily3d.rotate_y: angle must be a number, not STRING
+lily3d.compose: want two matrices or a list of them, not INTEGER
+lily3d.compose: matrix 1 must be a matrix (a list of 16 numbers, like lily3d.identity()), not a list of 2
+lily3d.mesh: face 0 has no corner 1: the corners are 0 to 0
+lily3d.mesh: face 0 must be [a, b, c], not [0, 0]
+lily3d.camera: fov must be between 0deg and 180deg, not 200deg
+lily3d.camera: far must be a number above near (1), not 0.5
+lily3d.camera: unknown option "zoom" (the options are far, near, up)
+lily3d.scene: unknown option "sky" (the options are background, fog, lights)
+lily3d.scene: the fog's far must be above its near
+lily3d.add: want a mesh (like lily3d.cube(1)) to add, not STRING
+lily3d.add: unknown material key "colour" (the material keys are color, cull, line_width, lit, shading, shine, specular, wireframe)
+lily3d.light: want a light made by lily3d.ambient, directional or point_light
+lily3d.directional: direction must be a 3D point like (0, 1, 2), not (0, -1)
+lily3d.render: want a camera made by lily3d.camera or ortho_camera, not HASH
+lily3d.render: light 0 must be made by lily3d.ambient, directional or point_light, not 5
+lily3d.load_obj: path must be a string, not INTEGER

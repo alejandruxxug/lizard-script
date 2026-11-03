@@ -1,0 +1,20 @@
+cube 24 corners 12 faces; (-0.5, -0.5, -0.5) to (0.5, 0.5, 0.5)
+   12/12 faces out, 24/24 normals 1 long
+sphere 325 corners 528 faces; (-0.5, -0.5, -0.5) to (0.5, 0.5, 0.5)
+   528/528 faces out, 325/325 normals 1 long
+cylinder 150 corners 96 faces; (-0.5, -0.5, -0.5) to (0.5, 0.5, 0.5)
+   96/96 faces out, 150/150 normals 1 long
+cone 100 corners 48 faces; (-0.5, -0.5, -0.5) to (0.5, 0.5, 0.5)
+   48/48 faces out, 100/100 normals 1 long
+torus 561 corners 1024 faces; (-0.5, -0.15, -0.5) to (0.5, 0.15, 0.5)
+small sphere 15 corners 8 faces; (-2.0, -2.0, -2.0) to (2.0, 2.0, 2.0)
+   8/8 faces out, 15/15 normals 1 long
+torus faces away from the tube: 96 of 96
+plane 16 corners 18 faces; (-1.0, 0.0, -1.0) to (1.0, 0.0, 1.0) normal (0.0, 1.0, 0.0)
+plane faces up (0.0, 1.0, 0.0)
+surface [(0.0, 0, 0.0), (1.0, 0, 0.0), (0.0, 0, 1.0), (1.0, 0, 1.0)] [[0, 2, 3], [0, 3, 1]]
+smooth normals (0.4082482904638631, 0.4082482904638631, 0.8164965809277261)
+facets 6 [[0, 1, 2], [3, 4, 5]] (0.0, 0.0, 1.0) (0.7071067811865475, 0.7071067811865475, 0.0)
+merge 4 [6, 7, 5]
+transformed (2.0, 6.0, 0.0) (0.0, 0.0, 1.0)
+fit (1.0, 0.5, -0.5) (-1.0, -0.5, -0.5)

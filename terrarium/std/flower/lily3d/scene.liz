@@ -1,0 +1,103 @@
+-~> scene: what there is to see. A scene is a hash of its objects, its
+-~> lights, its background and its fog; an object is a mesh with its
+-~> transform and its material. A program keeps the object add gives and
+-~> changes it between frames:
+-~>
+-~>   let box = add(s, cube(1))
+-~>   box.transform = rotate_y(t)
+-~>   box.material.color = #3fa34d
+-~>
+-~> A material is a hash; every key can be left out:
+-~>
+-~>   "color"       the surface's color (#d0d0d0); its alpha makes it see
+-~>                 through
+-~>   "shading"     "smooth": colors mixed from the corners' normals, so a
+-~>                 round shape looks round; "flat": one color per triangle
+-~>   "lit"         false paints the color as it is, with no lights
+-~>   "shine"       above 0 adds a highlight, smaller the bigger it is (8
+-~>                 is dull, 64 is glossy)
+-~>   "specular"    how bright the highlight is (0.5)
+-~>   "cull"        false draws the back of the faces too (for a plane seen
+-~>                 from both sides)
+-~>   "wireframe"   true draws only the edges of the triangles; a color
+-~>                 draws them in that color over the faces
+-~>   "line_width"  how wide the edges are, in pixels (1)
+
+use "check"
+use "matrix"
+use "light"
+
+let _material_keys = ["color", "cull", "line_width", "lit", "shading", "shine", "specular", "wireframe"]
+
+-~> A new scene. The options are "background" (#000000; false leaves the
+-~> target as it is), "lights" (a list; with none the scene gets
+-~> default_lights) and "fog" ({"color": c, "near": n, "far": f}: things
+-~> fade into c from n to f away from the camera).
+function scene(options = {}) {
+  need_hash("scene", "options", options)
+  need_keys("scene", "option", options, ["background", "fog", "lights"])
+  let s = {"objects": [], "lights": option(options, "lights", []),
+    "background": option(options, "background", #000000), "fog": options.fog}
+  if (type(s.lights) != "ARRAY") {
+    fail("scene", "lights must be a list of lights, not " + type(s.lights))
+  }
+  if (s.fog != null) {
+    _need_fog(s.fog)
+  }
+  s
+}
+
+function _need_fog(fog) {
+  need_hash("scene", "fog", fog)
+  need_keys("scene", "fog key", fog, ["color", "far", "near"])
+  need_color("scene", "fog color", fog.color)
+  need_number("scene", "fog near", fog.near)
+  need_number("scene", "fog far", fog.far)
+  if (fog.far <= fog.near) {
+    fail("scene", "the fog's far must be above its near")
+  }
+}
+
+-~> Adds the mesh to the scene, moved by transform, with the material, and
+-~> gives the object: {"mesh", "transform", "material", "visible"}.
+-~> example: add(s, cube(1), rotate_y(30deg), {"color": #f2a65a})
+function add(s, m, transform = identity(), material = {}) {
+  need_hash("add", "scene", s)
+  if (type(m) != "HASH" || m.positions == null || m.faces == null || m.normals == null) {
+    fail("add", "want a mesh (like lily3d.cube(1)) to add, not " + type(m))
+  }
+  need_matrix("add", "transform", transform)
+  need_hash("add", "material", material)
+  need_keys("add", "material key", material, _material_keys)
+  let object = {"mesh": m, "transform": transform, "material": material, "visible": true}
+  push(s.objects, object)
+  object
+}
+
+-~> Takes the object out of the scene. It is fine when it isn't there.
+function remove(s, object) {
+  for (let i = 0; i < len(s.objects); i += 1) {
+    if (same(s.objects[i], object)) {
+      list.remove(s.objects, i)
+      return null
+    }
+  }
+}
+
+-~> Adds a light (from ambient, directional or point_light) to the scene.
+function light(s, l) {
+  need_hash("light", "light", l)
+  if (l.kind == null) {
+    fail("light", "want a light made by lily3d.ambient, directional or point_light")
+  }
+  push(s.lights, l)
+  l
+}
+
+-~> The scene's lights, or default_lights when it has none.
+function scene_lights(s) {
+  if (len(s.lights) == 0) {
+    return default_lights()
+  }
+  s.lights
+}

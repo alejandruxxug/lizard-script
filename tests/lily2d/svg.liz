@@ -1,0 +1,10 @@
+-~> SVG export.
+use "flower/lily2d" as lily2d
+
+let shapes = [
+  lily2d.circle(null, (50, 50), 20, lily2d.radial([#fff3c4, #e0607a])),
+  lily2d.rect(null, (10, 80), (60, 30), {"fill": rgba(45, 106, 143, 128), "stroke": #1a1418, "width": 2, "join": "miter", "dash": [4, 2]}, 5),
+  lily2d.group(null, [lily2d.line(null, (0, 0), (100, 100), {"stroke": lily2d.linear([#000, #fff], 0deg, 3), "width": 3, "cap": "butt"})], {"opacity": 0.5, "blend": "multiply"}),
+  lily2d.polygon(null, [(0, 0), (10, 0), (5, 8)], {"fill": #000, "rule": "evenodd", "opacity": 0.25})
+]
+puts(lily2d.svg(shapes, (120, 120), #ffffff))

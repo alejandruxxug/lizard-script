@@ -1,0 +1,97 @@
+-~> check: the argument checks the parts of lily3d share. Each one stops
+-~> the program with a message that starts with the call's name, like
+-~> "lily3d.cube: size must be a number, not STRING". They run once per
+-~> call, never per vertex or per pixel.
+
+-~> Stops with a message for the call.
+function fail(call, message) {
+  error("lily3d." + call + ": " + message)
+}
+
+function is_number(v) {
+  type(v) == "INTEGER" || type(v) == "FLOAT"
+}
+
+function need_number(call, name, v) {
+  if (!is_number(v)) {
+    fail(call, name + " must be a number, not " + type(v))
+  }
+}
+
+function need_positive(call, name, v) {
+  need_number(call, name, v)
+  if (v <= 0) {
+    fail(call, name + " must be above 0, not " + str(v))
+  }
+}
+
+-~> A whole number of steps, at least least.
+function need_steps(call, name, v, least) {
+  if (type(v) != "INTEGER" || v < least) {
+    fail(call, name + " must be a whole number from " + str(least) + " up, not " + str(v))
+  }
+}
+
+-~> A 3D point (x, y, z).
+function need_vector(call, name, v) {
+  let ok = type(v) == "POINT"
+  if (ok) {
+    try {
+      v.z
+    } catch (e) {
+      ok = false
+    }
+  }
+  if (!ok) {
+    fail(call, name + " must be a 3D point like (0, 1, 2), not " + str(v))
+  }
+}
+
+function need_color(call, name, v) {
+  if (type(v) != "COLOR") {
+    fail(call, name + " must be a color like #f2a65a, not " + type(v))
+  }
+}
+
+-~> A 4x4 matrix: a list of 16 numbers, row by row.
+function need_matrix(call, name, m) {
+  if (type(m) != "ARRAY" || len(m) != 16) {
+    let got = type(m)
+    if (got == "ARRAY") {
+      got = "a list of " + str(len(m))
+    }
+    fail(call, name + " must be a matrix (a list of 16 numbers, like lily3d.identity()), not " + got)
+  }
+}
+
+function need_hash(call, name, v) {
+  if (type(v) != "HASH") {
+    fail(call, name + " must be a hash, not " + type(v))
+  }
+}
+
+-~> Fails when the hash has a key that isn't in allowed, so a typo in an
+-~> option doesn't go unnoticed.
+function need_keys(call, name, h, allowed) {
+  let names = keys(h)
+  for (let i = 0; i < len(names); i += 1) {
+    if (list.index(allowed, names[i]) < 0) {
+      fail(call, "unknown " + name + " " + quote(names[i]) + " (the " + name + "s are " + text.join(allowed, ", ") + ")")
+    }
+  }
+}
+
+-~> The text with quotes round it, the way str shows text inside a list.
+function quote(t) {
+  let inside = str([t])
+  text.slice(inside, 1, len(inside) - 1)
+}
+
+-~> The value of key in options, or fallback when it isn't there.
+function option(options, key, fallback) {
+  let v = options[key]
+  if (v == null) {
+    return fallback
+  }
+  v
+}

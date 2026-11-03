@@ -1,0 +1,248 @@
+-~> paint: what fills or strokes a shape, a color or a gradient. A
+-~> gradient is a hash:
+-~>   kind      "linear" or "radial"
+-~>   stops     [[t, color], ...] with t from 0 to 1, in order; a hard stop
+-~>             is two stops at the same t
+-~>   steps     0 for smooth, or the number of flat bands (2 to 64)
+-~>   relative  true when it fits each shape's box (linear, radial), with
+-~>             angle (linear) or center and r (radial) in fractions of it
+-~>   from, to (linear_at) or center, r (radial_at): pinned, in pixels, with
+-~>             origin, axis and scale, the keys the Terrarium's
+-~>             spans_gradient reads
+-~> Stops are colors (spread evenly), [t, color] pairs, or hard(color) for
+-~> an edge: [#fff, #333, hard(#c00), #000] is a smooth white to grey, a
+-~> sharp step to red, then red to black. [t, color, "hard"] is an edge at
+-~> a chosen t. Past the first and last stop the color stays.
+
+use "check"
+use "geometry"
+use "matrix"
+
+let max_steps = 64
+
+function is_gradient(v) {
+  type(v) == "HASH" && (v["kind"] == "linear" || v["kind"] == "radial") && type(v["stops"]) == "ARRAY"
+}
+
+function is_paint(v) {
+  type(v) == "COLOR" || is_gradient(v)
+}
+
+function need_paint(call, name, v) {
+  if (!is_paint(v)) {
+    fail(call, name + " must be a color like #3fa34d or a gradient like lily2d.linear([#fff, #000]), not " + type(v))
+  }
+}
+
+-~> Marks a stop as an edge: its color starts right where it is, with no
+-~> blend from the stop before.
+function hard(color) {
+  need_color("hard", "color", color)
+  {"hard": color}
+}
+
+-~> The stops as [[t, color], ...]: missing t spread evenly, and each hard
+-~> stop written as two (the color before, then its own).
+function gradient_stops(call, stops) {
+  if (type(stops) != "ARRAY" || len(stops) < 2) {
+    fail(call, "stops must be a list of at least two colors, like [#f4d35e, #3d1c4f]")
+  }
+  let n = len(stops)
+  let out = []
+  let before = null
+  let last_t = 0.0
+  for (let i = 0; i < n; i += 1) {
+    let item = stops[i]
+    let t = i / (n - 1.0)
+    let color = null
+    let edge = false
+    if (type(item) == "COLOR") {
+      color = item
+    } elif (type(item) == "HASH" && type(item["hard"]) == "COLOR") {
+      color = item["hard"]
+      edge = true
+    } elif (type(item) == "ARRAY" && (len(item) == 2 || len(item) == 3)) {
+      need_number(call, "stop " + str(i) + " position", item[0])
+      need_color(call, "stop " + str(i) + " color", item[1])
+      t = item[0]
+      color = item[1]
+      if (len(item) == 3) {
+        if (item[2] != "hard") {
+          fail(call, "stop " + str(i) + " can only have \"hard\" as its third item")
+        }
+        edge = true
+      }
+    } else {
+      fail(call, "stop " + str(i) + " must be a color, hard(color) or [t, color], not " + type(item))
+    }
+    if (t < 0 || t > 1) {
+      fail(call, "stop " + str(i) + " position must be from 0 to 1, not " + str(t))
+    }
+    if (t < last_t) {
+      fail(call, "stops must go in order, but stop " + str(i) + " is before the one above it")
+    }
+    if (edge && before !== null) {
+      push(out, [t, before])
+    }
+    push(out, [t, color])
+    before = color
+    last_t = t
+  }
+  out
+}
+
+function need_steps(call, steps) {
+  if (type(steps) != "INTEGER" || steps < 0 || steps == 1 || steps > max_steps) {
+    fail(call, "steps must be 0 (smooth) or a whole number from 2 to " + str(max_steps) + ", not " + str(steps))
+  }
+}
+
+-~> A linear gradient pinned to the canvas: the first stop at from, the
+-~> last at to.
+function linear_at(from, to, stops, steps = 0) {
+  need_point("linear_at", "from", from)
+  need_point("linear_at", "to", to)
+  need_steps("linear_at", steps)
+  pinned_linear(from, to, gradient_stops("linear_at", stops), steps)
+}
+
+function pinned_linear(from, to, stops, steps) {
+  let dx = float(to.x - from.x)
+  let dy = float(to.y - from.y)
+  let len2 = dx * dx + dy * dy
+  if (len2 == 0) {
+    fail("linear_at", "from and to must be different points")
+  }
+  {"kind": "linear", "from": from, "to": to, "stops": stops, "steps": steps,
+   "origin": from, "axis": (dx / len2, dy / len2), "scale": 0.0}
+}
+
+-~> A radial gradient pinned to the canvas: circles round center, the last
+-~> stop at r pixels.
+function radial_at(center, r, stops, steps = 0) {
+  need_point("radial_at", "center", center)
+  need_number("radial_at", "r", r)
+  if (r <= 0) {
+    fail("radial_at", "r must be more than 0, not " + str(r))
+  }
+  need_steps("radial_at", steps)
+  pinned_radial(center, r, gradient_stops("radial_at", stops), steps)
+}
+
+function pinned_radial(center, r, stops, steps) {
+  {"kind": "radial", "center": center, "r": r, "stops": stops, "steps": steps,
+   "origin": center, "axis": (0.0, 0.0), "scale": 1.0 / r}
+}
+
+-~> A linear gradient that fits each shape's box. angle is the way the
+-~> colors travel, clockwise on the screen from "to the right": 0deg left to
+-~> right, 90deg top to bottom (the default). The first stop is at the box's
+-~> start corner and the last at the opposite one.
+function linear(stops, angle = 90deg, steps = 0) {
+  need_number("linear", "angle", angle)
+  need_steps("linear", steps)
+  {"kind": "linear", "relative": true, "angle": angle, "stops": gradient_stops("linear", stops), "steps": steps}
+}
+
+-~> A radial gradient that fits each shape's box: center in fractions of
+-~> the box ((0, 0) top left, (1, 1) bottom right) and r a fraction of its
+-~> longer side, so the default r = 0.5 reaches the longer side's edges.
+-~> The rings are circles, also on a long box.
+function radial(stops, center = (0.5, 0.5), r = 0.5, steps = 0) {
+  need_point("radial", "center", center)
+  need_number("radial", "r", r)
+  if (r <= 0) {
+    fail("radial", "r must be more than 0, not " + str(r))
+  }
+  need_steps("radial", steps)
+  {"kind": "radial", "relative": true, "center": center, "r": r, "stops": gradient_stops("radial", stops), "steps": steps}
+}
+
+function is_relative(v) {
+  is_gradient(v) && v["relative"] === true
+}
+
+-~> A relative gradient worked out for a box {"min", "max"}: a pinned one.
+function resolve_gradient(g, box) {
+  let w = float(box.max.x - box.min.x)
+  let h = float(box.max.y - box.min.y)
+  if (g.kind == "linear") {
+    -~> rounded so that 90deg is exactly straight down
+    let dx = math.round(math.cos(g.angle) * 1000000000) / 1000000000.0
+    let dy = math.round(math.sin(g.angle) * 1000000000) / 1000000000.0
+    let half = math.max(1.0, math.abs(w * dx) + math.abs(h * dy)) / 2
+    let mid = box.min + (w / 2, h / 2)
+    return pinned_linear(mid - (dx, dy) * half, mid + (dx, dy) * half, g.stops, g.steps)
+  }
+  let r = math.max(0.01, g.r * math.max(w, h))
+  pinned_radial((box.min.x + g.center.x * w, box.min.y + g.center.y * h), r, g.stops, g.steps)
+}
+
+-~> A paint ready to draw on a shape whose path box is box: a relative
+-~> gradient is worked out for the box, anything else stays as it is.
+function resolve_paint(paint, box) {
+  if (!is_relative(paint)) {
+    return paint
+  }
+  resolve_gradient(paint, box)
+}
+
+-~> The color c with its alpha multiplied by k (0 to 1).
+function fade_color(c, k) {
+  rgba(c.r, c.g, c.b, math.round(c.a * math.max(0.0, math.min(1.0, k))))
+}
+
+-~> A paint with its alpha multiplied by k: a gradient gets it on every stop.
+function fade(paint, k) {
+  if (k >= 1 || paint === null) {
+    return paint
+  }
+  if (type(paint) == "COLOR") {
+    return fade_color(paint, k)
+  }
+  let out = hash.copy(paint)
+  let stops = []
+  for (let i = 0; i < len(paint.stops); i += 1) {
+    push(stops, [paint.stops[i][0], fade_color(paint.stops[i][1], k)])
+  }
+  out.stops = stops
+  out
+}
+
+-~> A paint moved with its shape by the matrix m: a pinned gradient moves
+-~> its points (a radial one scales its r by the matrix's stretch); a color
+-~> or a relative gradient stays as it is, since it fits the moved box.
+function transform_paint(paint, m) {
+  if (!is_gradient(paint) || is_relative(paint)) {
+    return paint
+  }
+  if (paint.kind == "linear") {
+    return pinned_linear(apply(m, paint.from), apply(m, paint.to), paint.stops, paint.steps)
+  }
+  pinned_radial(apply(m, paint.center), paint.r * stretch(m), paint.stops, paint.steps)
+}
+
+-~> The color of a gradient at t (0 to 1), steps included, the way the
+-~> Terrarium paints it. The SVG writer uses it for stepped gradients.
+function color_at(g, t) {
+  t = math.max(0.0, math.min(1.0, t))
+  if (g.steps >= 2) {
+    t = math.min(math.floor(t * g.steps), g.steps - 1) / (g.steps - 1.0)
+  }
+  let st = g.stops
+  if (t <= st[0][0]) {
+    return st[0][1]
+  }
+  let j = 0
+  while (j < len(st) && st[j][0] <= t) {
+    j += 1
+  }
+  if (j == len(st)) {
+    return st[len(st) - 1][1]
+  }
+  let a = st[j - 1]
+  let b = st[j]
+  let f = (t - a[0]) / (b[0] - a[0])
+  rgba(math.round(lerp(a[1].r, b[1].r, f)), math.round(lerp(a[1].g, b[1].g, f)),
+       math.round(lerp(a[1].b, b[1].b, f)), math.round(lerp(a[1].a, b[1].a, f)))
+}

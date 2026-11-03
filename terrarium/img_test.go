@@ -1,12 +1,15 @@
 package terrarium
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"image/png"
+	"lizardscript/bundle"
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 )
 
 func TestImg(t *testing.T) {
@@ -61,6 +64,26 @@ func TestImgLoadKeepsAlphaWhenShrinking(t *testing.T) {
 	if got != "#ff000080" {
 		t.Fatalf("got %s, want #ff000080", got)
 	}
+}
+
+// A built program's own pictures load like files on disk.
+func TestImgLoadFromBundle(t *testing.T) {
+	src := image.NewNRGBA(image.Rect(0, 0, 2, 1))
+	src.SetNRGBA(1, 0, color.NRGBA{G: 255, A: 255})
+	var data bytes.Buffer
+	if err := png.Encode(&data, src); err != nil {
+		t.Fatal(err)
+	}
+	saved := bundle.Current
+	defer func() { bundle.Current = saved }()
+	bundle.Current = &bundle.Program{Main: "main.liz", Files: fstest.MapFS{
+		"main.liz":    {Data: []byte("puts(1)")},
+		"art/dot.png": {Data: data.Bytes()},
+	}}
+	check(t, []testCase{
+		{"load", `let m = img.load("bundle:/art/dot.png"); [img.size(m), img.get(m, 1, 0)]`, "[(2, 1), #00ff00]", false},
+		{"load missing", `img.load("bundle:/art/nope.png")`, "can't load bundle:/art/nope.png: file does not exist", true},
+	})
 }
 
 // The drawing functions are the same for every target; the window tests

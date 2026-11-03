@@ -129,6 +129,10 @@ func collectModules(root string, found map[string][]byte) error {
 			if ferr != nil {
 				return fmt.Errorf("%s: %s", relative(root, file), ferr.Message)
 			}
+			if evaluator.IsStandardModule(path) {
+				// Every lizardscript has the standard modules.
+				continue
+			}
 			path = filepath.FromSlash(path)
 			if _, err := inside(root, path); err != nil {
 				return fmt.Errorf("%s uses %s, which is outside the program's folder", relative(root, file), relative(root, path))

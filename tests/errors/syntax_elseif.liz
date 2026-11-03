@@ -1,0 +1,6 @@
+let n = 5
+if (n > 10) {
+  puts("big")
+} elseif (n > 3) {
+  puts("medium")
+}

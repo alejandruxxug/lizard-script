@@ -1,0 +1,209 @@
+-~> svg: shapes as SVG text, one <path> for each shape and a <g> for each
+-~> group that has an opacity or a blend mode. A relative gradient is
+-~> written as the pinned one it is for its shape (SVG's own
+-~> objectBoundingBox would bend the angle on a box that is not square), and
+-~> shapes whose gradients come out the same share one <defs> entry.
+
+use "check"
+use "geometry"
+use "paint"
+use "shapes"
+
+let hex_digits = "0123456789abcdef"
+
+function hex2(n) {
+  hex_digits[n // 16] + hex_digits[n % 16]
+}
+
+-~> A color as "#rrggbb" (its alpha is written as an opacity).
+function color_hex(c) {
+  "#" + hex2(c.r) + hex2(c.g) + hex2(c.b)
+}
+
+-~> A number with at most two decimals and no needless ".0".
+function num(n) {
+  let r = math.round(n * 100) / 100.0
+  if (r == math.floor(r)) {
+    return str(math.floor(r))
+  }
+  str(r)
+}
+
+function point_text(p) {
+  num(p.x) + " " + num(p.y)
+}
+
+-~> The d="..." text of a path.
+function path_data(path) {
+  let out = []
+  for (let i = 0; i < len(path); i += 1) {
+    let cmd = path[i]
+    let op = cmd[0]
+    if (op == "Z") {
+      push(out, "Z")
+    } elif (op == "C") {
+      push(out, "C " + point_text(cmd[1]) + " " + point_text(cmd[2]) + " " + point_text(cmd[3]))
+    } else {
+      push(out, op + " " + point_text(cmd[1]))
+    }
+  }
+  text.join(out, " ")
+}
+
+function attr(name, value) {
+  " " + name + "=\"" + value + "\""
+}
+
+-~> The gradients of the document being written: {its text: id}, and the
+-~> list in the order they got their ids.
+function new_defs() {
+  {"ids": {}, "list": []}
+}
+
+function gradient_id(defs, g) {
+  let key = str(g)
+  if (defs.ids[key] === null) {
+    defs.ids[key] = "g" + str(len(defs.list))
+    push(defs.list, g)
+  }
+  defs.ids[key]
+}
+
+-~> The stops an SVG needs: the stops, or for a stepped gradient two stops
+-~> of the same color for each band.
+function svg_stops(g) {
+  if (g.steps < 2) {
+    return g.stops
+  }
+  let out = []
+  for (let i = 0; i < g.steps; i += 1) {
+    let c = color_at(g, i / (g.steps - 1.0))
+    push(out, [i / float(g.steps), c])
+    push(out, [(i + 1) / float(g.steps), c])
+  }
+  out
+}
+
+function gradient_def(g, id) {
+  let stops = svg_stops(g)
+  let body = ""
+  for (let i = 0; i < len(stops); i += 1) {
+    let c = stops[i][1]
+    body = body + "      <stop" + attr("offset", num(stops[i][0])) + attr("stop-color", color_hex(c))
+    if (c.a != 255) {
+      body = body + attr("stop-opacity", num(c.a / 255.0))
+    }
+    body = body + "/>\n"
+  }
+  let tag = "linearGradient"
+  let head = ""
+  if (g.kind == "linear") {
+    head = attr("x1", num(g.from.x)) + attr("y1", num(g.from.y)) + attr("x2", num(g.to.x)) + attr("y2", num(g.to.y))
+  } else {
+    tag = "radialGradient"
+    head = attr("cx", num(g.center.x)) + attr("cy", num(g.center.y)) + attr("r", num(g.r))
+  }
+  "    <" + tag + attr("id", id) + attr("gradientUnits", "userSpaceOnUse") + head + ">\n" + body + "    </" + tag + ">\n"
+}
+
+-~> The attributes of a fill or a stroke paint (none for null).
+function paint_attrs(defs, name, paint) {
+  if (is_gradient(paint)) {
+    return attr(name, "url(#" + gradient_id(defs, paint) + ")")
+  }
+  if (type(paint) != "COLOR") {
+    return attr(name, "none")
+  }
+  let out = attr(name, color_hex(paint))
+  if (paint.a != 255) {
+    out = out + attr(name + "-opacity", num(paint.a / 255.0))
+  }
+  out
+}
+
+function number_list(items) {
+  let out = []
+  for (let i = 0; i < len(items); i += 1) {
+    push(out, num(items[i]))
+  }
+  text.join(out, " ")
+}
+
+-~> The style="..." of an opacity and a blend mode, or "".
+function look(opacity, blend) {
+  let parts = []
+  if (blend != "normal") {
+    push(parts, "mix-blend-mode: " + blend)
+  }
+  if (opacity < 1) {
+    push(parts, "opacity: " + num(opacity))
+  }
+  if (len(parts) == 0) {
+    return ""
+  }
+  attr("style", text.join(parts, "; "))
+}
+
+function svg_shape(defs, shape, pad) {
+  if (shape.kind == "group") {
+    let out = pad + "<g" + look(shape.opacity, shape.blend) + ">\n"
+    for (let i = 0; i < len(shape.shapes); i += 1) {
+      out = out + svg_shape(defs, shape.shapes[i], pad + "  ")
+    }
+    return out + pad + "</g>\n"
+  }
+  let box = path_box(shape.path)
+  if (box === null) {
+    box = {"min": (0, 0), "max": (0, 0)}
+  }
+  let out = pad + "<path" + attr("d", path_data(shape.path)) + paint_attrs(defs, "fill", resolve_paint(shape.fill, box))
+  if (shape.fill !== null && shape.rule == "evenodd") {
+    out = out + attr("fill-rule", "evenodd")
+  }
+  if (shape.stroke !== null) {
+    out = out + paint_attrs(defs, "stroke", resolve_paint(shape.stroke, box)) + attr("stroke-width", num(shape.width))
+    out = out + attr("stroke-linecap", shape.cap) + attr("stroke-linejoin", shape.join)
+    if (shape.join == "miter") {
+      out = out + attr("stroke-miterlimit", num(shape.miter))
+    }
+    if (shape.dash !== null) {
+      out = out + attr("stroke-dasharray", number_list(shape.dash))
+      if (shape.dash_offset != 0) {
+        out = out + attr("stroke-dashoffset", num(shape.dash_offset))
+      }
+    }
+  }
+  out + look(shape.opacity, shape.blend) + "/>\n"
+}
+
+-~> The SVG document of shapes (back to front) on a picture of size (w, h),
+-~> with a background paint or none.
+function svg(shapes, size, background = null) {
+  if (type(shapes) != "ARRAY") {
+    fail("svg", "shapes must be a list of shapes")
+  }
+  need_point("svg", "size", size)
+  if (background !== null) {
+    need_paint("svg", "background", background)
+  }
+  let defs = new_defs()
+  let body = ""
+  if (background !== null) {
+    let bg = resolve_paint(background, {"min": (0, 0), "max": size})
+    body = "  <rect" + attr("width", num(size.x)) + attr("height", num(size.y)) + paint_attrs(defs, "fill", bg) + "/>\n"
+  }
+  for (let i = 0; i < len(shapes); i += 1) {
+    need_shape("svg", "shapes item " + str(i), shapes[i])
+    body = body + svg_shape(defs, shapes[i], "  ")
+  }
+  let out = "<svg xmlns=\"http://www.w3.org/2000/svg\"" + attr("width", num(size.x)) + attr("height", num(size.y))
+  out = out + attr("viewBox", "0 0 " + num(size.x) + " " + num(size.y)) + ">\n"
+  if (len(defs.list) > 0) {
+    out = out + "  <defs>\n"
+    for (let i = 0; i < len(defs.list); i += 1) {
+      out = out + gradient_def(defs.list[i], "g" + str(i))
+    }
+    out = out + "  </defs>\n"
+  }
+  out + body + "</svg>\n"
+}

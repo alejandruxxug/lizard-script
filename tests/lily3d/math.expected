@@ -1,0 +1,24 @@
+dot 12
+cross (0, 0, 1) (0, 0, -1)
+length 7.0 (0.0, 0.6, 0.8) (0.0, 0.0, 0.0)
+lerp (0.5, 1.0, 1.5)
+translate (11.0, 22.0, 33.0)
+scale (2.0, 4.0, 6.0) (1.0, -2.0, 1.5)
+rotate_x (0.0, 0.0, 1.0)
+rotate_y (1.0, 0.0, 0.0)
+rotate_z (0.0, 1.0, 0.0)
+rotate about z (0.0, 1.0, 0.0)
+direction (1.0, 0.0, 0.0)
+compose (1.0, 2.0, 0.0)
+compose two (0.0, 1.0, 0.0)
+multiply true
+inverse true (1.0, 2.0, 3.0)
+no inverse null
+transpose 1.0 true
+normal (0.4472, 0.8944, 0.0)
+look_at (0.0, 0.0, -5.0) (1.0, 2.0, 0.0)
+look_at sideways (1.0, 0.0, -5.0)
+look_at straight down (0.0, 0.0, -5.0)
+perspective near [0.0, 0.0, -1.0, 1.0] far [0.0, 0.0, 10.0, 10.0]
+perspective edge 1.0 1.0
+orthographic [1.0, 1.0, -1.0, 1.0] [-1.0, -1.0, 1.0, 1.0]

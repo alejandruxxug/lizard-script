@@ -250,7 +250,7 @@ In a string literal, `\"` is `"`, `\\` is `\`, `\n` is a line break, `\t` is a t
 
 ## Modules
 
-`use "draw/shapes"` loads a **module**: the file `draw/shapes.liz`, found next to the file that says the `use` (its source name, see below), then in each folder of the module path (`evaluator.ModulePath`; the `lizardscript` command takes it from `$LIZARD_PATH`, folders separated like `PATH`). A path that starts with `/` (or a drive) is used as it is. ([LEP 0002](../proposals/0002-modules.md))
+`use "draw/shapes"` loads a **module**: the file `draw/shapes.liz`, found next to the file that says the `use` (its source name, see below), then in each folder of the module path (`evaluator.ModulePath`; the `lizardscript` command takes it from `$LIZARD_PATH`, folders separated like `PATH`), then among the **standard modules** (`evaluator.StandardModules`, libraries built into `lizardscript`, like `flower/lily2d`; see [TERRARIUM.md](TERRARIUM.md#standard-modules)). A standard module's source name starts with `std:/` (`std:/flower/lily2d.liz`), so a `use` inside it finds the files next to it the same way, and a path can't climb out of them with `..`. The not-found message lists only the files on disk, as before. A path that starts with `/` (or a drive) is used as it is. ([LEP 0002](../proposals/0002-modules.md))
 
 - **Once per run.** The first use of a module in a run parses its file and runs it, on the same engine as the program, in a **top scope of its own**: it doesn't see the program's variables, or those of the files that use it. Around that scope there is what the host gives every module (`evaluator.ModulePrelude`: `lizardscript` gives the whole Terrarium, the same as the program has), and then the builtins and libraries. Every later use of the same file (however its path is written) in the same run reuses it: its code doesn't run again. `evaluator.ResetModules()` forgets them; the REPL and `Run` call it at the start.
 - **`use "x"` lets the file see every name the module defined at its top level, alive.** Reading one reads the module's own variable, so a module's function that changes it is seen at once; `=` (and `+=` ...) on it changes the module's variable, for every file that uses the module. A file's own names come first: a `let` of the same name in the file, before or after the `use`, hides the module's. Between modules, the last one used comes first. Names that start with `_` are the module's own and are not seen (`identifier not found: _made`). A module's names are not passed on: what a module itself uses is not seen by the files that use it.
@@ -292,7 +292,7 @@ A runtime error stops the program. Its message has the position of the operator,
 
 A `try` statement can catch it and read the message, line and column (see Control flow). `object.Error` also has `Line` and `Column` fields with the same position, so a host can tell where an error was raised (for example by `error(...)` inside a library function) and show it at another line, and an `Uncatchable` flag, true for the step limit and stack overflow errors, which a `try` lets through.
 
-Syntax errors are found before the program starts, so a program with one doesn't run at all.
+Syntax errors are found before the program starts, so a program with one doesn't run at all. All of them are reported at once, one for each mistake (see [GRAMMAR.md](GRAMMAR.md#syntax-errors)).
 
 ## Known limitations
 

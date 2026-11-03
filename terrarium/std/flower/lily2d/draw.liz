@@ -1,0 +1,78 @@
+-~> draw: paints shapes on a drawing target (an image, a window or a
+-~> surface) with the Terrarium's spans, gradient spans and layers.
+
+use "raster"
+use "paint"
+use "shapes"
+
+-~> Paints spans in a paint, moved by offset: a color with img.spans, a
+-~> gradient with img.spans_gradient (the Terrarium works out each pixel).
+function paint_spans(target, spans, paint, offset = (0, 0)) {
+  if (type(paint) == "COLOR") {
+    img.spans(target, spans, paint, offset)
+  } else {
+    img.spans_gradient(target, spans, paint, offset)
+  }
+}
+
+-~> Whether a group or a shape needs a layer of its own: a blend mode, or
+-~> an opacity over a fill and a stroke (which must not show through each
+-~> other). An opacity on one paint alone goes into its colors instead.
+function needs_layer(shape, spans) {
+  if (shape.blend != "normal") {
+    return true
+  }
+  shape.opacity < 1 && (shape.kind == "group" || spans.fill !== null && spans.stroke !== null)
+}
+
+-~> Paints one shape, or every shape of a group in order.
+function draw_shape(target, shape) {
+  if (shape.kind == "group") {
+    let layered = needs_layer(shape, null)
+    if (layered) {
+      img.push_layer(target)
+    }
+    for (let i = 0; i < len(shape.shapes); i += 1) {
+      draw_shape(target, shape.shapes[i])
+    }
+    if (layered) {
+      img.pop_layer(target, shape.blend, shape.opacity)
+    }
+    return null
+  }
+  let spans = shape_spans(shape)
+  let layered = needs_layer(shape, spans)
+  let k = shape.opacity
+  if (layered) {
+    k = 1.0
+    img.push_layer(target)
+  }
+  if (spans.fill !== null && len(spans.fill) > 0) {
+    paint_spans(target, spans.fill, fade(resolve_paint(shape.fill, spans.box), k))
+  }
+  if (spans.stroke !== null && len(spans.stroke) > 0) {
+    paint_spans(target, spans.stroke, fade(resolve_paint(shape.stroke, spans.box), k))
+  }
+  if (layered) {
+    img.pop_layer(target, shape.blend, shape.opacity)
+  }
+  null
+}
+
+-~> The box a shape paints, [x0, y0, x1, y1], from its kept spans' box (so
+-~> its path is not flattened again), or null for an empty group.
+function painted_box(shape) {
+  if (shape.kind == "group") {
+    let box = null
+    for (let i = 0; i < len(shape.shapes); i += 1) {
+      box = union_box(box, painted_box(shape.shapes[i]))
+    }
+    return box
+  }
+  let b = shape_spans(shape).box
+  if (b === null) {
+    return null
+  }
+  let r = stroke_reach(shape)
+  [b.min.x - r, b.min.y - r, b.max.x + r, b.max.y + r]
+}

@@ -1,1 +1,1 @@
-[line 1, column 5] syntax error: expected identifier, got "="
+[line 1, column 5] syntax error: let needs a name before the "=", like let x = 1

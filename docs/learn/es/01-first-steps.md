@@ -199,7 +199,7 @@ let total = (1 + 2
 **Salida:**
 
 ```text
-[line 3, column 1] syntax error: expected ")", got end of input
+[line 2, column 19] syntax error: the "(" at line 2, column 13 is never closed
 ```
 
 El capítulo 14 trata por completo de los errores.

@@ -1,0 +1,188 @@
+-~> pens: how lily2d.brush turns raw pressures into a stroke. A pen is a
+-~> hash, and a program can write its own:
+-~>   name     what to call it
+-~>   min      the width in pixels at pressure 0
+-~>   max      the width at pressure 1 (min == max is a constant width)
+-~>   taper    0 to 0.5: the share of the stroke's length, at each end, where
+-~>            the width shrinks towards the tip (0 is flat ends)
+-~>   opacity  [low, high]: the opacity (0 to 1) at pressure 0 and at 1
+-~>   nib      null, or an angle: the width then comes from the angle
+-~>            between the stroke and the nib, not from the pressure
+-~>   grain    0, or the roughness of the edge in pixels (always the same
+-~>            for the same stroke)
+-~>   tilt     optional, {"nib": gain}: a tablet's tilt turns the nib by gain
+-~>            radians for each unit of tilt
+-~>   pressure the pressure block, below (optional)
+-~>
+-~> The pressure block says how a raw pressure (0 to 1, what the device
+-~> gave) becomes the look. Every key is optional; a missing one keeps the
+-~> default in brackets. A stroke keeps its raw pressures, so changing the
+-~> block restyles it.
+-~>   curve      [[0, 0], [1, 1]]  points [raw, effective] from 0 to 1: the
+-~>              effective pressure is read off the line through them
+-~>   width      [0, 1]  how far along min..max the width goes at effective
+-~>              pressure 0 and at 1
+-~>   opacity    [0, 1]  the same for the opacity pair
+-~>   smoothing  0  0 to 0.95: how much each pressure is blended with its
+-~>              neighbours first (higher is a steadier line)
+-~>   speed      0  0 to 1: how much a fast stroke thins (the distance
+-~>              between neighbouring points stands for the speed)
+-~>   floor      0  0 to 0.9: pressures under it count as 0, and the rest
+-~>              is stretched to fill 0 to 1
+-~>   nib_weight 0  0 to 1: for a pen with a nib, how much pressure also
+-~>              scales the width the nib gives
+-~>   inputs     {}  overrides by device, "mouse", "trackpad" or "tablet"
+-~>              (the source of the window's pen events):
+-~>              {"trackpad": {"floor": 0.15}}. Any key above can be one.
+
+let pens = {}
+
+-~> ink: a crisp line whose width follows the pressure, tapering to a point
+-~> at both ends. A little smoothed, and thinner when fast.
+pens.ink = {"name": "ink", "min": 1, "max": 10, "taper": 0.3, "opacity": [1, 1], "nib": null, "grain": 0,
+  "pressure": {"curve": [[0, 0], [1, 1]], "smoothing": 0.2, "speed": 0.4,
+    "inputs": {"trackpad": {"floor": 0.08}}}}
+
+-~> pencil: thin and light; pressure changes the opacity more than the
+-~> width, and the edge is a little grainy. It follows the hand.
+pens.pencil = {"name": "pencil", "min": 1, "max": 2.5, "taper": 0.1, "opacity": [0.3, 0.95], "nib": null, "grain": 0.4,
+  "pressure": {"curve": [[0, 0], [1, 1]], "smoothing": 0.05, "speed": 0,
+    "inputs": {"trackpad": {"floor": 0.12, "curve": [[0, 0], [0.5, 0.6], [1, 1]]}}}}
+
+-~> marker: one width, see-through, flat ends; very smooth.
+pens.marker = {"name": "marker", "min": 10, "max": 10, "taper": 0, "opacity": [0.55, 0.55], "nib": null, "grain": 0,
+  "pressure": {"curve": [[0, 0], [1, 1]], "smoothing": 0.6, "speed": 0}}
+
+-~> brush: a wide range of widths, a soft taper, fading at low pressure. It
+-~> needs a firm press to get wide (the curve starts slowly).
+pens.brush = {"name": "brush", "min": 2, "max": 28, "taper": 0.4, "opacity": [0.35, 1], "nib": null, "grain": 0,
+  "pressure": {"curve": [[0, 0], [0.4, 0.2], [1, 1]], "smoothing": 0.3, "speed": 0.5,
+    "inputs": {"trackpad": {"floor": 0.15}, "tablet": {"curve": [[0, 0], [0.2, 0.1], [1, 1]]}}}}
+
+-~> calligraphy: a flat nib held at 45 degrees; strokes along it are thin
+-~> and across it are thick, and pressure adds a little.
+pens.calligraphy = {"name": "calligraphy", "min": 1.5, "max": 14, "taper": 0, "opacity": [1, 1], "nib": 45deg, "grain": 0,
+  "pressure": {"curve": [[0, 0], [0.5, 0.7], [1, 1]], "smoothing": 0.4, "speed": 0.2, "nib_weight": 0.3,
+    "inputs": {"trackpad": {"floor": 0.1}}},
+  "tilt": {"nib": 0.6}}
+
+-~> The pressure settings of a pen for a device: the defaults, then the
+-~> pen's own block, then the device's overrides (source null: none).
+function pen_block(pen, source = null) {
+  let b = {"curve": [[0, 0], [1, 1]], "width": [0, 1], "opacity": [0, 1], "smoothing": 0, "speed": 0,
+           "floor": 0, "nib_weight": 0}
+  let own = pen["pressure"]
+  if (type(own) != "HASH") {
+    return b
+  }
+  let names = keys(own)
+  for (let i = 0; i < len(names); i += 1) {
+    if (names[i] != "inputs") {
+      b[names[i]] = own[names[i]]
+    }
+  }
+  if (source !== null && type(own["inputs"]) == "HASH" && type(own.inputs[source]) == "HASH") {
+    let over = own.inputs[source]
+    let on = keys(over)
+    for (let i = 0; i < len(on); i += 1) {
+      b[on[i]] = over[on[i]]
+    }
+  }
+  b
+}
+
+-~> The effective pressure (0 to 1) at raw pressure p: the floor rescales
+-~> it, then the curve is read at that value.
+function pen_curve(b, p) {
+  let x = math.max(0.0, math.min(1.0, p))
+  if (b.floor > 0) {
+    x = math.max(0.0, (x - b.floor) / (1.0 - b.floor))
+  }
+  let c = b.curve
+  let n = len(c)
+  if (n == 0) {
+    return x
+  }
+  if (x <= c[0][0]) {
+    return float(c[0][1])
+  }
+  for (let i = 1; i < n; i += 1) {
+    if (x <= c[i][0]) {
+      let run = c[i][0] - c[i - 1][0]
+      if (run <= 0) {
+        return float(c[i][1])
+      }
+      return c[i - 1][1] + (c[i][1] - c[i - 1][1]) * (x - c[i - 1][0]) / run
+    }
+  }
+  float(c[n - 1][1])
+}
+
+-~> The pressures prepared for the pen: smoothed (forward and back, so the
+-~> line doesn't lag) and thinned where the points are far apart (fast).
+-~> Still raw: pen_response applies the curve.
+function pen_prepare(pen, points, pressures, source = null) {
+  let b = pen_block(pen, source)
+  let n = len(pressures)
+  let out = []
+  for (let i = 0; i < n; i += 1) {
+    push(out, float(pressures[i]))
+  }
+  let s = math.max(0.0, math.min(0.95, b.smoothing))
+  if (s > 0 && n > 2) {
+    for (let i = 1; i < n; i += 1) {
+      out[i] = out[i - 1] * s + out[i] * (1 - s)
+    }
+    for (let i = n - 2; i >= 0; i -= 1) {
+      out[i] = out[i + 1] * s + out[i] * (1 - s)
+    }
+  }
+  if (b.speed > 0 && n > 1) {
+    for (let i = 0; i < n; i += 1) {
+      let a = math.dist(points[math.max(i - 1, 0)], points[i])
+      let c = math.dist(points[i], points[math.min(i + 1, n - 1)])
+      let near = 1
+      if (i > 0 && i < n - 1) {
+        near = 2
+      }
+      let thin = math.max(0.25, 1.0 - ((a + c) / near) / 220.0)
+      out[i] = out[i] * (1 - b.speed * (1 - thin))
+    }
+  }
+  out
+}
+
+-~> What a pen does at one point: [width, opacity] from the prepared
+-~> pressure and the direction of the stroke there (radians). tilt, when
+-~> it is a number, turns a nib that has pen.tilt.
+function pen_response(pen, pressure, angle, source = null, tilt = null) {
+  let b = pen_block(pen, source)
+  let e = pen_curve(b, pressure)
+  let f = b.width[0] + (b.width[1] - b.width[0]) * e
+  if (type(pen["nib"]) == "FLOAT" || type(pen["nib"]) == "INTEGER") {
+    let nib = pen.nib
+    if (tilt !== null && type(pen["tilt"]) == "HASH" && pen.tilt["nib"] !== null) {
+      nib = nib + pen.tilt.nib * tilt
+    }
+    f = math.abs(math.sin(angle - nib)) * (1 - b.nib_weight + b.nib_weight * e)
+  }
+  let width = pen.min + (pen.max - pen.min) * f
+  let g = b.opacity[0] + (b.opacity[1] - b.opacity[0]) * e
+  [width, pen.opacity[0] + (pen.opacity[1] - pen.opacity[0]) * g]
+}
+
+-~> How much of its width a pen keeps at along (0 at the start of the
+-~> stroke, 1 at the end): 1 in the middle, 0.15 at the very tips.
+function pen_taper(pen, along) {
+  if (!(pen.taper > 0)) {
+    return 1.0
+  }
+  0.15 + 0.85 * math.min(1.0, math.min(along, 1 - along) / pen.taper)
+}
+
+-~> A number from 0 up to 1 for each whole number k, always the same for
+-~> the same k (the pencil's grain).
+function pen_noise(k) {
+  let x = math.sin(k * 12.9898) * 43758.5453
+  x - math.floor(x)
+}

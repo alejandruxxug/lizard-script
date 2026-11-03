@@ -1,0 +1,31 @@
+-~> Cutting triangles to the near and far planes, and putting corners on
+-~> the screen. A corner is [x, y, z, w, color]; the part is used on its own.
+use "flower/lily3d/clip"
+
+let white = (1.0, 1.0, 1.0)
+let black = (0.0, 0.0, 0.0)
+-~> With w = 1, a corner is seen when z is from -1 to 1.
+function corner(x, y, z, color = white) { [x, y, z, 1.0, color] }
+
+puts("seen", seen(corner(0, 0, 0)), seen(corner(0, 0, -1)), seen(corner(0, 0, 1.5)), seen(corner(0, 0, -2)))
+
+-~> All in: the same three corners.
+puts("inside", len(clip_triangle(corner(0, 0, 0), corner(1, 0, 0), corner(0, 1, 0))))
+-~> All behind the near plane: nothing.
+puts("behind", clip_triangle(corner(0, 0, -2), corner(1, 0, -3), corner(0, 1, -2)))
+-~> One corner behind: a quad, cut where z = -1, with the color mixed.
+let quad = clip_triangle(corner(0, 0, 0, black), corner(1, 0, 0, black), corner(0, 0, -3, white))
+puts("one behind", len(quad))
+for (let i = 0; i < len(quad); i += 1) {
+  puts("  ", quad[i])
+}
+-~> Two behind: a smaller triangle.
+puts("two behind", clip_triangle(corner(0, 0, 0), corner(2, 0, -3), corner(0, 2, -3)))
+-~> Through both planes: cut twice.
+puts("both planes", len(clip_triangle(corner(0, 0, -3), corner(0, 0, 3), corner(1, 0, 0))))
+
+puts("segment", clip_segment(corner(0, 0, 0), corner(0, 0, 2)))
+puts("segment out", clip_segment(corner(0, 0, 2), corner(0, 0, 3)))
+
+-~> The screen: (-1, 1) is the top left, the depth 0 at the near plane.
+puts("screen", to_screen([-1.0, 1.0, -1.0, 1.0, white], 200, 100), to_screen([2.0, -2.0, 2.0, 2.0, white], 200, 100))

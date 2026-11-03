@@ -1,0 +1,67 @@
+-~> Every shape of lily2d on one page. Esc quits.
+-~> Run it with: lizardscript examples/lily2d/gallery.liz
+-~> or save the picture: lizardscript examples/lily2d/gallery.liz --save gallery.png
+
+use "flower/lily2d" as lily2d
+
+let ink = #1a1418
+let paper = #f4efe6
+
+-~> One cell of the page: its title under the shape.
+function caption(target, at, words) {
+  lily2d.text(target, at + (70, 112), words, {"fill": ink, "align": "center"})
+}
+
+function page(target) {
+  img.clear(target, paper)
+  lily2d.circle(target, (70, 60), 42, #f2a65a)
+  caption(target, (0, 0), "circle")
+  lily2d.ellipse(target, (210, 60), (60, 32), {"fill": #8fb996, "stroke": ink, "width": 2})
+  caption(target, (140, 0), "ellipse")
+  lily2d.rect(target, (300, 20), (120, 80), {"fill": #2d6a8f, "stroke": ink, "width": 3}, 18)
+  caption(target, (290, 0), "rect, round")
+  lily2d.polygon(target, [(500, 20), (550, 100), (450, 100)], #c0392b)
+  caption(target, (430, 0), "polygon")
+  lily2d.star(target, (630, 62), 5, 46, 19, {"fill": #f6c453, "stroke": ink, "width": 2, "join": "miter"})
+  caption(target, (560, 0), "star")
+
+  lily2d.line(target, (20, 160), (120, 220), {"stroke": ink, "width": 6, "cap": "round"})
+  caption(target, (0, 140), "line")
+  lily2d.polyline(target, [(150, 220), (180, 160), (210, 220), (240, 160), (270, 220)], {"stroke": #3b2a5c, "width": 8, "join": "miter", "cap": "square"})
+  caption(target, (140, 140), "polyline")
+  lily2d.path(target, [(300, 200), (330, 150), (380, 170), (420, 150), (410, 220), (340, 230)], {"fill": lily2d.linear([#f2a65a, #e0607a]), "stroke": ink, "width": 2})
+  caption(target, (290, 140), "path")
+  lily2d.path(target, [["M", (450, 220)], ["C", (450, 140), (550, 140), (550, 220)], ["Q", (500, 180), (450, 220)], ["Z"]], {"fill": #8fb996, "stroke": ink, "width": 2})
+  caption(target, (430, 140), "path commands")
+  lily2d.arc(target, (630, 190), 40, -60deg, 220deg, {"stroke": #2d6a8f, "width": 10, "cap": "round"})
+  lily2d.arc(target, (630, 190), 24, 0deg, 300deg, #f2a65a)
+  caption(target, (560, 140), "arc")
+
+  lily2d.line(target, (20, 320), (270, 320), {"stroke": ink, "width": 4, "dash": [18, 8, 2, 8], "cap": "butt"})
+  lily2d.circle(target, (210, 320), 30, {"stroke": #c0392b, "width": 4, "dash": [6, 6]})
+  caption(target, (70, 280), "dashes")
+  lily2d.brush(target, [(300, 340), (340, 300), (390, 330), (430, 290)], [0.2, 0.9, 0.5, 0.3], ink, lily2d.pens.ink)
+  lily2d.brush(target, [(300, 370), (360, 340), (430, 360)], [0.5, 0.8, 0.4], #3b2a5c, lily2d.pens.calligraphy)
+  caption(target, (290, 280), "brush")
+  lily2d.group(target, [lily2d.circle(null, (500, 320), 30, #2d6a8f), lily2d.circle(null, (530, 320), 30, #e0607a), lily2d.circle(null, (515, 345), 30, #f6c453)], {"blend": "multiply", "opacity": 0.85})
+  caption(target, (445, 280), "group, multiply")
+  lily2d.text(target, (630, 300), "lily2d", {"fill": lily2d.linear([#e0607a, #3b2a5c]), "size": 3, "align": "center"})
+  lily2d.text(target, (630, 340), "7x13 font", {"fill": ink, "align": "center"})
+  caption(target, (560, 280), "text")
+}
+
+let args = os.args()
+let saving = len(args) == 2 && args[0] == "--save"
+let w = window.open(700, 420, "lily2d gallery", {"headless": saving, "scale": 1})
+page(w)
+if (saving) {
+  img.save(window.screenshot(w), args[1])
+} else {
+  window.run(w, function(events) {
+    for (let i = 0; i < len(events); i += 1) {
+      if (events[i].type == "key" && events[i].key == "Escape") {
+        return false
+      }
+    }
+  })
+}

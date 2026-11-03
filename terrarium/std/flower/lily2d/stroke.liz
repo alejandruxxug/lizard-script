@@ -1,0 +1,248 @@
+-~> stroke: the outline of a line of some width, as polygons the scanline
+-~> filler joins with the nonzero rule. A line is a quad for each segment,
+-~> a piece at each corner (the join) and one at each end of an open line
+-~> (the cap):
+-~>   join  "round", "miter" (a sharp point, cut to a bevel past the miter
+-~>         limit, a multiple of the half width) or "bevel" (cut flat)
+-~>   cap   "round", "butt" (ends right at the point) or "square" (goes on
+-~>         by half the width)
+-~> A dash pattern [on, off, ...] cuts the line into pieces first, each with
+-~> its own caps; an odd pattern is repeated to make it even, like SVG.
+
+use "geometry"
+
+-~> Twice the signed area of a polygon. Its sign says which way it turns.
+function signed_area2(poly) {
+  let a = 0.0
+  let n = len(poly)
+  for (let i = 0; i < n; i += 1) {
+    let p = poly[i]
+    let q = poly[(i + 1) % n]
+    a = a + p.x * q.y - q.x * p.y
+  }
+  a
+}
+
+-~> Adds a polygon to out, turned the positive way, so the nonzero rule sees
+-~> the union of all the pieces however they overlap.
+function add_poly(out, poly) {
+  if (signed_area2(poly) < 0) {
+    poly = list.reverse(poly)
+  }
+  push(out, poly)
+}
+
+-~> The angle step that keeps a circle of radius h within the tolerance.
+function arc_step(h) {
+  math.min(0.8, math.sqrt(1.2 / math.max(h, 0.05)))
+}
+
+-~> A pie slice round v with radius h, from angle a0 turning by delta.
+function fan(v, h, a0, delta) {
+  let steps = math.max(1, math.ceil(math.abs(delta) / arc_step(h)))
+  let poly = [v]
+  for (let k = 0; k <= steps; k += 1) {
+    let a = a0 + delta * k / float(steps)
+    push(poly, (v.x + math.cos(a) * h, v.y + math.sin(a) * h))
+  }
+  poly
+}
+
+-~> The cap at point p of a line whose direction there is d, pointing out of
+-~> the line (away from it), with half width h.
+function add_cap(out, p, d, h, cap) {
+  let n = (-d.y, d.x)
+  if (cap == "round") {
+    -~> half a turn from one side of the line, round the end, to the other
+    add_poly(out, fan(p, h, math.atan2(-d.x, d.y), math.pi))
+  } elif (cap == "square") {
+    add_poly(out, [p - n * h, p + n * h, p + n * h + d * h, p - n * h + d * h])
+  }
+}
+
+-~> The join at corner p between directions d0 (in) and d1 (out).
+function add_join(out, p, h, d0, d1, join, miter) {
+  let cross = d0.x * d1.y - d0.y * d1.x
+  let dot = d0.x * d1.x + d0.y * d1.y
+  if (dot < -0.999) {
+    -~> the line turns right back: only a round join covers the end
+    if (join == "round") {
+      add_poly(out, fan(p, h, 0.0, math.tau))
+    }
+    return null
+  }
+  let delta = math.atan2(cross, dot)
+  if (math.abs(delta) * h <= 0.02) {
+    return null
+  }
+  -~> the outer normals of the two segments: the corner's outside
+  let s = 1.0
+  if (cross > 0) {
+    s = -1.0
+  }
+  let o0 = (-d0.y, d0.x) * s
+  let o1 = (-d1.y, d1.x) * s
+  if (join == "round") {
+    add_poly(out, fan(p, h, math.atan2(o0.y, o0.x), delta))
+    return null
+  }
+  let half_turn = math.cos(delta / 2)
+  if (join == "miter" && half_turn > 0 && 1 / half_turn <= miter) {
+    let mid = o0 + o1
+    let mlen = math.sqrt(float(mid.x * mid.x + mid.y * mid.y))
+    add_poly(out, [p, p + o0 * h, p + mid / mlen * (h / half_turn), p + o1 * h])
+  } else {
+    add_poly(out, [p, p + o0 * h, p + o1 * h])
+  }
+  null
+}
+
+-~> Adds to out the polygons of a line through points with half width
+-~> halves[i] at point i.
+function sweep(out, points, halves, closed, join = "round", cap = "round", miter = 4) {
+  let pts = [points[0]]
+  let hs = [halves[0]]
+  for (let i = 1; i < len(points); i += 1) {
+    if (points[i] != pts[len(pts) - 1]) {
+      push(pts, points[i])
+      push(hs, halves[i])
+    }
+  }
+  if (closed && len(pts) > 1 && pts[0] == pts[len(pts) - 1]) {
+    list.remove(pts, len(pts) - 1)
+    list.remove(hs, len(hs) - 1)
+  }
+  let m = len(pts)
+  if (m == 1) {
+    -~> a dot: what its caps would make
+    if (cap == "round") {
+      add_poly(out, fan(pts[0], hs[0], 0.0, math.tau))
+    } elif (cap == "square") {
+      let h = hs[0]
+      add_poly(out, [pts[0] + (-h, -h), pts[0] + (h, -h), pts[0] + (h, h), pts[0] + (-h, h)])
+    }
+    return null
+  }
+
+  let nseg = m - 1
+  if (closed) {
+    nseg = m
+  }
+  let dirs = []
+  for (let i = 0; i < nseg; i += 1) {
+    let a = pts[i]
+    let b = pts[(i + 1) % m]
+    let d = (b - a) / float(math.dist(a, b))
+    push(dirs, d)
+    let n = (-d.y, d.x)
+    let ha = hs[i]
+    let hb = hs[(i + 1) % m]
+    -~> this order always turns the positive way, so no area check
+    push(out, [a - n * ha, b - n * hb, b + n * hb, a + n * ha])
+  }
+
+  let first = 1
+  let last = m - 2
+  if (closed) {
+    first = 0
+    last = m - 1
+  }
+  for (let i = first; i <= last; i += 1) {
+    add_join(out, pts[i], hs[i], dirs[(i - 1 + nseg) % nseg], dirs[i % nseg], join, miter)
+  }
+  if (!closed) {
+    add_cap(out, pts[0], -dirs[0], hs[0], cap)
+    add_cap(out, pts[m - 1], dirs[nseg - 1], hs[m - 1], cap)
+  }
+  null
+}
+
+-~> The pieces of a polyline cut by a dash pattern, as lists of points. The
+-~> pattern starts offset pixels in.
+function dash_pieces(points, closed, pattern, offset) {
+  if (len(pattern) % 2 == 1) {
+    pattern = pattern + pattern
+  }
+  let total = 0.0
+  for (let i = 0; i < len(pattern); i += 1) {
+    total += pattern[i]
+  }
+  if (total <= 0) {
+    return [points]
+  }
+  let pts = points
+  if (closed) {
+    pts = points + [points[0]]
+  }
+  -~> where in the pattern the line starts
+  let k = 0
+  let left = float(pattern[0])
+  let skip = offset % total
+  if (skip < 0) {
+    skip += total
+  }
+  while (skip > 0) {
+    if (skip >= left) {
+      skip -= left
+      k = (k + 1) % len(pattern)
+      left = float(pattern[k])
+    } else {
+      left -= skip
+      skip = 0
+    }
+  }
+  let pieces = []
+  let current = null
+  if (k % 2 == 0) {
+    current = [pts[0]]
+  }
+  for (let i = 0; i + 1 < len(pts); i += 1) {
+    let a = pts[i]
+    let b = pts[i + 1]
+    let length = math.dist(a, b)
+    let pos = 0.0
+    while (length - pos > left) {
+      pos += left
+      let at = lerp(a, b, pos / length)
+      if (k % 2 == 0) {
+        push(current, at)
+        push(pieces, current)
+        current = null
+      } else {
+        current = [at]
+      }
+      k = (k + 1) % len(pattern)
+      left = float(pattern[k])
+    }
+    left -= length - pos
+    if (k % 2 == 0) {
+      push(current, b)
+    }
+  }
+  if (current !== null) {
+    push(pieces, current)
+  }
+  pieces
+}
+
+-~> The polygons of a stroke along the flattened sub-paths subs.
+function stroke_polys(subs, width, join, cap, miter, dash, dash_offset) {
+  let polys = []
+  let half = math.max(width / 2.0, 0.05)
+  for (let i = 0; i < len(subs); i += 1) {
+    let lines = [subs[i].points]
+    let closed = subs[i].closed
+    if (dash !== null) {
+      lines = dash_pieces(subs[i].points, closed, dash, dash_offset)
+      closed = false
+    }
+    for (let j = 0; j < len(lines); j += 1) {
+      let halves = []
+      for (let q = 0; q < len(lines[j]); q += 1) {
+        push(halves, half)
+      }
+      sweep(polys, lines[j], halves, closed, join, cap, miter)
+    }
+  }
+  polys
+}

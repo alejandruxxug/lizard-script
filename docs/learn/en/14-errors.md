@@ -20,22 +20,66 @@ let price = 10 @ 2
 [line 1, column 16] lexical error: unexpected character "@"
 ```
 
-**Syntax errors** are pieces in the wrong order. They are also found before anything runs, and the parser reports as many as it can at once (ending statements with `;` helps it find them all):
+**Syntax errors** are pieces in the wrong order. They are also found before anything runs, and the parser reports all of them at once: one error for each mistake, while the lines after a mistake are still checked:
 
 ```
-puts("this line never runs");
-let = 5;
-let total = (1 + 2;
+puts("this line never runs")
+let = 5
+let total = (1 + 2
 if (true) { break }
 ```
 
 **Output:**
 
 ```text
-[line 2, column 5] syntax error: expected identifier, got "="
-[line 3, column 19] syntax error: expected ")", got ";"
+[line 2, column 5] syntax error: let needs a name before the "=", like let x = 1
+[line 3, column 19] syntax error: the "(" at line 3, column 13 is never closed
 [line 4, column 13] syntax error: break outside of a loop
 ```
+
+A missing `)`, `]` or `}` is reported right where it is missing, and the message says where the bracket was opened. A line gets at most one error: a mistake often breaks the rest of its line, so a second mistake on the same line shows up once the first is fixed.
+
+### Messages that help
+
+Many syntax errors say what you probably meant:
+
+```
+fucntion double(x) {
+  x * 2
+}
+let n = 3
+if (n = 3) {
+  puts("three")
+} elseif (n > 3) {
+  puts("more")
+}
+let pet = {"name" = "Liz"}
+puts("unclosed"
+let age = 2
+```
+
+**Output:**
+
+```text
+[line 1, column 1] syntax error: "fucntion" is not a keyword; did you mean "function"?
+[line 5, column 7] syntax error: "=" in a condition gives n a value; did you mean "=="?
+[line 7, column 3] syntax error: "elseif" is not a keyword; did you mean "elif"?
+[line 10, column 19] syntax error: a hash puts ":" between a key and its value, not "="
+[line 11, column 16] syntax error: the "(" at line 11, column 5 is never closed
+```
+
+| Message starts with | Usually means |
+| --- | --- |
+| `"x" is not a keyword; did you mean ...` | a misspelled keyword, or one from another language (`elseif`, `var`, `def`) |
+| `"=" in a condition gives x a value` | `=` where `==` was meant: `if (x == 1)` |
+| `the "(" at line L, column C is never closed` | a missing `)` (or `]`, `}`) for the bracket at that place |
+| `block is never closed` | a missing `}`; the position is the `{` that lacks it |
+| `this "}" has nothing to close` | one `}` (or `)`, `]`) too many |
+| `let needs a name before the "="` | `let = 5` instead of `let x = 5` |
+| `"if" is a reserved word, it can't be a name` | a keyword used as a variable or parameter name |
+| `a hash puts ":" between a key and its value` | `{"a" = 1}` instead of `{"a": 1}` |
+| `a let gives its value with "=", not ":"` | `let x: 1` instead of `let x = 1` |
+| `unterminated string: this " is never closed` | a string without its closing `"`; the position is where it starts |
 
 **Runtime errors** happen while the program runs. Everything before them has already happened:
 
@@ -149,7 +193,6 @@ let n = try { int("12") } catch { 0 }
 
 ```text
 [line 1, column 13] syntax error: expected end of statement, got "{"
-[line 1, column 33] syntax error: expected end of statement, got "{"
 ```
 
 But a `try` has the value of the block that ran, so as the last statement of a function it becomes the function's result. That's the usual pattern:

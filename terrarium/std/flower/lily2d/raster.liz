@@ -1,0 +1,180 @@
+-~> raster: turns shapes into spans, the rows the Terrarium paints. A span
+-~> is [y, x0, x1]: row y from x0 up to (not including) x1. The ends are
+-~> floats, so the left and right edges of a shape are soft (the Terrarium
+-~> covers the end pixels in part); a row is sampled at its middle,
+-~> y + 0.5. A shape that did not change is never rasterized again: the
+-~> spans are kept by the shape's geometry (not its paint).
+
+use "geometry"
+use "stroke"
+
+-~> Rows outside this range are never made, so a huge shape stays cheap.
+let min_row = -64
+let max_row = 32768
+
+-~> The scanline filler. polys is a list of point lists, each closed by
+-~> itself; rule is "nonzero" or "evenodd". Edges go into buckets by their
+-~> first row, then one pass down the rows keeps the edges that cross the
+-~> row (the active ones), sorted by where they cross it.
+function scan(polys, rule) {
+  let lo = max_row
+  let hi = min_row - 1
+  let edges = []
+  for (let k = 0; k < len(polys); k += 1) {
+    let poly = polys[k]
+    let n = len(poly)
+    for (let j = 0; j < n; j += 1) {
+      let top = poly[j]
+      let bot = poly[(j + 1) % n]
+      let dir = 1
+      if (top.y > bot.y) {
+        let swap = top
+        top = bot
+        bot = swap
+        dir = -1
+      }
+      if (top.y != bot.y) {
+        -~> the rows whose middle lies in [top.y, bot.y)
+        let r0 = math.max(math.ceil(top.y - 0.5), min_row)
+        let r1 = math.min(math.ceil(bot.y - 0.5) - 1, max_row - 1)
+        if (r1 >= r0) {
+          push(edges, [r0, r1, top.x, (bot.x - top.x) / float(bot.y - top.y), top.y, dir])
+          lo = math.min(lo, r0)
+          hi = math.max(hi, r1)
+        }
+      }
+    }
+  }
+  if (hi < lo) {
+    return []
+  }
+
+  let buckets = []
+  for (let r = lo; r <= hi; r += 1) {
+    push(buckets, [])
+  }
+  for (let i = 0; i < len(edges); i += 1) {
+    push(buckets[edges[i][0] - lo], edges[i])
+  }
+
+  let spans = []
+  let active = []
+  let odd = rule == "evenodd"
+  for (let r = lo; r <= hi; r += 1) {
+    let added = buckets[r - lo]
+    for (let i = 0; i < len(added); i += 1) {
+      push(active, added[i])
+    }
+    let keep = []
+    let xs = []
+    let yc = r + 0.5
+    for (let i = 0; i < len(active); i += 1) {
+      let e = active[i]
+      if (e[1] >= r) {
+        push(keep, e)
+        let cur = [e[2] + (yc - e[4]) * e[3], e[5]]
+        let j = len(xs) - 1
+        push(xs, cur)
+        while (j >= 0 && xs[j][0] > cur[0]) {
+          xs[j + 1] = xs[j]
+          j -= 1
+        }
+        xs[j + 1] = cur
+      }
+    }
+    active = keep
+
+    let w = 0
+    let inside = false
+    let start = 0.0
+    for (let i = 0; i < len(xs); i += 1) {
+      w += xs[i][1]
+      let now = w != 0
+      if (odd) {
+        now = i % 2 == 0
+      }
+      if (now && !inside) {
+        start = xs[i][0]
+      } elif (!now && inside && xs[i][0] > start) {
+        push(spans, [r, start, xs[i][0]])
+      }
+      inside = now
+    }
+  }
+  spans
+}
+
+-~> The spans inside flattened sub-paths (see flatten_path).
+function fill_spans(subs, rule = "nonzero") {
+  let polys = []
+  for (let i = 0; i < len(subs); i += 1) {
+    if (len(subs[i].points) >= 3) {
+      push(polys, subs[i].points)
+    }
+  }
+  scan(polys, rule)
+}
+
+-~> The spans of a line along flattened sub-paths.
+function stroke_spans(subs, width, join = "round", cap = "round", miter = 4, dash = null, dash_offset = 0) {
+  scan(stroke_polys(subs, width, join, cap, miter, dash, dash_offset), "nonzero")
+}
+
+-~> The spans kept so far, by geometry key. Each entry remembers the round
+-~> of the cache it was last used in; when the cache is full, the entries
+-~> not used since the last sweep go, and if the ones left still fill half
+-~> of it, it grows instead (so a big scene is never rasterized again).
+let cache = {}
+let cache_size = 0
+let cache_limit = 400
+let cache_round = 0
+
+function sweep_cache() {
+  let kept = {}
+  let size = 0
+  let ks = keys(cache)
+  for (let i = 0; i < len(ks); i += 1) {
+    if (cache[ks[i]].round == cache_round) {
+      kept[ks[i]] = cache[ks[i]]
+      size += 1
+    }
+  }
+  cache = kept
+  cache_size = size
+  cache_round += 1
+  if (cache_size * 2 > cache_limit) {
+    cache_limit = cache_size * 2
+  }
+}
+
+-~> What decides the spans of a shape besides its path: whether it is
+-~> filled (and by which rule) and how it is stroked.
+function outline_key(shape) {
+  str(shape.fill !== null) + str(shape.rule) + "|" + str(shape.stroke !== null) + str(shape.width) +
+    str(shape.join) + str(shape.cap) + str(shape.miter) + str(shape.dash) + str(shape.dash_offset)
+}
+
+-~> The spans of a shape: {"fill": spans or null, "stroke": spans or null,
+-~> "box": the box of its path, {"min", "max"}, or null when it is empty}. The path is flattened once
+-~> for all three.
+function shape_spans(shape) {
+  let key = str(shape.path) + "|" + outline_key(shape)
+  let hit = cache[key]
+  if (hit === null) {
+    let subs = flatten_path(shape.path)
+    hit = {"fill": null, "stroke": null, "box": subs_box(subs), "round": cache_round}
+    if (shape.fill !== null) {
+      hit.fill = fill_spans(subs, shape.rule)
+    }
+    if (shape.stroke !== null && shape.width > 0) {
+      hit.stroke = stroke_spans(subs, shape.width, shape.join, shape.cap, shape.miter, shape.dash, shape.dash_offset)
+    }
+    if (cache_size >= cache_limit) {
+      sweep_cache()
+    }
+    cache[key] = hit
+    cache_size += 1
+  }
+  hit.round = cache_round
+  hit
+}

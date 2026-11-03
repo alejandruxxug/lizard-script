@@ -79,3 +79,21 @@ Nothing. `use` followed by a string on the same line was a syntax error (`expect
 
 - A `use` inside a `try` is impossible (a use is top level only), so a program can't recover from a missing module; a host can check with `evaluator.FindModule` first.
 - The `as` hash doesn't follow the module's variables after loading; a live namespace value could be added later without breaking this.
+
+## Amendment 1 (2026-11-03): standard modules
+
+Big libraries that come with the language (the **flower** graphics family: `flower/lily2d`, and `flower/lily3d`) are **standard modules**: lizard-script files built into `lizardscript`, found by `use` after the places above. Rule 1 becomes: next to the file, then the module path, then the standard modules.
+
+```
+use "flower/lily2d" as lily2d
+lily2d.circle(picture, (50, 50), 20, #f2a65a)
+```
+
+- **Where they are.** `evaluator.StandardModules`, a file system the host sets (the Terrarium embeds `terrarium/std/`). `use "flower/lily2d"` reads `flower/lily2d.liz` from it; a folder in the path is a folder there, like on disk.
+- **Their names.** A standard module's source name is `std:/` and its path, `std:/flower/lily2d.liz`. So its errors say where they come from, and a `use` inside it finds the files next to it by rule 1 (`use "lily2d/raster"` in `std:/flower/lily2d.liz` is `std:/flower/lily2d/raster.liz`); `..` can climb inside the standard modules but not out of them. Two ways of writing the same path load it once.
+- **The program's files win.** A file `flower/lily2d.liz` next to the program, or in the module path, is used instead, so adding a standard module never changes a program that already had a file of that name. The not-found message still lists only the files on disk.
+- **The name in the program is the program's choice.** `use` binds nothing new for a standard module: it is an ordinary module, so `use "flower/lily2d" as lily2d` is how a program names it (any name works after `as`), and a plain `use "flower/lily2d"` makes its functions names of the file, as for any module. We considered binding the last part of the path (`lily2d`) by default, but then a plain `use` of a standard module would mean something a plain `use` of a file doesn't, and one rule is easier to teach than two.
+- **Tools.** `lizardscript build` leaves standard modules out of the bundle (every `lizardscript` has them); `evaluator.IsStandardModule(path)` tells their source names.
+
+What breaks: nothing. A `use` that found a file before finds the same file; one that failed with `can't find the module` may now find a standard module of that path, which no program could rely on failing.
+

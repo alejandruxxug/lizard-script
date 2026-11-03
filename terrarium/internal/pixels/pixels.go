@@ -29,6 +29,8 @@ type Image struct {
 	clip    image.Rectangle // drawing is cut to it while clipped
 	clipped bool
 	layers  []*Image // open layers, the newest last
+
+	depth []float32 // the depth of each pixel, for Triangle; made by its first use
 }
 
 // New makes an image filled with c. It fails when the size is negative or

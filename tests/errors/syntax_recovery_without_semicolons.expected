@@ -1,0 +1,4 @@
+[line 2, column 19] syntax error: the "(" at line 2, column 13 is never closed
+[line 4, column 5] syntax error: let needs a name before the "=", like let x = 1
+[line 7, column 3] syntax error: "retrun" is not a keyword; did you mean "return"?
+[line 9, column 16] syntax error: the "(" at line 9, column 5 is never closed

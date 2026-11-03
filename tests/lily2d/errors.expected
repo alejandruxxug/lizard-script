@@ -1,0 +1,26 @@
+lily2d.circle: center must be a point like (10, 20), not STRING
+lily2d.circle: the style has no key fil; it can have fill, stroke, width, join, cap, miter, dash, dash_offset, rule, opacity, blend
+lily2d.circle: the style needs a fill or a stroke
+lily2d.circle: style must be a color, a gradient or a hash like {"fill": #f2a65a, "stroke": #1a1418}, not INTEGER
+lily2d.circle: target must be an image, a window, a surface, a scene or null, not STRING
+lily2d.line: join must be one of round, miter, bevel, not sharp
+lily2d.line: dash lengths can't be below 0, got -1
+lily2d.line: opacity must be from 0 to 1, not 2
+lily2d.path: the commands must start with ["M", point]
+lily2d.path: command 1: C takes 3 points, got 1
+lily2d.path: holes need closed = true
+lily2d.linear: stops must be a list of at least two colors, like [#f4d35e, #3d1c4f]
+lily2d.linear: steps must be 0 (smooth) or a whole number from 2 to 64, not 1
+lily2d.linear: stops must go in order, but stop 1 is before the one above it
+lily2d.radial_at: r must be more than 0, not 0
+lily2d.linear_at: from and to must be different points
+lily2d.text: size must be a whole number from 1 to 8 (each font pixel is size by size), not 9
+lily2d.star: count must be a whole number from 2 up, not 1
+lily2d.brush: pressures must be a list with one number for each point
+lily2d.brush: pen must be a pen like lily2d.pens.ink
+lily2d.group: shapes item 0 must be a shape, like the value of lily2d.circle, not INTEGER
+lily2d.group: a group's style has only opacity and blend, not fill
+lily2d.transform: a matrix must be a list of six numbers like lily2d.identity(), not ARRAY
+lily2d.invert: this matrix squashes everything flat, so it can't be undone
+lily2d.scene: the only option is background, not bg
+lily2d.scene.draw: target must be an image, a window or a surface, not INTEGER

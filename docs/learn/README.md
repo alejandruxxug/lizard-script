@@ -24,6 +24,8 @@ Una guía para aprender y enseñar lizard-script, un pequeño lenguaje interpret
 | 16 | [Projects](en/16-projects.md) | [Proyectos](es/16-projects.md) |
 | 17 | [The Terrarium: files, JSON, images, windows](en/17-terrarium.md) | [El Terrario: archivos, JSON, imágenes, ventanas](es/17-terrarium.md) |
 | 18 | [Modules and tools: `use`, tests, builds, `lizard`](en/18-modules-and-tools.md) | [Módulos y herramientas: `use`, pruebas, ejecutables, `lizard`](es/18-modules-and-tools.md) |
+| 19 | [lily2d: 2D graphics](en/19-lily2d.md) | [lily2d: gráficos 2D](es/19-lily2d.md) |
+| 20 | [lily3d: 3D graphics](en/20-lily3d.md) | [lily3d: gráficos 3D](es/20-lily3d.md) |
 | | [Cheat sheet](en/cheatsheet.md) | [Hoja de referencia](es/cheatsheet.md) |
 | | [Exercises](en/exercises.md) | [Ejercicios](es/exercises.md) |
 

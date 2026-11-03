@@ -1,0 +1,163 @@
+-~> obj: meshes from Wavefront .obj files, the plain text format most 3D
+-~> programs save. The lines it reads:
+-~>
+-~>   v x y z           a position
+-~>   vn x y z          a normal
+-~>   f a b c ...       a face by the positions' numbers, from 1 (a
+-~>                     negative one counts back from the last); each can
+-~>                     be a/t/n or a//n to give its normal too
+-~>
+-~> A face of more than three corners is cut into triangles from its first
+-~> corner. Every other line (texture coordinates, groups, materials,
+-~> comments) is skipped. When the faces don't give normals, each corner
+-~> gets the average of the faces round it.
+
+use "check"
+use "vec"
+use "mesh"
+
+-~> The mesh of the .obj file at path.
+-~> example: load_obj(fs.join(os.program_dir(), "teapot.obj"))
+function load_obj(path) {
+  if (type(path) != "STRING") {
+    fail("load_obj", "path must be a string, not " + type(path))
+  }
+  parse_obj(fs.read(path), "load_obj")
+}
+
+-~> The mesh of the text of an .obj file.
+function parse_obj(source, call = "parse_obj") {
+  if (type(source) != "STRING") {
+    fail(call, "want the text of an .obj file, not " + type(source))
+  }
+  let points = []
+  let given_normals = []
+  -~> Each face as its corners, each corner [position, normal or -1].
+  let polygons = []
+  let lines = text.lines(source)
+  for (let i = 0; i < len(lines); i += 1) {
+    let words = _words(lines[i])
+    if (len(words) == 0) {
+      continue
+    }
+    let kind = words[0]
+    if (kind == "v") {
+      push(points, _vector(call, i, words))
+    } elif (kind == "vn") {
+      push(given_normals, _vector(call, i, words))
+    } elif (kind == "f") {
+      if (len(words) < 4) {
+        fail(call, "line " + str(i + 1) + ": a face needs three corners or more")
+      }
+      let corners = []
+      for (let k = 1; k < len(words); k += 1) {
+        push(corners, _corner(call, i, words[k], len(points), len(given_normals)))
+      }
+      push(polygons, corners)
+    }
+  }
+  _build(points, given_normals, polygons)
+}
+
+-~> The words of a line, without its comment.
+function _words(line) {
+  let cut = text.find(line, "#")
+  if (cut >= 0) {
+    line = text.slice(line, 0, cut)
+  }
+  let out = []
+  let parts = text.split(text.replace(text.trim(line), "\t", " "), " ")
+  for (let i = 0; i < len(parts); i += 1) {
+    if (parts[i] != "") {
+      push(out, parts[i])
+    }
+  }
+  out
+}
+
+-~> The vector of a v or vn line.
+function _vector(call, i, words) {
+  if (len(words) < 4) {
+    fail(call, "line " + str(i + 1) + ": " + words[0] + " needs three numbers")
+  }
+  let v = []
+  for (let k = 1; k < 4; k += 1) {
+    let n = text.number(words[k])
+    if (n == null) {
+      fail(call, "line " + str(i + 1) + ": " + quote(words[k]) + " is not a number")
+    }
+    push(v, float(n))
+  }
+  (v[0], v[1], v[2])
+}
+
+-~> One corner of a face, "a", "a/t", "a/t/n" or "a//n", as [position,
+-~> normal], both from 0, the normal -1 when it isn't given.
+function _corner(call, i, word, points, normals) {
+  let parts = text.split(word, "/")
+  let p = _index(call, i, parts[0], points, "position")
+  let n = -1
+  if (len(parts) >= 3 && parts[2] != "") {
+    n = _index(call, i, parts[2], normals, "normal")
+  }
+  [p, n]
+}
+
+-~> A position's or a normal's number, from 1 or from the end, as an
+-~> index from 0 into a list of count.
+function _index(call, i, word, count, what) {
+  let n = text.number(word)
+  if (n == null || type(n) != "INTEGER" || n == 0) {
+    fail(call, "line " + str(i + 1) + ": " + quote(word) + " is not a " + what + " number")
+  }
+  if (n < 0) {
+    n = count + n + 1
+  }
+  if (n < 1 || n > count) {
+    fail(call, "line " + str(i + 1) + ": there is no " + what + " " + word + ", only " + str(count) + " so far")
+  }
+  n - 1
+}
+
+-~> The mesh of the faces. With normals given for every corner, a corner is
+-~> one per pair of position and normal; without, one per position.
+function _build(points, given_normals, polygons) {
+  let every_normal = len(polygons) > 0
+  for (let i = 0; i < len(polygons) && every_normal; i += 1) {
+    for (let k = 0; k < len(polygons[i]); k += 1) {
+      if (polygons[i][k][1] < 0) {
+        every_normal = false
+      }
+    }
+  }
+  let faces = []
+  if (!every_normal) {
+    for (let i = 0; i < len(polygons); i += 1) {
+      let c = polygons[i]
+      for (let k = 1; k < len(c) - 1; k += 1) {
+        push(faces, [c[0][0], c[k][0], c[k + 1][0]])
+      }
+    }
+    return mesh(points, faces)
+  }
+  let positions = []
+  let normals = []
+  let seen = {}
+  for (let i = 0; i < len(polygons); i += 1) {
+    let ids = []
+    let c = polygons[i]
+    for (let k = 0; k < len(c); k += 1) {
+      let key = str(c[k][0]) + "/" + str(c[k][1])
+      if (seen[key] == null) {
+        seen[key] = len(positions)
+        push(positions, points[c[k][0]])
+        push(normals, normalize(given_normals[c[k][1]]))
+      }
+      push(ids, seen[key])
+    }
+    for (let k = 1; k < len(ids) - 1; k += 1) {
+      push(faces, [ids[0], ids[k], ids[k + 1]])
+    }
+  }
+  mesh(positions, faces, normals)
+}

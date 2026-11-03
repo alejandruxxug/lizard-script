@@ -1,0 +1,251 @@
+-~> matrix: 4x4 matrices, the transforms of 3D. A matrix is a list of 16
+-~> numbers, row by row, that takes the point p to m * p (p as a column,
+-~> with a fourth coordinate 1). So translate((1, 0, 0)) is
+-~>
+-~>   [1, 0, 0, 1,
+-~>    0, 1, 0, 0,
+-~>    0, 0, 1, 0,
+-~>    0, 0, 0, 1]
+-~>
+-~> Angles are in radians (write 30deg); a positive one turns
+-~> counterclockwise when the axis points at the viewer.
+
+use "check"
+use "vec"
+
+function identity() {
+  [1.0, 0.0, 0.0, 0.0,
+   0.0, 1.0, 0.0, 0.0,
+   0.0, 0.0, 1.0, 0.0,
+   0.0, 0.0, 0.0, 1.0]
+}
+
+-~> Moves by offset, a 3D point.
+function translate(offset) {
+  need_vector("translate", "offset", offset)
+  [1.0, 0.0, 0.0, float(offset.x),
+   0.0, 1.0, 0.0, float(offset.y),
+   0.0, 0.0, 1.0, float(offset.z),
+   0.0, 0.0, 0.0, 1.0]
+}
+
+-~> Sizes by s: a number for every axis, or a point (sx, sy, sz).
+function scale(s) {
+  let v = s
+  if (is_number(s)) {
+    v = (s, s, s)
+  }
+  need_vector("scale", "s", v)
+  [float(v.x), 0.0, 0.0, 0.0,
+   0.0, float(v.y), 0.0, 0.0,
+   0.0, 0.0, float(v.z), 0.0,
+   0.0, 0.0, 0.0, 1.0]
+}
+
+-~> Turns round the x axis: y towards z.
+function rotate_x(angle) {
+  need_number("rotate_x", "angle", angle)
+  let c = math.cos(angle)
+  let s = math.sin(angle)
+  [1.0, 0.0, 0.0, 0.0,
+   0.0, c, -s, 0.0,
+   0.0, s, c, 0.0,
+   0.0, 0.0, 0.0, 1.0]
+}
+
+-~> Turns round the y axis: z towards x.
+function rotate_y(angle) {
+  need_number("rotate_y", "angle", angle)
+  let c = math.cos(angle)
+  let s = math.sin(angle)
+  [c, 0.0, s, 0.0,
+   0.0, 1.0, 0.0, 0.0,
+   -s, 0.0, c, 0.0,
+   0.0, 0.0, 0.0, 1.0]
+}
+
+-~> Turns round the z axis: x towards y.
+function rotate_z(angle) {
+  need_number("rotate_z", "angle", angle)
+  let c = math.cos(angle)
+  let s = math.sin(angle)
+  [c, -s, 0.0, 0.0,
+   s, c, 0.0, 0.0,
+   0.0, 0.0, 1.0, 0.0,
+   0.0, 0.0, 0.0, 1.0]
+}
+
+-~> Turns round any axis (a 3D point, of any length) through the origin.
+function rotate(axis, angle) {
+  need_vector("rotate", "axis", axis)
+  need_number("rotate", "angle", angle)
+  let a = normalize(axis)
+  let c = math.cos(angle)
+  let s = math.sin(angle)
+  let t = 1 - c
+  [t * a.x * a.x + c, t * a.x * a.y - s * a.z, t * a.x * a.z + s * a.y, 0.0,
+   t * a.x * a.y + s * a.z, t * a.y * a.y + c, t * a.y * a.z - s * a.x, 0.0,
+   t * a.x * a.z - s * a.y, t * a.y * a.z + s * a.x, t * a.z * a.z + c, 0.0,
+   0.0, 0.0, 0.0, 1.0]
+}
+
+-~> The product a * b: the matrix that does b first and then a.
+function multiply(a, b) {
+  let out = []
+  for (let row = 0; row < 16; row += 4) {
+    for (let col = 0; col < 4; col += 1) {
+      push(out, a[row] * b[col] + a[row + 1] * b[col + 4] + a[row + 2] * b[col + 8] + a[row + 3] * b[col + 12])
+    }
+  }
+  out
+}
+
+-~> The matrix that does first and then second; or, with one argument, a
+-~> list of matrices done in order:
+-~>   compose([scale(2), rotate_y(30deg), translate((0, 1, 0))])
+-~> sizes, then turns, then moves.
+function compose(first, second = null) {
+  if (second != null) {
+    need_matrix("compose", "first", first)
+    need_matrix("compose", "second", second)
+    return multiply(second, first)
+  }
+  if (type(first) != "ARRAY") {
+    fail("compose", "want two matrices or a list of them, not " + type(first))
+  }
+  let out = identity()
+  for (let i = 0; i < len(first); i += 1) {
+    need_matrix("compose", "matrix " + str(i), first[i])
+    out = multiply(first[i], out)
+  }
+  out
+}
+
+-~> The point p moved by m.
+function apply(m, p) {
+  let x = p.x
+  let y = p.y
+  let z = p.z
+  (m[0] * x + m[1] * y + m[2] * z + m[3],
+   m[4] * x + m[5] * y + m[6] * z + m[7],
+   m[8] * x + m[9] * y + m[10] * z + m[11])
+}
+
+-~> The direction v turned by m, without its move.
+function apply_direction(m, v) {
+  let x = v.x
+  let y = v.y
+  let z = v.z
+  (m[0] * x + m[1] * y + m[2] * z, m[4] * x + m[5] * y + m[6] * z, m[8] * x + m[9] * y + m[10] * z)
+}
+
+-~> The point p through a projection: [x, y, z, w], its clip coordinates.
+-~> Divided by w they are the point on the screen, -1 to 1 each way.
+function project(m, p) {
+  let x = p.x
+  let y = p.y
+  let z = p.z
+  [m[0] * x + m[1] * y + m[2] * z + m[3],
+   m[4] * x + m[5] * y + m[6] * z + m[7],
+   m[8] * x + m[9] * y + m[10] * z + m[11],
+   m[12] * x + m[13] * y + m[14] * z + m[15]]
+}
+
+-~> Rows and columns swapped.
+function transpose(m) {
+  [m[0], m[4], m[8], m[12],
+   m[1], m[5], m[9], m[13],
+   m[2], m[6], m[10], m[14],
+   m[3], m[7], m[11], m[15]]
+}
+
+-~> The matrix that undoes m, or null when nothing can (it flattens space).
+function inverse(m) {
+  -~> The cofactors, by the 2x2 determinants of the top and bottom rows.
+  let s0 = m[0] * m[5] - m[4] * m[1]
+  let s1 = m[0] * m[6] - m[4] * m[2]
+  let s2 = m[0] * m[7] - m[4] * m[3]
+  let s3 = m[1] * m[6] - m[5] * m[2]
+  let s4 = m[1] * m[7] - m[5] * m[3]
+  let s5 = m[2] * m[7] - m[6] * m[3]
+  let c5 = m[10] * m[15] - m[14] * m[11]
+  let c4 = m[9] * m[15] - m[13] * m[11]
+  let c3 = m[9] * m[14] - m[13] * m[10]
+  let c2 = m[8] * m[15] - m[12] * m[11]
+  let c1 = m[8] * m[14] - m[12] * m[10]
+  let c0 = m[8] * m[13] - m[12] * m[9]
+  let det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0
+  if (math.abs(det) < 1e-12) {
+    return null
+  }
+  let k = 1.0 / det
+  [(m[5] * c5 - m[6] * c4 + m[7] * c3) * k,
+   (-m[1] * c5 + m[2] * c4 - m[3] * c3) * k,
+   (m[13] * s5 - m[14] * s4 + m[15] * s3) * k,
+   (-m[9] * s5 + m[10] * s4 - m[11] * s3) * k,
+   (-m[4] * c5 + m[6] * c2 - m[7] * c1) * k,
+   (m[0] * c5 - m[2] * c2 + m[3] * c1) * k,
+   (-m[12] * s5 + m[14] * s2 - m[15] * s1) * k,
+   (m[8] * s5 - m[10] * s2 + m[11] * s1) * k,
+   (m[4] * c4 - m[5] * c2 + m[7] * c0) * k,
+   (-m[0] * c4 + m[1] * c2 - m[3] * c0) * k,
+   (m[12] * s4 - m[13] * s2 + m[15] * s0) * k,
+   (-m[8] * s4 + m[9] * s2 - m[11] * s0) * k,
+   (-m[4] * c3 + m[5] * c1 - m[6] * c0) * k,
+   (m[0] * c3 - m[1] * c1 + m[2] * c0) * k,
+   (-m[12] * s3 + m[13] * s1 - m[14] * s0) * k,
+   (m[8] * s3 - m[9] * s1 + m[10] * s0) * k]
+}
+
+-~> The matrix that turns the normals of a shape moved by m: the transpose
+-~> of its inverse, so a shape stretched one way keeps its normals at right
+-~> angles to its faces. Use it with apply_direction, then normalize.
+function normal_matrix(m) {
+  let inv = inverse(m)
+  if (inv == null) {
+    return identity()
+  }
+  transpose(inv)
+}
+
+-~> The view of a camera at eye looking at target, with up the way that is
+-~> up on the screen: it takes the world to the camera's space, where the
+-~> camera is at the origin looking down -z.
+function look_at(eye, target, up = (0, 1, 0)) {
+  let f = normalize(target - eye)
+  let s = normalize(cross(f, up))
+  if (length(s) == 0) {
+    -~> Looking straight along up: any side will do.
+    s = normalize(cross(f, (0.0, 0.0, -1.0)))
+    if (length(s) == 0) {
+      s = (1.0, 0.0, 0.0)
+    }
+  }
+  let u = cross(s, f)
+  [s.x, s.y, s.z, -dot(s, eye),
+   u.x, u.y, u.z, -dot(u, eye),
+   -f.x, -f.y, -f.z, dot(f, eye),
+   0.0, 0.0, 0.0, 1.0]
+}
+
+-~> A perspective projection: fov is the angle from the bottom to the top of
+-~> the view, aspect its width / height, and near and far the distances
+-~> (above 0) between which things are seen. Things far away look smaller.
+function perspective(fov, aspect, near, far) {
+  let t = 1.0 / math.tan(fov / 2.0)
+  let d = float(near - far)
+  [t / float(aspect), 0.0, 0.0, 0.0,
+   0.0, t, 0.0, 0.0,
+   0.0, 0.0, (far + near) / d, 2.0 * far * near / d,
+   0.0, 0.0, -1.0, 0.0]
+}
+
+-~> An orthographic projection: a box width by height across, from near to
+-~> far. Things look the same size however far they are.
+function orthographic(width, height, near, far) {
+  let d = float(far - near)
+  [2.0 / width, 0.0, 0.0, 0.0,
+   0.0, 2.0 / height, 0.0, 0.0,
+   0.0, 0.0, -2.0 / d, -(far + near) / d,
+   0.0, 0.0, 0.0, 1.0]
+}

@@ -12,6 +12,8 @@
 // and, in paint.go, clip and unclip, the gradient spans, the blend layers
 // and composite.
 //
+// triangles.go has triangles, the depth-tested triangle fill of 3D drawing.
+//
 // Painting mixes the color over what is there (alpha counts); clear
 // replaces. Ends of spans and sides of rectangles can be fractional: the
 // pixel they cut is covered in part, so edges are soft. Nothing reaches
@@ -44,6 +46,8 @@ func Add(functions map[string]object.BuiltinFunction) map[string]object.BuiltinF
 		"push_layer":     pushLayer,
 		"pop_layer":      popLayer,
 		"composite":      composite,
+
+		"triangles": triangles,
 	} {
 		functions[name] = fn
 	}

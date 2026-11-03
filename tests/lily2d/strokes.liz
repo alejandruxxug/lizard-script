@@ -1,0 +1,28 @@
+-~> Joins, caps, dashes, arcs, stars, round corners and curve commands.
+use "flower/lily2d" as lily2d
+use "golden"
+
+let w = img.new(420, 300, #ffffff)
+let zig = [(0, 40), (30, 0), (60, 40), (90, 0)]
+let joins = ["round", "miter", "bevel"]
+let caps = ["round", "butt", "square"]
+for (let i = 0; i < 3; i += 1) {
+  let moved = []
+  for (let k = 0; k < len(zig); k += 1) {
+    push(moved, zig[k] + (20 + i * 130, 20))
+  }
+  lily2d.polyline(w, moved, {"stroke": #2d6a8f, "width": 10, "join": joins[i], "cap": caps[i]})
+  lily2d.polyline(w, moved, {"stroke": #f2a65a, "width": 1})
+}
+lily2d.line(w, (20, 100), (400, 100), {"stroke": #1a1418, "width": 4, "dash": [16, 6, 2, 6], "cap": "butt"})
+lily2d.line(w, (20, 120), (400, 120), {"stroke": #c0392b, "width": 6, "dash": [0, 12]})
+lily2d.circle(w, (60, 190), 40, {"stroke": #3fa34d, "width": 5, "dash": [10, 5], "dash_offset": 4})
+lily2d.arc(w, (170, 190), 40, -90deg, 180deg, {"stroke": #3b2a5c, "width": 8, "cap": "round"})
+lily2d.arc(w, (170, 190), 25, 0deg, 120deg, {"fill": #e0a526, "stroke": #3b2a5c, "width": 2, "join": "miter"})
+lily2d.star(w, (280, 190), 6, 45, 18, {"fill": #f6c453, "stroke": #8a5a00, "width": 3, "join": "miter", "miter": 10})
+lily2d.rect(w, (330, 150), (70, 80), {"fill": #8fb996, "stroke": #1a1418, "width": 2}, 18)
+lily2d.path(w, [["M", (20, 280)], ["C", (60, 230), (100, 300), (140, 250)], ["Q", (180, 220), (220, 280)], ["L", (240, 250)]],
+            {"stroke": #1a1418, "width": 3, "join": "bevel"})
+lily2d.path(w, [["M", (260, 240)], ["L", (400, 240)], ["L", (330, 295)], ["Z"], ["M", (300, 255)], ["L", (360, 255)], ["L", (330, 280)], ["Z"]],
+            {"fill": #2d6a8f, "rule": "evenodd"})
+check("strokes", w)

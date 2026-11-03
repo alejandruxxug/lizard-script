@@ -1,0 +1,11 @@
+quad [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0)] [[0, 1, 2], [0, 2, 3]] (0.0, 0.0, 1.0)
+normals 6 [[0, 1, 2], [3, 4, 5]] [(0.0, 0.0, 1.0), (0.0, 0.0, 1.0), (0.0, 0.0, 1.0), (0.0, 0.0, -1.0), (0.0, 0.0, -1.0), (0.0, 0.0, -1.0)]
+from the end [[0, 1, 2]] (0.0, 1.0, 0.0)
+teapot 3644 corners 6320 faces
+lily3d.parse_obj: line 1: v needs three numbers
+lily3d.parse_obj: line 1: "x" is not a number
+lily3d.parse_obj: line 2: a face needs three corners or more
+lily3d.parse_obj: line 2: there is no position 2, only 1 so far
+lily3d.parse_obj: line 4: "0" is not a position number
+lily3d.parse_obj: line 4: there is no normal 1, only 0 so far
+fs.read: can't read

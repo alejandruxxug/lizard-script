@@ -1,0 +1,73 @@
+-~> The shapes: how many corners and faces, and that every face looks out.
+use "flower/lily3d" as lily3d
+
+-~> For a shape round the origin with no dents: the share of faces whose
+-~> normal points away from the middle, and of corner normals 1 long.
+function outward(m) {
+  let p = m.positions
+  let out = 0
+  for (let i = 0; i < len(m.faces); i += 1) {
+    let f = m.faces[i]
+    let middle = (p[f[0]] + p[f[1]] + p[f[2]]) / 3.0
+    if (lily3d.dot(lily3d.face_normal(p[f[0]], p[f[1]], p[f[2]]), middle) > 0) {
+      out += 1
+    }
+  }
+  let unit = 0
+  for (let i = 0; i < len(m.normals); i += 1) {
+    if (math.abs(lily3d.length(m.normals[i]) - 1) < 1e-9) {
+      unit += 1
+    }
+  }
+  str(out) + "/" + str(len(m.faces)) + " faces out, " + str(unit) + "/" + str(len(m.normals)) + " normals 1 long"
+}
+
+-~> A box's corners, rounded.
+function box(m) {
+  let b = lily3d.bounds(m)
+  let r = function(v) { (math.round(v.x * 1000) / 1000.0, math.round(v.y * 1000) / 1000.0, math.round(v.z * 1000) / 1000.0) }
+  str(r(b.min)) + " to " + str(r(b.max))
+}
+
+let shapes = {"cube": lily3d.cube(1), "sphere": lily3d.sphere(), "cylinder": lily3d.cylinder(),
+  "cone": lily3d.cone(), "torus": lily3d.torus(), "small sphere": lily3d.sphere(2, 4)}
+let names = keys(shapes)
+for (let i = 0; i < len(names); i += 1) {
+  let m = shapes[names[i]]
+  puts(names[i], len(m.positions), "corners", len(m.faces), "faces;", box(m))
+  if (names[i] != "torus") {
+    puts("  ", outward(m))
+  }
+}
+-~> The torus has a hole, so its faces look away from its tube instead.
+let t = lily3d.torus(0.35, 0.15, 8, 6)
+let away = 0
+for (let i = 0; i < len(t.faces); i += 1) {
+  let f = t.faces[i]
+  let p = t.positions
+  let middle = (p[f[0]] + p[f[1]] + p[f[2]]) / 3.0
+  let ring = lily3d.normalize((middle.x, 0, middle.z)) * 0.35
+  if (lily3d.dot(lily3d.face_normal(p[f[0]], p[f[1]], p[f[2]]), middle - ring) > 0) {
+    away += 1
+  }
+}
+puts("torus faces away from the tube:", away, "of", len(t.faces))
+
+let floor = lily3d.plane(2, 3)
+puts("plane", len(floor.positions), "corners", len(floor.faces), "faces;", box(floor), "normal", floor.normals[0])
+puts("plane faces up", lily3d.face_normal(floor.positions[floor.faces[0][0]], floor.positions[floor.faces[0][1]], floor.positions[floor.faces[0][2]]))
+
+-~> A surface of one's own: a square facing up.
+let square = lily3d.surface(1, 1, function(u, v) { [(v, 0, u), (0, 1, 0)] })
+puts("surface", square.positions, square.faces)
+
+-~> mesh works out smooth normals; facets gives every face its own corners.
+let tent = lily3d.mesh([(0, 0, 0), (1, 1, 0), (2, 0, 0), (1, 1, -1)], [[0, 2, 1], [2, 3, 1]])
+puts("smooth normals", tent.normals[1])
+let cut = lily3d.facets(tent)
+puts("facets", len(cut.positions), cut.faces, cut.normals[0], cut.normals[3])
+puts("merge", len(lily3d.merge([tent, tent]).faces), lily3d.merge([tent, tent]).faces[3])
+let moved = lily3d.transformed(tent, lily3d.compose(lily3d.scale((2, 1, 1)), lily3d.translate((0, 5, 0))))
+puts("transformed", moved.positions[1], moved.normals[0])
+let fitted = lily3d.fit(lily3d.mesh([(0, 0, 0), (4, 2, 0), (0, 2, 2)], [[0, 1, 2]]), 2)
+puts("fit", lily3d.apply(fitted, (4, 2, 0)), lily3d.apply(fitted, (0, 0, 0)))

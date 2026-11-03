@@ -1,0 +1,40 @@
+-~> What a wrong argument says.
+use "flower/lily2d" as lily2d
+
+let w = img.new(10, 10)
+let calls = [
+  function() { lily2d.circle(w, "x", 4, #fff) },
+  function() { lily2d.circle(w, (1, 1), 4, {"fil": #fff}) },
+  function() { lily2d.circle(w, (1, 1), 4, {"width": 2}) },
+  function() { lily2d.circle(w, (1, 1), 4, 5) },
+  function() { lily2d.circle("w", (1, 1), 4, #fff) },
+  function() { lily2d.line(w, (0, 0), (1, 1), {"stroke": #000, "join": "sharp"}) },
+  function() { lily2d.line(w, (0, 0), (1, 1), {"stroke": #000, "dash": [4, -1]}) },
+  function() { lily2d.line(w, (0, 0), (1, 1), {"stroke": #000, "opacity": 2}) },
+  function() { lily2d.path(w, [["L", (0, 0)]], #000) },
+  function() { lily2d.path(w, [["M", (0, 0)], ["C", (1, 1)]], #000) },
+  function() { lily2d.path(w, [(0, 0), (5, 5)], {"fill": #000, "closed": false, "holes": [[(1, 1)]]}) },
+  function() { lily2d.linear([#000]) },
+  function() { lily2d.linear([#000, #fff], 0deg, 1) },
+  function() { lily2d.linear([[0.5, #000], [0.2, #fff]]) },
+  function() { lily2d.radial_at((0, 0), 0, [#000, #fff]) },
+  function() { lily2d.linear_at((1, 1), (1, 1), [#000, #fff]) },
+  function() { lily2d.text(w, (0, 0), "x", {"fill": #000, "size": 9}) },
+  function() { lily2d.star(w, (0, 0), 1, 5, 2, #000) },
+  function() { lily2d.brush(w, [(0, 0)], [], #000) },
+  function() { lily2d.brush(w, [(0, 0)], [1], #000, "ink") },
+  function() { lily2d.group(w, [1]) },
+  function() { lily2d.group(w, [], {"fill": #000}) },
+  function() { lily2d.transform(lily2d.circle(null, (0, 0), 1, #000), [1, 2]) },
+  function() { lily2d.invert(lily2d.scale(0)) },
+  function() { lily2d.scene({"bg": #000}) },
+  function() { lily2d.scene().draw(5) }
+]
+for (let i = 0; i < len(calls); i += 1) {
+  try {
+    calls[i]()
+    puts("no error")
+  } catch (e) {
+    puts(e.message)
+  }
+}

@@ -1,0 +1,79 @@
+-~> clip: cutting triangles to what the camera can see, and putting them on
+-~> the screen. A corner here is [x, y, z, w, color]: its clip coordinates
+-~> (from matrix.project) and its color as a vector.
+-~>
+-~> A corner is seen when -w <= z <= w: in front of the near plane and
+-~> behind the far one. A triangle with every corner seen goes to the
+-~> screen as it is; one with every corner out on the same side is left
+-~> out; any other is cut along the planes into a polygon of the part that
+-~> is seen, which is then cut into triangles again. Left and right, top and
+-~> bottom need no cutting: the pixels outside the target are not painted.
+
+use "vec"
+
+-~> Whether the corner is between the near and the far planes.
+function seen(v) {
+  v[2] >= -v[3] && v[2] <= v[3]
+}
+
+-~> The corner t of the way from a to b.
+function _between(a, b, t) {
+  [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t,
+   a[3] + (b[3] - a[3]) * t, a[4] + (b[4] - a[4]) * t]
+}
+
+-~> How far the corner is inside a plane: above 0 inside. side is 1 for
+-~> the near plane (z + w) and -1 for the far one (w - z).
+function _inside(v, side) {
+  v[3] + side * v[2]
+}
+
+-~> The polygon cut to one plane (Sutherland and Hodgman's way: walk round
+-~> it, keep the corners inside, add a corner where an edge crosses).
+function _cut(polygon, side) {
+  let out = []
+  let n = len(polygon)
+  for (let i = 0; i < n; i += 1) {
+    let a = polygon[i]
+    let b = polygon[(i + 1) % n]
+    let da = _inside(a, side)
+    let db = _inside(b, side)
+    if (da >= 0) {
+      push(out, a)
+    }
+    if ((da >= 0) != (db >= 0)) {
+      push(out, _between(a, b, da / (da - db)))
+    }
+  }
+  out
+}
+
+-~> The part of the triangle a, b, c that is seen, as a polygon of 0, 3 or
+-~> more corners in the same turn.
+function clip_triangle(a, b, c) {
+  _cut(_cut([a, b, c], 1), -1)
+}
+
+-~> The part of the segment from a to b that is seen, as [a, b], or null.
+function clip_segment(a, b) {
+  for (let side = 1; side >= -1; side -= 2) {
+    let da = _inside(a, side)
+    let db = _inside(b, side)
+    if (da < 0 && db < 0) {
+      return null
+    }
+    if (da < 0) {
+      a = _between(a, b, da / (da - db))
+    } elif (db < 0) {
+      b = _between(a, b, da / (da - db))
+    }
+  }
+  [a, b]
+}
+
+-~> The corner on a screen width by height: (x, y, depth) in pixels from
+-~> the top left, the depth from 0 at the near plane to 1 at the far one.
+function to_screen(v, width, height) {
+  let w = v[3]
+  ((v[0] / w + 1) * 0.5 * width, (1 - v[1] / w) * 0.5 * height, (v[2] / w + 1) * 0.5)
+}

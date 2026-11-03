@@ -1,0 +1,114 @@
+-~> light: the lights of a scene and how a surface is lit by them. A light
+-~> is a hash with its kind:
+-~>
+-~>   ambient(color, strength)                   light from everywhere: what
+-~>                                              keeps the side in shadow
+-~>                                              from going black
+-~>   directional(direction, color, strength)    parallel rays, like the
+-~>                                              sun's, going direction
+-~>   point_light(position, color, strength, range)  light from one point,
+-~>                                              weaker with distance
+-~>
+-~> A surface's color is its own color times the light that reaches it
+-~> (the more it faces a light, the more), plus a highlight when its
+-~> material shines. This is worked out at the corners of each triangle
+-~> (or once for its middle, with flat shading) and the colors are mixed
+-~> across it.
+
+use "check"
+use "vec"
+
+function ambient(color = #ffffff, strength = 0.25) {
+  need_color("ambient", "color", color)
+  need_number("ambient", "strength", strength)
+  {"kind": "ambient", "color": color, "strength": strength}
+}
+
+-~> example: directional((-1, -2, -1)) shines down from the upper left,
+-~> from in front
+function directional(direction, color = #ffffff, strength = 1) {
+  need_vector("directional", "direction", direction)
+  need_color("directional", "color", color)
+  need_number("directional", "strength", strength)
+  {"kind": "directional", "direction": direction, "color": color, "strength": strength}
+}
+
+-~> With a range above 0 the light fades to nothing at that distance; with
+-~> 0 it doesn't fade.
+function point_light(position, color = #ffffff, strength = 1, range = 0) {
+  need_vector("point_light", "position", position)
+  need_color("point_light", "color", color)
+  need_number("point_light", "strength", strength)
+  need_number("point_light", "range", range)
+  {"kind": "point", "position": position, "color": color, "strength": strength, "range": range}
+}
+
+-~> The lights a scene gets when it has none: a soft ambient one and a
+-~> sun from the upper left, in front.
+function default_lights() {
+  [ambient(#ffffff, 0.3), directional((-0.6, -1.0, -0.8), #ffffff, 0.85)]
+}
+
+-~> The lights ready to use: colors as vectors already times their
+-~> strength, the ambient ones added into one, directions turned into the
+-~> way towards the light, 1 long.
+-~>   {"ambient": vector, "lights": [{"point": bool, "color": vector,
+-~>     "to": vector or "position": point, "range": number}, ...]}
+function prepare_lights(lights) {
+  let sky = (0.0, 0.0, 0.0)
+  let out = []
+  for (let i = 0; i < len(lights); i += 1) {
+    let l = lights[i]
+    if (type(l) != "HASH" || l.kind == null) {
+      fail("render", "light " + str(i) + " must be made by lily3d.ambient, directional or point_light, not " + str(l))
+    }
+    let c = from_color(l.color) * float(l.strength)
+    if (l.kind == "ambient") {
+      sky = sky + c
+    } elif (l.kind == "directional") {
+      push(out, {"point": false, "color": c, "to": normalize(-l.direction)})
+    } else {
+      push(out, {"point": true, "color": c, "position": l.position, "range": float(l.range)})
+    }
+  }
+  {"ambient": sky, "lights": out}
+}
+
+-~> The color, as a vector, of a surface of color base (a vector) at p with
+-~> the normal n (1 long), seen from eye, lit by lit (from prepare_lights).
+-~> shine above 0 adds a highlight, smaller the bigger shine is; specular
+-~> is how bright it is.
+function shade(lit, base, p, n, eye, shine, specular) {
+  let diffuse = lit.ambient
+  let glow = (0.0, 0.0, 0.0)
+  let lights = lit.lights
+  for (let i = 0; i < len(lights); i += 1) {
+    let l = lights[i]
+    let to = l.to
+    let k = 1.0
+    if (l.point) {
+      let d = l.position - p
+      let dist = math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
+      if (dist == 0) {
+        continue
+      }
+      to = d / dist
+      if (l.range > 0) {
+        let fade = math.max(0.0, 1.0 - dist / l.range)
+        k = fade * fade
+      }
+    }
+    let facing = n.x * to.x + n.y * to.y + n.z * to.z
+    if (facing > 0) {
+      diffuse = diffuse + l.color * (facing * k)
+      if (shine > 0) {
+        let half = normalize(to + normalize(eye - p))
+        let s = n.x * half.x + n.y * half.y + n.z * half.z
+        if (s > 0) {
+          glow = glow + l.color * (s ** shine * specular * k)
+        }
+      }
+    }
+  }
+  (base.x * diffuse.x + glow.x, base.y * diffuse.y + glow.y, base.z * diffuse.z + glow.z)
+}

@@ -25,6 +25,7 @@ func lizardReflectModule() *object.Hash {
 		"parse":  lizardParse,
 		"run":    lizardRun,
 		"docs":   lizardDocs,
+		"check":  lizardCheck,
 	})
 }
 

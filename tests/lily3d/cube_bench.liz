@@ -1,0 +1,20 @@
+-~> The lit cube of examples/lily3d/cube.liz at 600x400 in a headless
+-~> window, 300 frames: how fast lily3d draws a frame.
+use "flower/lily3d" as lily3d
+
+let w = window.open(600, 400, "cube", {"headless": true})
+let s = lily3d.scene({"background": #1d1b22})
+lily3d.light(s, lily3d.ambient(#ffffff, 0.25))
+lily3d.light(s, lily3d.directional((-0.6, -1, -0.8), #fff4e0, 0.9))
+lily3d.light(s, lily3d.point_light((2, 0.5, 2), #5aa0f2, 0.6, 6))
+let box = lily3d.add(s, lily3d.cube(1.4), lily3d.identity(), {"color": #f2a65a, "shine": 24})
+let cam = lily3d.camera((0, 1.5, 4), (0, 0, 0), 60deg)
+let frames = 0
+let start = time.ms()
+window.run(w, function(events) {
+  box.transform = lily3d.compose(lily3d.rotate_y(frames * 0.012), lily3d.rotate_x(frames * 0.004))
+  lily3d.render(s, cam, w)
+  frames += 1
+  frames < 300
+})
+puts(math.round(frames * 1000 / (time.ms() - start)), "frames a second")

@@ -1,0 +1,67 @@
+-~> camera: where a scene is seen from. A camera is a hash with its eye,
+-~> the point it looks at, which way is up, and how it projects:
+-~>
+-~>   camera(eye, target, fov, options)          perspective: far things
+-~>                                              look smaller
+-~>   ortho_camera(eye, target, height, options) orthographic: they don't,
+-~>                                              like a technical drawing
+-~>
+-~> The options are "near" and "far", the distances between which things
+-~> are seen (0.1 and 100), and "up" ((0, 1, 0)). A program can change a
+-~> camera's keys between frames: cam.eye = (x, y, z).
+
+use "check"
+use "vec"
+use "matrix"
+
+function _options(call, options) {
+  need_hash(call, "options", options)
+  need_keys(call, "option", options, ["far", "near", "up"])
+  let near = option(options, "near", 0.1)
+  let far = option(options, "far", 100)
+  need_positive(call, "near", near)
+  if (!is_number(far) || far <= near) {
+    fail(call, "far must be a number above near (" + str(near) + "), not " + str(far))
+  }
+  let up = option(options, "up", (0.0, 1.0, 0.0))
+  need_vector(call, "up", up)
+  [float(near), float(far), up]
+}
+
+-~> fov is the angle from the bottom of the view to its top.
+-~> example: camera((0, 1.5, 4), (0, 0, 0), 60deg)
+function camera(eye, target, fov = 60deg, options = {}) {
+  need_vector("camera", "eye", eye)
+  need_vector("camera", "target", target)
+  need_number("camera", "fov", fov)
+  if (fov <= 0 || fov >= math.pi) {
+    fail("camera", "fov must be between 0deg and 180deg, not " + str(math.round(fov / 1deg)) + "deg")
+  }
+  let o = _options("camera", options)
+  {"kind": "perspective", "eye": eye, "target": target, "fov": fov,
+   "near": o[0], "far": o[1], "up": o[2]}
+}
+
+-~> height is how much of the world fits from the bottom of the view to its
+-~> top; the width follows from the target's shape.
+function ortho_camera(eye, target, height = 2, options = {}) {
+  need_vector("ortho_camera", "eye", eye)
+  need_vector("ortho_camera", "target", target)
+  need_positive("ortho_camera", "height", height)
+  let o = _options("ortho_camera", options)
+  {"kind": "orthographic", "eye": eye, "target": target, "height": float(height),
+   "near": o[0], "far": o[1], "up": o[2]}
+}
+
+-~> The camera's view matrix: the world as the camera sees it.
+function view_matrix(cam) {
+  look_at(cam.eye, cam.target, cam.up)
+}
+
+-~> The camera's projection for a view of the aspect width / height.
+function projection_matrix(cam, aspect) {
+  if (cam.kind == "orthographic") {
+    return orthographic(cam.height * aspect, cam.height, cam.near, cam.far)
+  }
+  perspective(cam.fov, aspect, cam.near, cam.far)
+}

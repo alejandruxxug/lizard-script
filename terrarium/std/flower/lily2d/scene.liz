@@ -1,0 +1,242 @@
+-~> scene: retained mode. A scene keeps a list of shapes, back to front,
+-~> and draws them on a target. After the first draw it paints again only
+-~> the regions that changed: the boxes of the shapes that were added,
+-~> removed or changed, cut into regions (regions.liz). Each region is
+-~> clipped, cleared to the background and painted with only the shapes
+-~> that touch it, found with a grid of buckets (spatial.liz), so a small
+-~> change in a big scene costs a small paint. On a window or a surface it
+-~> also tells the window which rectangles changed (window.dirty).
+-~>
+-~> The scene owns its target: it expects the pixels it painted last time to
+-~> still be there. After drawing something else on the target, call
+-~> invalidate() and the next draw paints everything.
+
+use "check"
+use "paint"
+use "shapes"
+use "draw"
+use "regions"
+use "spatial"
+
+-~> The cell size of the scene's grid, in pixels.
+let cell = 64
+
+function is_scene(v) {
+  type(v) == "HASH" && v["kind"] == "scene"
+}
+
+-~> A new scene. options: {"background": a paint or null} (null: the
+-~> regions are cleared to transparent).
+function scene(options = {}) {
+  if (type(options) != "HASH") {
+    fail("scene", "options must be a hash like {\"background\": #ffffff}, not " + type(options))
+  }
+  let names = keys(options)
+  for (let i = 0; i < len(names); i += 1) {
+    if (names[i] != "background") {
+      fail("scene", "the only option is background, not " + str(names[i]))
+    }
+  }
+  let background = options["background"]
+  if (background !== null) {
+    need_paint("scene", "background", background)
+  }
+  let s = {"kind": "scene", "background": background, "entries": [], "by_id": {}, "index": spatial_new(cell),
+           "next": 0, "dirty": [], "all": true, "target": null, "size": null}
+  s.add = function(shape) { scene_add(s, shape) }
+  s.remove = function(shape) { scene_remove(s, shape) }
+  s.replace = function(old, shape) { scene_replace(s, old, shape) }
+  s.changed = function(shape) { scene_replace(s, shape, shape) }
+  s.clear = function() { scene_clear(s) }
+  s.shapes = function() { scene_shapes(s) }
+  s.at = function(p) { scene_at(s, p) }
+  s.invalidate = function() { s.all = true }
+  s.draw = function(target) { scene_draw(s, target) }
+  s
+}
+
+-~> The box an entry repaints: what the shape paints and a pixel round it
+-~> for the soft edges.
+function entry_box(shape) {
+  let b = painted_box(shape)
+  if (b === null) {
+    return null
+  }
+  [b[0] - 1, b[1] - 1, b[2] + 1, b[3] + 1]
+}
+
+function mark(s, box) {
+  if (box !== null) {
+    push(s.dirty, box)
+  }
+}
+
+-~> The place of shape in the scene's list, or -1.
+function find(s, shape) {
+  for (let i = 0; i < len(s.entries); i += 1) {
+    if (same(s.entries[i].shape, shape)) {
+      return i
+    }
+  }
+  -1
+}
+
+-~> Puts the entry's box in the grid (or takes it out, for a shape that
+-~> paints nothing).
+function index_entry(s, e) {
+  spatial_remove(s.index, e.id)
+  if (e.box !== null) {
+    spatial_insert(s.index, e.id, e.box)
+  }
+}
+
+function scene_add(s, shape) {
+  need_shape("scene.add", "shape", shape)
+  if (find(s, shape) >= 0) {
+    fail("scene.add", "this shape is already in the scene")
+  }
+  let e = {"id": s.next, "order": s.next, "shape": shape, "box": entry_box(shape)}
+  s.next += 1
+  push(s.entries, e)
+  s.by_id[e.id] = e
+  index_entry(s, e)
+  mark(s, e.box)
+  shape
+}
+
+function scene_remove(s, shape) {
+  let i = find(s, shape)
+  if (i < 0) {
+    fail("scene.remove", "this shape is not in the scene")
+  }
+  let e = s.entries[i]
+  mark(s, e.box)
+  spatial_remove(s.index, e.id)
+  delete(s.by_id, e.id)
+  list.remove(s.entries, i)
+  null
+}
+
+-~> Puts shape where old was (in front of the same shapes), and repaints
+-~> where both are. With old == shape, it is a shape that was changed.
+function scene_replace(s, old, shape) {
+  need_shape("scene.replace", "shape", shape)
+  let i = find(s, old)
+  if (i < 0) {
+    fail("scene.replace", "the shape to replace is not in the scene")
+  }
+  let e = s.entries[i]
+  mark(s, e.box)
+  e.shape = shape
+  e.box = entry_box(shape)
+  index_entry(s, e)
+  mark(s, e.box)
+  shape
+}
+
+function scene_clear(s) {
+  s.entries = []
+  s.by_id = {}
+  s.index = spatial_new(cell)
+  s.all = true
+  null
+}
+
+function scene_shapes(s) {
+  let out = []
+  for (let i = 0; i < len(s.entries); i += 1) {
+    push(out, s.entries[i].shape)
+  }
+  out
+}
+
+-~> The entries of ids, back to front.
+function in_order(s, ids) {
+  let out = []
+  for (let i = 0; i < len(ids); i += 1) {
+    push(out, s.by_id[ids[i]])
+  }
+  list.sort(out, function(a, b) { a.order < b.order })
+}
+
+-~> The frontmost shape that paints point p, or null.
+function scene_at(s, p) {
+  need_point("scene.at", "p", p)
+  let entries = in_order(s, spatial_at(s.index, p))
+  for (let i = len(entries) - 1; i >= 0; i -= 1) {
+    if (hit(entries[i].shape, p)) {
+      return entries[i].shape
+    }
+  }
+  null
+}
+
+-~> Clears the region r (whole pixels) and paints the background in it.
+function paint_background(s, target, r, size) {
+  let rect = [r[0], r[1], r[2] - r[0], r[3] - r[1]]
+  let bg = s.background
+  if (type(bg) == "COLOR") {
+    img.clear(target, bg, rect)
+    return null
+  }
+  img.clear(target, #00000000, rect)
+  if (bg === null) {
+    return null
+  }
+  let rows = []
+  for (let y = r[1]; y < r[3]; y += 1) {
+    push(rows, [y, r[0], r[2]])
+  }
+  paint_spans(target, rows, resolve_paint(bg, {"min": (0, 0), "max": size}))
+}
+
+-~> Whether the Terrarium's window module shows target (a window or one of
+-~> its surfaces), so it is told what changed.
+function on_window(target) {
+  let name = str(target)
+  text.starts(name, "<window") || text.starts(name, "<surface")
+}
+
+-~> Paints what changed since the last draw (everything the first time, on
+-~> a new target, or after invalidate) and returns the rectangles it
+-~> painted, [x, y, w, h] each.
+function scene_draw(s, target) {
+  if (type(target) != "NATIVE") {
+    fail("scene.draw", "target must be an image, a window or a surface, not " + type(target))
+  }
+  let size = img.size(target)
+  let regions = []
+  if (s.all || !same(s.target, target) || s.size != size) {
+    regions = [[0, 0, size.x, size.y]]
+  } else {
+    for (let i = 0; i < len(s.dirty); i += 1) {
+      let box = pixel_box(s.dirty[i], size)
+      if (box !== null) {
+        regions = add_region(regions, box)
+      }
+    }
+  }
+  s.all = false
+  s.dirty = []
+  s.target = target
+  s.size = size
+
+  let painted = []
+  let tell = on_window(target)
+  for (let i = 0; i < len(regions); i += 1) {
+    let r = regions[i]
+    let rect = [r[0], r[1], r[2] - r[0], r[3] - r[1]]
+    img.clip(target, rect)
+    paint_background(s, target, r, size)
+    let entries = in_order(s, spatial_query(s.index, r))
+    for (let k = 0; k < len(entries); k += 1) {
+      draw_shape(target, entries[k].shape)
+    }
+    img.unclip(target)
+    if (tell) {
+      window.dirty(target, rect)
+    }
+    push(painted, rect)
+  }
+  painted
+}

@@ -1,0 +1,24 @@
+-~> Every kind of shape on one picture.
+use "flower/lily2d" as lily2d
+use "golden"
+
+let w = img.new(480, 360, #f4efe6)
+lily2d.circle(w, (60, 60), 40, #3fa34d)
+lily2d.circle(w, (150.3, 60.7), 33.5, rgba(224, 96, 122, 160))
+lily2d.ellipse(w, (260, 60), (60, 30), #e0a526)
+lily2d.rect(w, (340, 25), (110, 70.5), #2d6a8f)
+lily2d.line(w, (20, 130), (200, 150), {"stroke": #1d1d1f, "width": 3})
+lily2d.polygon(w, [(230, 110), (300, 180), (220, 190)], #c0392b)
+lily2d.path(w, [(330, 110), (450, 120), (440, 200), (340, 190)], {"fill": #8fb996, "holes": [[(370, 140), (410, 140), (400, 170)]]})
+lily2d.path(w, [(20, 220), (80, 180), (140, 240), (200, 200)], {"stroke": #3b2a5c, "width": 5, "closed": false, "corner": 180})
+lily2d.rect(w, (220, 210), (120, 60), lily2d.linear_at((220, 0), (340, 0), [#f4d35e, #ee964b, lily2d.hard(#e0607a), #3d1c4f]))
+lily2d.circle(w, (400, 250), 45, lily2d.radial_at((390, 240), 45, [#fff3c4, #e0607a], 5))
+lily2d.rect(w, (20, 260), (180, 30), lily2d.linear([#2d6a8f, #f4d35e], 0deg))
+lily2d.brush(w, [(20, 320), (80, 300), (140, 340), (200, 310)], [0.2, 0.9, 0.6, 0.3], #1d1d1f, lily2d.pens.ink)
+lily2d.brush(w, [(220, 300), (280, 330), (340, 300)], [0.5, 0.8, 0.4], #2d6a8f, lily2d.pens.calligraphy)
+lily2d.brush(w, [(220, 345), (300, 335), (350, 350)], [0.5, 0.5, 0.5], #c0392b, lily2d.pens.marker)
+lily2d.brush(w, [(370, 320), (420, 340), (470, 310)], [0.3, 1.0, 0.2], #3b2a5c, lily2d.pens.pencil)
+lily2d.brush(w, [(370, 350), (470, 345)], [0.6, 0.9], #3fa34d, lily2d.pens.brush)
+lily2d.text(w, (230, 195), "lily2d 123", #1d1d1f)
+lily2d.group(w, [lily2d.circle(null, (60, 180), 25, #2d6a8f), lily2d.circle(null, (90, 180), 25, #c0392b)], {"opacity": 0.6, "blend": "multiply"})
+check("shapes", w)

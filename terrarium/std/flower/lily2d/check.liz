@@ -1,0 +1,55 @@
+-~> check: the argument checks every part of lily2d shares. Each one stops
+-~> the program with a message that starts with the call's name, like
+-~> "lily2d.circle: center must be a point like (10, 20), not STRING".
+
+-~> Stops with a message for the call.
+function fail(call, message) {
+  error("lily2d." + call + ": " + message)
+}
+
+function is_number(v) {
+  type(v) == "INTEGER" || type(v) == "FLOAT"
+}
+
+function need_point(call, name, v) {
+  if (type(v) != "POINT") {
+    fail(call, name + " must be a point like (10, 20), not " + type(v))
+  }
+}
+
+function need_color(call, name, v) {
+  if (type(v) != "COLOR") {
+    fail(call, name + " must be a color like #3fa34d, not " + type(v))
+  }
+}
+
+function need_number(call, name, v) {
+  if (!is_number(v)) {
+    fail(call, name + " must be a number, not " + type(v))
+  }
+}
+
+function need_fraction(call, name, v) {
+  need_number(call, name, v)
+  if (v < 0 || v > 1) {
+    fail(call, name + " must be from 0 to 1, not " + str(v))
+  }
+}
+
+function need_points(call, name, v) {
+  if (type(v) != "ARRAY" || len(v) == 0) {
+    fail(call, name + " must be a list of points like [(0, 0), (10, 5)] with at least one")
+  }
+  for (let i = 0; i < len(v); i += 1) {
+    if (type(v[i]) != "POINT") {
+      fail(call, name + " must only hold points, but item " + str(i) + " is " + type(v[i]))
+    }
+  }
+}
+
+-~> v must be one of the strings in choices.
+function need_choice(call, name, v, choices) {
+  if (list.index(choices, v) < 0) {
+    fail(call, name + " must be one of " + text.join(choices, ", ") + ", not " + str(v))
+  }
+}

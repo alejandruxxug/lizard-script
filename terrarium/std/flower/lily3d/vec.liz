@@ -1,0 +1,57 @@
+-~> vec: 3D vectors. A vector is a point with three coordinates, (x, y, z),
+-~> so + and - between two of them and * and / by a number already work;
+-~> this file adds what points don't have. A color being lit is a vector
+-~> too: (red, green, blue), each from 0 to 1.
+-~>
+-~> The space is right-handed: x goes right, y goes up and z comes towards
+-~> the viewer.
+
+-~> The dot product: how much a and b point the same way.
+-~> example: dot((1, 0, 0), (0.5, 2, 0)) is 0.5
+function dot(a, b) {
+  a.x * b.x + a.y * b.y + a.z * b.z
+}
+
+-~> The cross product: a vector at right angles to both, as long as the
+-~> area of the parallelogram they make. cross(x axis, y axis) is the z
+-~> axis.
+function cross(a, b) {
+  (a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x)
+}
+
+-~> How long v is.
+function length(v) {
+  math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+}
+
+-~> v made 1 long, the same way. The zero vector stays zero.
+function normalize(v) {
+  let n = math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+  if (n == 0) {
+    return (0.0, 0.0, 0.0)
+  }
+  (v.x / n, v.y / n, v.z / n)
+}
+
+-~> The vector t of the way from a to b: a at 0, b at 1.
+function lerp(a, b, t) {
+  a + (b - a) * t
+}
+
+-~> The vectors multiplied coordinate by coordinate: how a light's color
+-~> tints a surface's.
+function times(a, b) {
+  (a.x * b.x, a.y * b.y, a.z * b.z)
+}
+
+-~> A COLOR as a vector of floats from 0 to 1 (its alpha is left out).
+function from_color(c) {
+  (c.r / 255.0, c.g / 255.0, c.b / 255.0)
+}
+
+-~> A vector of floats from 0 to 1 as a COLOR with the alpha a (0 to 255).
+-~> A channel above 1 (a bright light) is cut to 1.
+function to_color(v, a = 255) {
+  rgba(math.max(0, math.min(255, v.x * 255)), math.max(0, math.min(255, v.y * 255)),
+    math.max(0, math.min(255, v.z * 255)), a)
+}

@@ -8,11 +8,11 @@ import (
 	_ "image/gif"  // registers the GIF decoder for image.Decode
 	_ "image/jpeg" // registers the JPEG decoder
 	_ "image/png"  // registers the PNG decoder
+	"lizardscript/bundle"
 	"lizardscript/object"
 	"lizardscript/terrarium/internal/arg"
 	"lizardscript/terrarium/internal/canvas"
 	"lizardscript/terrarium/internal/pixels"
-	"os"
 )
 
 // img: images. An image is a NATIVE value of kind "image" that holds its
@@ -57,9 +57,9 @@ func imageArg(args []object.Object, i int) (*pixels.Image, *object.Error) {
 	return v.(*pixels.Image), nil
 }
 
-// img.load(path, max_side = 0) reads a PNG, JPEG or GIF file. With a
-// max_side above 0, an image longer than that on its longer side is shrunk
-// to fit (never enlarged).
+// img.load(path, max_side = 0) reads a PNG, JPEG or GIF file, also one of
+// a built program's own (a bundle: path). With a max_side above 0, an image
+// longer than that on its longer side is shrunk to fit (never enlarged).
 func imgLoad(args ...object.Object) object.Object {
 	if err := arg.Count(args, 1, 2); err != nil {
 		return err
@@ -74,22 +74,18 @@ func imgLoad(args ...object.Object) object.Object {
 			return err
 		}
 	}
-	file, oerr := os.Open(path)
-	if oerr != nil {
-		return systemError("load", path, oerr)
+	data, rerr := bundle.ReadFile(path)
+	if rerr != nil {
+		return systemError("load", path, rerr)
 	}
-	defer file.Close()
-	config, _, derr := image.DecodeConfig(file)
+	config, _, derr := image.DecodeConfig(bytes.NewReader(data))
 	if derr != nil {
 		return arg.Errorf("can't load %s: not a PNG, JPEG or GIF image", path)
 	}
 	if config.Width > maxSide || config.Height > maxSide {
 		return arg.Errorf("can't load %s: %dx%d is bigger than %d on a side", path, config.Width, config.Height, maxSide)
 	}
-	if _, serr := file.Seek(0, 0); serr != nil {
-		return systemError("load", path, serr)
-	}
-	decoded, _, derr := image.Decode(file)
+	decoded, _, derr := image.Decode(bytes.NewReader(data))
 	if derr != nil {
 		return arg.Errorf("can't load %s: %v", path, derr)
 	}

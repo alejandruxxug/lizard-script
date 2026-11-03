@@ -13,6 +13,9 @@
 //	window a window to draw in, with its input (package terrarium/window)
 //	pen    pen pressure, which comes in the window's events
 //
+// The standard modules (std.go) are bigger libraries in lizard-script that
+// a program loads with use, like the flower graphics family (flower/lily2d).
+//
 // The Go code here only reaches the system: what to draw, and every pixel
 // of it, is decided by the program.
 package terrarium

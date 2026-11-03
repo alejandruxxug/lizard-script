@@ -1,0 +1,10 @@
+[[0, 0, 300, 200]]
+[]
+[[113, 161, 66, 39], [121, 61, 18, 18], [231, 111, 18, 18]]
+scene: same as the golden picture
+true
+true null
+30
+[[0, 0, 300, 200]]
+0 [[0, 0, 300, 200]]
+lily2d.scene.remove: this shape is not in the scene

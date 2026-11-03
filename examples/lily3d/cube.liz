@@ -1,0 +1,54 @@
+-~> A lit cube spinning in a window, with the frames per second in the
+-~> title. Drag to turn it yourself; Space switches to its wireframe; Esc
+-~> quits.
+-~> Run it with: lizardscript --vm examples/lily3d/cube.liz
+
+use "flower/lily3d" as lily3d
+
+let w = window.open(600, 400, "lily3d cube", {"fps": 60})
+let s = lily3d.scene({"background": #1d1b22})
+lily3d.light(s, lily3d.ambient(#ffffff, 0.25))
+lily3d.light(s, lily3d.directional((-0.6, -1, -0.8), #fff4e0, 0.9))
+lily3d.light(s, lily3d.point_light((2, 0.5, 2), #5aa0f2, 0.6, 6))
+let box = lily3d.add(s, lily3d.cube(1.4), lily3d.identity(), {"color": #f2a65a, "shine": 24})
+let cam = lily3d.camera((0, 1.5, 4), (0, 0, 0), 60deg)
+
+let turn = (0.0, 0.0)
+let dragging = null
+let frames = 0
+let since = time.ms()
+
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "key" && e.key == "Escape") {
+      return false
+    } elif (e.type == "key" && e.key == "Space") {
+      if (box.material.wireframe) {
+        box.material.wireframe = false
+      } else {
+        box.material.wireframe = true
+      }
+    } elif (e.type == "down") {
+      dragging = e.pos
+    } elif (e.type == "up") {
+      dragging = null
+    } elif (e.type == "move" && dragging != null) {
+      turn = turn + (e.pos - dragging) * 0.01
+      dragging = e.pos
+    }
+  }
+  if (dragging == null) {
+    turn = turn + (0.012, 0.004)
+  }
+  box.transform = lily3d.compose(lily3d.rotate_y(turn.x), lily3d.rotate_x(turn.y))
+  lily3d.render(s, cam, w)
+
+  frames += 1
+  let now = time.ms()
+  if (now - since >= 1000) {
+    window.title(w, "lily3d cube: " + str(math.round(frames * 1000 / (now - since))) + " fps")
+    frames = 0
+    since = now
+  }
+})

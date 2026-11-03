@@ -1,0 +1,70 @@
+-~> Vectors, matrices and projections.
+use "flower/lily3d" as lily3d
+
+-~> A number, a point or a list with four decimals, so float noise doesn't
+-~> show.
+function r(v) {
+  if (type(v) == "FLOAT") {
+    let n = math.round(v * 10000) / 10000.0
+    if (n == 0) {
+      return 0.0
+    }
+    return n
+  }
+  if (type(v) == "POINT") {
+    return (r(v.x), r(v.y), r(v.z))
+  }
+  if (type(v) == "ARRAY") {
+    let out = []
+    for (let i = 0; i < len(v); i += 1) {
+      push(out, r(v[i]))
+    }
+    return out
+  }
+  v
+}
+
+puts("dot", lily3d.dot((1, 2, 3), (4, -5, 6)))
+puts("cross", lily3d.cross((1, 0, 0), (0, 1, 0)), lily3d.cross((0, 1, 0), (1, 0, 0)))
+puts("length", lily3d.length((2, 3, 6)), lily3d.normalize((0, 3, 4)), lily3d.normalize((0, 0, 0)))
+puts("lerp", lily3d.lerp((0, 0, 0), (2, 4, 6), 0.25))
+
+let p = (1, 2, 3)
+puts("translate", lily3d.apply(lily3d.translate((10, 20, 30)), p))
+puts("scale", lily3d.apply(lily3d.scale(2), p), lily3d.apply(lily3d.scale((1, -1, 0.5)), p))
+puts("rotate_x", r(lily3d.apply(lily3d.rotate_x(90deg), (0, 1, 0))))
+puts("rotate_y", r(lily3d.apply(lily3d.rotate_y(90deg), (0, 0, 1))))
+puts("rotate_z", r(lily3d.apply(lily3d.rotate_z(90deg), (1, 0, 0))))
+puts("rotate about z", r(lily3d.apply(lily3d.rotate((0, 0, 2), 90deg), (1, 0, 0))))
+puts("direction", lily3d.apply_direction(lily3d.translate((5, 5, 5)), (1, 0, 0)))
+
+-~> compose does its matrices in order: size, then turn, then move.
+let m = lily3d.compose([lily3d.scale(2), lily3d.rotate_z(90deg), lily3d.translate((1, 0, 0))])
+puts("compose", r(lily3d.apply(m, (1, 0, 0))))
+puts("compose two", r(lily3d.apply(lily3d.compose(lily3d.translate((1, 0, 0)), lily3d.rotate_z(90deg)), (0, 0, 0))))
+puts("multiply", lily3d.multiply(lily3d.identity(), m) == m)
+
+-~> The inverse undoes, the transpose swaps.
+let undo = lily3d.inverse(m)
+puts("inverse", r(lily3d.multiply(m, undo)) == r(lily3d.identity()), r(lily3d.apply(undo, lily3d.apply(m, p))))
+puts("no inverse", lily3d.inverse(lily3d.scale((1, 0, 1))))
+puts("transpose", lily3d.transpose(lily3d.translate((1, 2, 3)))[12], lily3d.transpose(lily3d.transpose(m)) == m)
+-~> A normal of a shape stretched along x leans away from x.
+puts("normal", r(lily3d.normalize(lily3d.apply_direction(lily3d.normal_matrix(lily3d.scale((2, 1, 1))), (1, 1, 0)))))
+
+-~> The camera's view puts the eye at the origin, looking down -z.
+let view = lily3d.look_at((0, 0, 5), (0, 0, 0))
+puts("look_at", r(lily3d.apply(view, (0, 0, 0))), r(lily3d.apply(view, (1, 2, 5))))
+puts("look_at sideways", r(lily3d.apply(lily3d.look_at((5, 0, 0), (0, 0, 0)), (0, 0, -1))))
+puts("look_at straight down", r(lily3d.apply(lily3d.look_at((0, 5, 0), (0, 0, 0)), (0, 0, 0))))
+
+-~> Perspective: the near plane goes to z = -w, the far one to z = w, and
+-~> the edge of the field of view to x / w = 1.
+let proj = lily3d.perspective(90deg, 2, 1, 10)
+let near = lily3d.project(proj, (0, 0, -1))
+let far = lily3d.project(proj, (0, 0, -10))
+puts("perspective near", r(near), "far", r(far))
+let edge = lily3d.project(proj, (2, 1, -1))
+puts("perspective edge", r(edge[0] / edge[3]), r(edge[1] / edge[3]))
+let ortho = lily3d.orthographic(4, 2, 1, 11)
+puts("orthographic", r(lily3d.project(ortho, (2, 1, -1))), r(lily3d.project(ortho, (-2, -1, -11))))

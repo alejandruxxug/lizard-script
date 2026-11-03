@@ -1,0 +1,116 @@
+-~> A doodle pad: draw with the mouse, a trackpad or a pen, and the stroke
+-~> follows the pressure. Keys 1 to 5 pick the pen (ink, pencil, marker,
+-~> brush, calligraphy), c clears, Esc quits. The strokes live in a
+-~> lily2d scene, so each frame paints only around the stroke being drawn.
+-~> Run it with: lizardscript examples/lily2d/doodle.liz
+-~> or let it draw by itself: lizardscript examples/lily2d/doodle.liz --save doodle.png
+
+use "flower/lily2d" as lily2d
+
+let size = (640, 420)
+let ink = #1a1418
+let names = ["ink", "pencil", "marker", "brush", "calligraphy"]
+let pen_index = 0
+
+let pad = lily2d.scene({"background": #f4efe6})
+let label = lily2d.text(pad, (10, 8), "", ink)
+
+-~> The stroke being drawn: its points, pressures, device and shape.
+let drawing = null
+
+function show_pen() {
+  let words = "pen: " + names[pen_index] + "   (1-5 pens, c clears)"
+  label = pad.replace(label, lily2d.text(null, (10, 8), words, ink))
+}
+
+function stroke_shape(d) {
+  lily2d.brush(null, d.points, d.pressures, ink, lily2d.pens[names[pen_index]], d.source)
+}
+
+-~> Adds the points of a pointer event to the stroke (every sample of a
+-~> move), skipping points closer than a pixel and a half to the last one.
+function follow(e) {
+  let samples = e["samples"]
+  if (samples === null) {
+    samples = [{"pos": e.pos, "pressure": e.pen.pressure}]
+  }
+  for (let i = 0; i < len(samples); i += 1) {
+    let p = samples[i]
+    let last = drawing.points[len(drawing.points) - 1]
+    if (math.dist(last, p.pos) >= 1.5) {
+      push(drawing.points, p.pos)
+      push(drawing.pressures, p.pressure)
+    }
+  }
+  drawing.shape = pad.replace(drawing.shape, stroke_shape(drawing))
+}
+
+function handle(e) {
+  if (e.type == "down" && e.button == "left") {
+    drawing = {"points": [e.pos], "pressures": [e.pen.pressure], "source": e.pen.source, "shape": null}
+    drawing.shape = pad.add(stroke_shape(drawing))
+  } elif (e.type == "move" && drawing !== null) {
+    follow(e)
+  } elif (e.type == "up" && drawing !== null) {
+    follow(e)
+    drawing = null
+  } elif (e.type == "key") {
+    let digit = list.index(["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"], e.key)
+    if (digit >= 0) {
+      pen_index = digit
+      show_pen()
+    } elif (e.key == "C") {
+      pad.clear()
+      label = pad.add(label)
+    } elif (e.key == "Escape") {
+      return false
+    }
+  }
+  true
+}
+
+-~> A wavy stroke of injected events, for --save: one per pen.
+function scribble(w, row) {
+  let steps = 24
+  for (let i = 0; i <= steps; i += 1) {
+    let t = i / float(steps)
+    let pos = (40 + t * 560, 70 + row * 70 + math.sin(t * 9) * 18)
+    let pressure = 0.2 + 0.8 * math.sin(t * math.pi)
+    let kind = "move"
+    if (i == 0) {
+      kind = "down"
+    } elif (i == steps) {
+      kind = "up"
+    }
+    window.inject(w, {"type": kind, "pos": pos, "pen": {"pressure": pressure, "raw": pressure, "source": "tablet"}})
+  }
+}
+
+let args = os.args()
+let saving = len(args) == 2 && args[0] == "--save"
+let w = window.open(size.x, size.y, "lily2d doodle", {"headless": saving, "on_demand": true})
+show_pen()
+
+let frame = 0
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    if (!handle(events[i])) {
+      return false
+    }
+  }
+  pad.draw(w)
+  if (saving) {
+    -~> each frame, the next pen draws one wave
+    if (frame < len(names)) {
+      pen_index = frame
+      show_pen()
+      scribble(w, frame)
+    }
+    frame += 1
+    return frame <= len(names)
+  }
+  true
+})
+if (saving) {
+  img.save(window.screenshot(w), args[1])
+}

@@ -1,0 +1,224 @@
+# What check finds in the repository's programs, all of it on purpose (see repo_test.go).
+docs/learn/en/02-values-and-types.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/en/03-variables-and-scope.md: error assign: can't assign to cuont: it was never declared, use let cuont = ...
+docs/learn/en/03-variables-and-scope.md: error assign: can't assign to total: it was never declared, use let total = ...
+docs/learn/en/03-variables-and-scope.md: error unknown-name: identifier not found: score
+docs/learn/en/03-variables-and-scope.md: error unknown-name: identifier not found: secret
+docs/learn/en/03-variables-and-scope.md: warning shadow: let i hides the i of line 1
+docs/learn/en/03-variables-and-scope.md: warning shadow: let n hides the n of line 1
+docs/learn/en/03-variables-and-scope.md: warning shadow: let n hides the n of line 1
+docs/learn/en/03-variables-and-scope.md: warning shadow: let x hides the x of line 1
+docs/learn/en/03-variables-and-scope.md: warning shadow: let x hides the x of line 1
+docs/learn/en/03-variables-and-scope.md: warning unused: n is never used
+docs/learn/en/03-variables-and-scope.md: warning unused: n is never used
+docs/learn/en/04-operators.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/en/04-operators.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/04-operators.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/04-operators.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/04-operators.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/04-operators.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/en/04-operators.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/en/04-operators.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/en/06-loops.md: error unknown-name: identifier not found: i
+docs/learn/en/07-functions.md: error arguments: wrong number of arguments to add: want 2, got 1
+docs/learn/en/10-strings-and-text.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/en/11-numbers-and-math.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/11-numbers-and-math.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/11-numbers-and-math.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/11-numbers-and-math.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/en/12-colors-and-points.md: error arguments: wrong number of arguments to show: want 1, got 2
+docs/learn/en/12-colors-and-points.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/en/12-colors-and-points.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/13-layers.md: error unknown-name: identifier not found: step
+docs/learn/en/14-errors.md: error unknown-name: identifier not found: nope
+docs/learn/en/14-errors.md: warning unused: x is never used
+docs/learn/en/17-terrarium.md: error unknown-name: identifier not found: dab
+docs/learn/en/17-terrarium.md: error unknown-name: identifier not found: e
+docs/learn/en/17-terrarium.md: error unknown-name: identifier not found: e
+docs/learn/en/17-terrarium.md: error unknown-name: identifier not found: handle
+docs/learn/en/17-terrarium.md: error unknown-name: identifier not found: hill
+docs/learn/en/17-terrarium.md: error unknown-name: identifier not found: hill
+docs/learn/en/17-terrarium.md: warning unused: the parameter events is never used
+docs/learn/en/17-terrarium.md: warning unused: the parameter events is never used
+docs/learn/en/18-modules-and-tools.md: error arguments: wrong number of arguments to area: want 2, got 1
+docs/learn/en/18-modules-and-tools.md: error assign: can't assign to total: it was never declared, use let total = ...
+docs/learn/en/18-modules-and-tools.md: error member: math has no sine
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "loud": there is no docs/learn/en/loud.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/cactus": there is no docs/learn/en/plants/cactus.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/en/plants/flowers.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/en/plants/flowers.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/en/plants/flowers.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/garden_bed": there is no docs/learn/en/plants/garden_bed.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/loud": there is no docs/learn/en/plants/loud.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/thirsty": there is no docs/learn/en/plants/thirsty.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/en/plants/watering.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/en/plants/watering.liz
+docs/learn/en/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/en/plants/watering.liz
+docs/learn/en/18-modules-and-tools.md: error unknown-name: identifier not found: forgs
+docs/learn/en/18-modules-and-tools.md: warning unused: the parameter column is never used
+docs/learn/en/18-modules-and-tools.md: warning unused: the parameter source is never used
+docs/learn/en/18-modules-and-tools.md: warning unused: unit is never used
+docs/learn/en/19-lily2d.md: error arguments: wrong number of arguments to lily2d.circle: want 4, got 5
+docs/learn/en/20-lily3d.md: error unknown-name: identifier not found: lily3d
+docs/learn/en/20-lily3d.md: warning unused-module: none of the names of "flower/lily3d" are used
+docs/learn/en/20-lily3d.md: warning unused: the parameter events is never used
+docs/learn/en/cheatsheet.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/cheatsheet.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/cheatsheet.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/en/cheatsheet.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/en/exercises.md: error assign: can't assign to i: it was never declared, use let i = ...
+docs/learn/en/exercises.md: error assign: can't assign to i: it was never declared, use let i = ...
+docs/learn/en/exercises.md: error assign: can't assign to totl: it was never declared, use let totl = ...
+docs/learn/en/exercises.md: error unknown-name: identifier not found: i
+docs/learn/en/exercises.md: error unknown-name: identifier not found: i
+docs/learn/en/exercises.md: error unknown-name: identifier not found: i
+docs/learn/en/exercises.md: error unknown-name: identifier not found: totl
+docs/learn/en/exercises.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/en/exercises.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/en/exercises.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/exercises.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/exercises.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/exercises.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/en/exercises.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/en/exercises.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/es/02-values-and-types.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/es/03-variables-and-scope.md: error assign: can't assign to cuont: it was never declared, use let cuont = ...
+docs/learn/es/03-variables-and-scope.md: error assign: can't assign to total: it was never declared, use let total = ...
+docs/learn/es/03-variables-and-scope.md: error unknown-name: identifier not found: score
+docs/learn/es/03-variables-and-scope.md: error unknown-name: identifier not found: secret
+docs/learn/es/03-variables-and-scope.md: warning shadow: let i hides the i of line 1
+docs/learn/es/03-variables-and-scope.md: warning shadow: let n hides the n of line 1
+docs/learn/es/03-variables-and-scope.md: warning shadow: let n hides the n of line 1
+docs/learn/es/03-variables-and-scope.md: warning shadow: let x hides the x of line 1
+docs/learn/es/03-variables-and-scope.md: warning shadow: let x hides the x of line 1
+docs/learn/es/03-variables-and-scope.md: warning unused: n is never used
+docs/learn/es/03-variables-and-scope.md: warning unused: n is never used
+docs/learn/es/04-operators.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/es/04-operators.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/04-operators.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/04-operators.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/04-operators.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/04-operators.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/es/04-operators.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/es/04-operators.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/es/06-loops.md: error unknown-name: identifier not found: i
+docs/learn/es/07-functions.md: error arguments: wrong number of arguments to add: want 2, got 1
+docs/learn/es/10-strings-and-text.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/es/11-numbers-and-math.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/11-numbers-and-math.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/11-numbers-and-math.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/11-numbers-and-math.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/es/12-colors-and-points.md: error arguments: wrong number of arguments to show: want 1, got 2
+docs/learn/es/12-colors-and-points.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/es/12-colors-and-points.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/13-layers.md: error unknown-name: identifier not found: step
+docs/learn/es/14-errors.md: error unknown-name: identifier not found: nope
+docs/learn/es/14-errors.md: warning unused: x is never used
+docs/learn/es/17-terrarium.md: error unknown-name: identifier not found: dab
+docs/learn/es/17-terrarium.md: error unknown-name: identifier not found: e
+docs/learn/es/17-terrarium.md: error unknown-name: identifier not found: e
+docs/learn/es/17-terrarium.md: error unknown-name: identifier not found: handle
+docs/learn/es/17-terrarium.md: error unknown-name: identifier not found: hill
+docs/learn/es/17-terrarium.md: error unknown-name: identifier not found: hill
+docs/learn/es/17-terrarium.md: warning unused: the parameter events is never used
+docs/learn/es/17-terrarium.md: warning unused: the parameter events is never used
+docs/learn/es/18-modules-and-tools.md: error arguments: wrong number of arguments to area: want 2, got 1
+docs/learn/es/18-modules-and-tools.md: error assign: can't assign to total: it was never declared, use let total = ...
+docs/learn/es/18-modules-and-tools.md: error member: math has no sine
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "loud": there is no docs/learn/es/loud.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/cactus": there is no docs/learn/es/plants/cactus.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/es/plants/flowers.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/es/plants/flowers.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/flowers": there is no docs/learn/es/plants/flowers.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/garden_bed": there is no docs/learn/es/plants/garden_bed.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/loud": there is no docs/learn/es/plants/loud.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/thirsty": there is no docs/learn/es/plants/thirsty.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/es/plants/watering.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/es/plants/watering.liz
+docs/learn/es/18-modules-and-tools.md: error module: can't find the module "plants/watering": there is no docs/learn/es/plants/watering.liz
+docs/learn/es/18-modules-and-tools.md: error unknown-name: identifier not found: forgs
+docs/learn/es/18-modules-and-tools.md: warning unused: the parameter column is never used
+docs/learn/es/18-modules-and-tools.md: warning unused: the parameter source is never used
+docs/learn/es/18-modules-and-tools.md: warning unused: unit is never used
+docs/learn/es/19-lily2d.md: error arguments: wrong number of arguments to lily2d.circle: want 4, got 5
+docs/learn/es/20-lily3d.md: error unknown-name: identifier not found: lily3d
+docs/learn/es/20-lily3d.md: warning unused-module: none of the names of "flower/lily3d" are used
+docs/learn/es/20-lily3d.md: warning unused: the parameter events is never used
+docs/learn/es/cheatsheet.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/cheatsheet.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/cheatsheet.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/es/cheatsheet.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/es/exercises.md: error assign: can't assign to i: it was never declared, use let i = ...
+docs/learn/es/exercises.md: error assign: can't assign to i: it was never declared, use let i = ...
+docs/learn/es/exercises.md: error assign: can't assign to totl: it was never declared, use let totl = ...
+docs/learn/es/exercises.md: error unknown-name: identifier not found: i
+docs/learn/es/exercises.md: error unknown-name: identifier not found: i
+docs/learn/es/exercises.md: error unknown-name: identifier not found: i
+docs/learn/es/exercises.md: error unknown-name: identifier not found: totl
+docs/learn/es/exercises.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/es/exercises.md: warning literals: both sides of == are literals, so it is always false
+docs/learn/es/exercises.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/exercises.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/exercises.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/exercises.md: warning literals: both sides of == are literals, so it is always true
+docs/learn/es/exercises.md: warning literals: both sides of === are literals, so it is always false
+docs/learn/es/exercises.md: warning literals: both sides of === are literals, so it is always false
+examples/02_expressions.liz: warning literals: both sides of == are literals, so it is always true
+examples/02_expressions.liz: warning literals: both sides of == are literals, so it is always true
+examples/02_expressions.liz: warning literals: both sides of === are literals, so it is always false
+examples/02_expressions.liz: warning literals: both sides of === are literals, so it is always false
+examples/06_scopes.liz: warning shadow: let i hides the i of line 36
+examples/06_scopes.liz: warning shadow: let x hides the x of line 3
+examples/06_scopes.liz: warning shadow: let x hides the x of line 3
+examples/10_floats_and_math.liz: warning literals: both sides of == are literals, so it is always true
+examples/10_floats_and_math.liz: warning literals: both sides of === are literals, so it is always false
+examples/13_defaults_try_continue.liz: error unknown-name: identifier not found: nope
+examples/13_defaults_try_continue.liz: error unknown-name: identifier not found: nope
+examples/terrarium/layers.liz: warning shadow: let i hides the i of line 68
+examples/terrarium/layers.liz: warning unused: all is never used
+tests/valid/colors.liz: warning literals: both sides of != are literals, so it is always true
+tests/valid/colors.liz: warning literals: both sides of == are literals, so it is always false
+tests/valid/colors.liz: warning literals: both sides of == are literals, so it is always false
+tests/valid/colors.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/colors.liz: warning literals: both sides of === are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of != are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of !== are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of == are literals, so it is always false
+tests/valid/equality.liz: warning literals: both sides of == are literals, so it is always false
+tests/valid/equality.liz: warning literals: both sides of == are literals, so it is always false
+tests/valid/equality.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of === are literals, so it is always false
+tests/valid/equality.liz: warning literals: both sides of === are literals, so it is always false
+tests/valid/equality.liz: warning literals: both sides of === are literals, so it is always true
+tests/valid/equality.liz: warning literals: both sides of === are literals, so it is always true
+tests/valid/exponents_and_else_if.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/exponents_and_else_if.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/exponents_and_else_if.liz: warning literals: both sides of === are literals, so it is always false
+tests/valid/floats.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/floats.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/floats.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/floats.liz: warning literals: both sides of === are literals, so it is always false
+tests/valid/floats.liz: warning literals: both sides of === are literals, so it is always false
+tests/valid/layers.liz: warning shadow: let outside hides the outside of line 25
+tests/valid/layers.liz: warning shadow: let size hides the size of line 6
+tests/valid/math_and_units.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/math_and_units.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/modules.liz: error unknown-name: identifier not found: _made
+tests/valid/scopes.liz: warning shadow: let x hides the x of line 1
+tests/valid/scopes.liz: warning shadow: let x hides the x of line 1
+tests/valid/scopes.liz: warning shadow: let x hides the x of line 3
+tests/valid/scopes.liz: warning unused: inner is never used
+tests/valid/scopes.liz: warning unused: the parameter v is never used
+tests/valid/short_circuit.liz: error unknown-name: identifier not found: undefinedVariable
+tests/valid/statements_end_at_newline.liz: error return: this return gives null: the value on the next line is a statement of its own
+tests/valid/strings.liz: warning literals: both sides of != are literals, so it is always true
+tests/valid/strings.liz: warning literals: both sides of == are literals, so it is always true
+tests/valid/try_catch.liz: error unknown-name: identifier not found: nope
+tests/valid/try_catch.liz: error unknown-name: identifier not found: nope
+tests/valid/try_catch.liz: error unknown-name: identifier not found: nope
+tests/valid/try_catch.liz: warning unused: r is never used
+tests/valid/unicode_escapes.liz: warning literals: both sides of == are literals, so it is always true

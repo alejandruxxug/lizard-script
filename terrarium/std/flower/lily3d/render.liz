@@ -1,0 +1,267 @@
+-~> render: drawing a scene, seen by a camera, into a target (a window, a
+-~> surface or an image). For each object:
+-~>
+-~>   1. its corners go into the world (its transform) and into clip space
+-~>      (the camera's view and projection);
+-~>   2. a face whose back is towards the camera is left out (unless the
+-~>      material says "cull": false);
+-~>   3. its corners are lit (or its middle, with flat shading) and fade
+-~>      into the fog;
+-~>   4. it is cut to the near and far planes (clip.liz) and put on the
+-~>      screen;
+-~>   5. the Terrarium's triangles fills its pixels, keeping the nearest.
+-~>
+-~> Steps 1 to 4 are here, in lizard-script; only step 5, pixel by pixel,
+-~> is done by the host. Objects that see through (a color with alpha) are
+-~> drawn after the others, so what is behind them is there to be seen.
+
+use "check"
+use "vec"
+use "matrix"
+use "camera"
+use "light"
+use "clip"
+use "scene"
+
+-~> Draws the scene into target and gives how many triangles were filled.
+-~> The background (if the scene has one) and the depth are cleared first.
+-~> example: render(s, camera((0, 1.5, 4), (0, 0, 0), 60deg), w)
+function render(s, cam, target) {
+  need_hash("render", "scene", s)
+  if (type(cam) != "HASH" || cam.kind == null) {
+    fail("render", "want a camera made by lily3d.camera or ortho_camera, not " + type(cam))
+  }
+  let size = img.size(target)
+  if (s.background) {
+    img.clear(target, s.background)
+  }
+  img.triangles(target, [], {"clear_depth": true})
+  if (size.x == 0 || size.y == 0) {
+    return 0
+  }
+  let view = view_matrix(cam)
+  let ctx = {
+    "target": target, "width": size.x, "height": size.y, "eye": cam.eye,
+    "ortho": cam.kind == "orthographic",
+    "forward": normalize(cam.target - cam.eye),
+    "view_projection": multiply(projection_matrix(cam, size.x / float(size.y)), view),
+    "lights": prepare_lights(scene_lights(s)), "fog": s.fog, "count": 0}
+  let later = []
+  for (let i = 0; i < len(s.objects); i += 1) {
+    let object = s.objects[i]
+    if (!object.visible) {
+      continue
+    }
+    if (option(object.material, "color", #d0d0d0).a < 255) {
+      push(later, object)
+    } else {
+      _draw(object, ctx)
+    }
+  }
+  for (let i = 0; i < len(later); i += 1) {
+    _draw(later[i], ctx)
+  }
+  ctx.count
+}
+
+-~> Where a point of the world lands on a target width by height pixels
+-~> seen by the camera: (x, y, depth), or null when it isn't between the
+-~> near and far planes. For a label next to a 3D thing.
+function screen_point(cam, size, p) {
+  let vp = multiply(projection_matrix(cam, size.x / float(size.y)), view_matrix(cam))
+  let v = project(vp, p) + []
+  push(v, (0.0, 0.0, 0.0))
+  if (!seen(v)) {
+    return null
+  }
+  to_screen(v, size.x, size.y)
+}
+
+-~> The material's settings with their defaults, and its color as a
+-~> vector.
+function _settings(material) {
+  let color = option(material, "color", #d0d0d0)
+  let wire = option(material, "wireframe", false)
+  {"base": from_color(color), "alpha": color.a,
+   "flat": option(material, "shading", "smooth") == "flat",
+   "lit": option(material, "lit", true), "cull": option(material, "cull", true),
+   "shine": option(material, "shine", 0), "specular": float(option(material, "specular", 0.5)),
+   "fill": wire != true, "wire": wire, "line_width": float(option(material, "line_width", 1))}
+}
+
+-~> Draws one object.
+function _draw(object, ctx) {
+  let m = object.mesh
+  let model = object.transform
+  let set = _settings(object.material)
+  let mvp = multiply(ctx.view_projection, model)
+  let turn = normal_matrix(model)
+  let positions = m.positions
+  let world = []
+  let clips = []
+  for (let i = 0; i < len(positions); i += 1) {
+    push(world, apply(model, positions[i]))
+    push(clips, project(mvp, positions[i]))
+  }
+  -~> The corners' colors, worked out the first time a face needs them: one
+  -~> list for the front, one for the back (seen when cull is off).
+  let front = []
+  let back = []
+  for (let i = 0; i < len(positions); i += 1) {
+    push(front, null)
+    push(back, null)
+  }
+
+  let fills = []
+  let wires = []
+  let faces = m.faces
+  for (let i = 0; i < len(faces); i += 1) {
+    let f = faces[i]
+    let a = world[f[0]]
+    let b = world[f[1]]
+    let c = world[f[2]]
+    let n = cross(b - a, c - a)
+    let toward = ctx.eye - a
+    if (ctx.ortho) {
+      toward = -ctx.forward
+    }
+    let facing = n.x * toward.x + n.y * toward.y + n.z * toward.z > 0
+    if (!facing && set.cull) {
+      continue
+    }
+    let ca = null
+    let cb = null
+    let cc = null
+    if (set.flat) {
+      let normal = normalize(n)
+      if (!facing) {
+        normal = -normal
+      }
+      let middle = (a + b + c) / 3.0
+      let color = _light(set, ctx, middle, normal)
+      ca = _fog(ctx, a, color)
+      cb = _fog(ctx, b, color)
+      cc = _fog(ctx, c, color)
+    } else {
+      let cache = front
+      let sign = 1.0
+      if (!facing) {
+        cache = back
+        sign = -1.0
+      }
+      ca = _corner(m, f[0], cache, sign, world, turn, set, ctx)
+      cb = _corner(m, f[1], cache, sign, world, turn, set, ctx)
+      cc = _corner(m, f[2], cache, sign, world, turn, set, ctx)
+    }
+    let va = clips[f[0]] + [ca]
+    let vb = clips[f[1]] + [cb]
+    let vc = clips[f[2]] + [cc]
+    if (set.fill) {
+      _fill(fills, va, vb, vc, set.alpha, ctx)
+    }
+    if (set.wire) {
+      _edge(wires, va, vb, set, ctx)
+      _edge(wires, vb, vc, set, ctx)
+      _edge(wires, vc, va, set, ctx)
+    }
+  }
+  img.triangles(ctx.target, fills)
+  img.triangles(ctx.target, wires)
+  ctx.count += len(fills)
+}
+
+-~> The color of corner k of the mesh, from the cache or lit now.
+function _corner(m, k, cache, sign, world, turn, set, ctx) {
+  let color = cache[k]
+  if (color == null) {
+    let normal = normalize(apply_direction(turn, m.normals[k])) * sign
+    color = _fog(ctx, world[k], _light(set, ctx, world[k], normal))
+    cache[k] = color
+  }
+  color
+}
+
+-~> The lit color of the material at p with the normal n.
+function _light(set, ctx, p, n) {
+  if (!set.lit) {
+    return set.base
+  }
+  shade(ctx.lights, set.base, p, n, ctx.eye, set.shine, set.specular)
+}
+
+-~> The color faded into the fog by how far p is from the eye.
+function _fog(ctx, p, color) {
+  let fog = ctx.fog
+  if (fog == null) {
+    return color
+  }
+  let t = (length(p - ctx.eye) - fog.near) / (fog.far - fog.near)
+  lerp(color, from_color(fog.color), math.max(0.0, math.min(1.0, t)))
+}
+
+-~> Adds the triangle to the fills, cut to the planes, as the Terrarium's
+-~> triangles takes them.
+function _fill(fills, va, vb, vc, alpha, ctx) {
+  let polygon = [va, vb, vc]
+  if (!seen(va) || !seen(vb) || !seen(vc)) {
+    polygon = clip_triangle(va, vb, vc)
+    if (len(polygon) < 3) {
+      return null
+    }
+  }
+  let corners = []
+  for (let i = 0; i < len(polygon); i += 1) {
+    let v = polygon[i]
+    push(corners, [to_screen(v, ctx.width, ctx.height), to_color(v[4], alpha)])
+  }
+  for (let i = 1; i < len(corners) - 1; i += 1) {
+    let p = corners[0]
+    let q = corners[i]
+    let r = corners[i + 1]
+    if (p[1] == q[1] && q[1] == r[1]) {
+      push(fills, [p[0], q[0], r[0], p[1]])
+    } else {
+      push(fills, [p[0], p[1], q[0], q[1], r[0], r[1]])
+    }
+  }
+}
+
+-~> Adds the edge from va to vb as a thin band of two triangles, a little
+-~> nearer than the faces it is on so they don't hide it.
+function _edge(wires, va, vb, set, ctx) {
+  let seg = clip_segment(va, vb)
+  if (seg == null) {
+    return null
+  }
+  let p = _nearer(to_screen(seg[0], ctx.width, ctx.height), ctx)
+  let q = _nearer(to_screen(seg[1], ctx.width, ctx.height), ctx)
+  let dx = q.x - p.x
+  let dy = q.y - p.y
+  let long = math.sqrt(dx * dx + dy * dy)
+  if (long < 1e-9) {
+    return null
+  }
+  let k = set.line_width / 2.0 / long
+  let side = (-dy * k, dx * k, 0.0)
+  let cp = null
+  let cq = null
+  if (type(set.wire) == "COLOR") {
+    cp = set.wire
+    cq = set.wire
+  } else {
+    cp = to_color(seg[0][4], set.alpha)
+    cq = to_color(seg[1][4], set.alpha)
+  }
+  push(wires, [p + side, cp, q + side, cq, q - side, cq])
+  push(wires, [p + side, cp, q - side, cq, p - side, cp])
+}
+
+-~> The screen point moved a little towards the camera: a hundredth of its
+-~> distance with perspective, where the depth is 1 - near / distance, and
+-~> a fixed step with an orthographic camera, where it grows evenly.
+function _nearer(p, ctx) {
+  if (ctx.ortho) {
+    return (p.x, p.y, p.z - 0.002)
+  }
+  (p.x, p.y, p.z - 0.01 * (1 - p.z))
+}

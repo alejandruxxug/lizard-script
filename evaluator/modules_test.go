@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // moduleFiles are the modules the tests of use load, written to a folder of
@@ -88,7 +89,7 @@ func TestUse(t *testing.T) {
 		{"missing", "use \"nope\"", `can't find the module "nope": there is no ` + dir + "/nope.liz"},
 		{"cycle", "use \"cycle_a\"", "use cycle: " + dir + "/cycle_a.liz uses " + dir + "/cycle_b.liz, which uses " + dir + "/cycle_a.liz"},
 		{"uses itself", "use \"self\"", "use cycle: " + dir + "/self.liz uses itself"},
-		{"syntax errors", "use \"broken\"", "[line 1, column 5] syntax error: expected identifier, got \"=\"\n[line 2, column 5]"},
+		{"syntax errors", "use \"broken\"", "[line 1, column 5] syntax error: let needs a name before the \"=\", like let x = 1\n[line 2, column 5]"},
 		{"runtime errors", "use \"fails\"", "[line 2, column 11] runtime error: type mismatch: INTEGER + STRING"},
 	}
 	for _, tt := range tests {
@@ -176,5 +177,56 @@ func TestReadModule(t *testing.T) {
 	got, _ := runModuleProgram(t, "virtual", "use \"x\"")
 	if !strings.Contains(got.Inspect(), `can't read the module "x": permission denied`) {
 		t.Errorf("got %s", got.Inspect())
+	}
+}
+
+func TestStandardModules(t *testing.T) {
+	dir := writeModules(t)
+	saved := StandardModules
+	defer func() { StandardModules, ModulePath = saved, nil }()
+	StandardModules = fstest.MapFS{
+		"kit.liz":        {Data: []byte("use \"kit/parts\"\nlet kit = {\"size\": size}")},
+		"kit/parts.liz":  {Data: []byte("use \"more\"\nlet size = 3 + more")},
+		"kit/more.liz":   {Data: []byte("let more = 1")},
+		"shapes.liz":     {Data: []byte("let sides = 100")},
+		"found.liz":      {Data: []byte("let found = \"standard\"")},
+		"bad.liz":        {Data: []byte("let x = 1 + \"a\"")},
+		"nested/odd.liz": {Data: []byte("use \"../kit\"\nlet odd = kit.size")},
+	}
+	tests := []struct {
+		name, input, want string
+	}{
+		{"a standard module", "use \"kit\"\nkit.size", "4"},
+		{"with as", "use \"kit\" as k\nk.kit.size", "4"},
+		{"its own files are found next to it", "use \"kit/parts\"\nsize", "4"},
+		{"a parent folder inside the standard modules", "use \"nested/odd\"\nodd", "4"},
+		{"the program's folder comes first", "use \"shapes\"\nsides", "3"},
+		{"its errors carry its name", "use \"bad\"", "type mismatch"},
+		{"missing lists only the files on disk", "use \"nope\"", `can't find the module "nope": there is no ` + dir + "/nope.liz"},
+		{"no climbing out", "use \"../kit\"", `can't find the module "../kit"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _ := runModuleProgram(t, dir, tt.input)
+			text := got.Inspect()
+			if err, ok := got.(*object.Error); ok {
+				text = err.Message
+			}
+			if !strings.Contains(text, tt.want) {
+				t.Errorf("got %s, want %s", text, tt.want)
+			}
+		})
+	}
+
+	got, _ := runModuleProgram(t, dir, "use \"bad\"")
+	if err, ok := got.(*object.Error); !ok || err.Source != "std:/bad.liz" {
+		t.Errorf("the error of a standard module is %#v, want one from std:/bad.liz", got)
+	}
+	ModulePath = []string{dir + "/lib"}
+	if got, _ := runModuleProgram(t, t.TempDir(), "use \"found\"\nfound"); got.Inspect() != "on the path" {
+		t.Errorf("ModulePath must come before the standard modules: %s", got.Inspect())
+	}
+	if !IsStandardModule("std:/kit.liz") || IsStandardModule("kit.liz") {
+		t.Errorf("IsStandardModule is wrong")
 	}
 }

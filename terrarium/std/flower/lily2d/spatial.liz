@@ -1,0 +1,110 @@
+-~> spatial: a grid of buckets over the plane, to find the things near a
+-~> point or a box without looking at every one of them. Each thing is an
+-~> id (an integer or a string) with a box [x0, y0, x1, y1]; a bucket is one
+-~> square cell of the grid and holds the ids of the boxes that touch it.
+-~>   spatial_new(cell)              an empty index with cells `cell` pixels wide
+-~>   spatial_insert(ix, id, box)    adds an id (an id already there is moved)
+-~>   spatial_remove(ix, id)         takes it out (nothing if it is not there)
+-~>   spatial_update(ix, id, box)    the same as remove then insert
+-~>   spatial_query(ix, box)         the ids whose boxes touch box, in no order
+-~>   spatial_at(ix, p)              the ids whose boxes hold the point p
+-~> Boxes are closed: two boxes that only share an edge touch.
+
+-~> Cells are numbered from -spatial_reach to spatial_reach on each axis; a box
+-~> beyond that lands in the cells at the border, so it is still found.
+let spatial_reach = 2048
+let spatial_row = 2 * spatial_reach + 1
+
+function spatial_new(cell) {
+  {"cell": cell, "cells": {}, "boxes": {}}
+}
+
+-~> The cell number of a coordinate, held inside the grid.
+function spatial_cell(ix, v) {
+  math.max(-spatial_reach, math.min(spatial_reach, math.floor(float(v) / ix.cell)))
+}
+
+-~> The cells a box touches, as [cx0, cy0, cx1, cy1].
+function spatial_span(ix, box) {
+  return [spatial_cell(ix, box[0]), spatial_cell(ix, box[1]), spatial_cell(ix, box[2]), spatial_cell(ix, box[3])]
+}
+
+function spatial_key(cx, cy) {
+  (cy + spatial_reach) * spatial_row + cx + spatial_reach
+}
+
+function spatial_insert(ix, id, box) {
+  if (ix.boxes[id] !== null) {
+    spatial_remove(ix, id)
+  }
+  ix.boxes[id] = box
+  let c = spatial_span(ix, box)
+  for (let cy = c[1]; cy <= c[3]; cy += 1) {
+    for (let cx = c[0]; cx <= c[2]; cx += 1) {
+      let k = spatial_key(cx, cy)
+      let bucket = ix.cells[k]
+      if (bucket === null) {
+        bucket = {}
+        ix.cells[k] = bucket
+      }
+      bucket[id] = true
+    }
+  }
+  null
+}
+
+function spatial_remove(ix, id) {
+  let box = ix.boxes[id]
+  if (box === null) {
+    return null
+  }
+  let c = spatial_span(ix, box)
+  for (let cy = c[1]; cy <= c[3]; cy += 1) {
+    for (let cx = c[0]; cx <= c[2]; cx += 1) {
+      let k = spatial_key(cx, cy)
+      let bucket = ix.cells[k]
+      delete(bucket, id)
+      if (len(bucket) == 0) {
+        delete(ix.cells, k)
+      }
+    }
+  }
+  delete(ix.boxes, id)
+  null
+}
+
+function spatial_update(ix, id, box) {
+  spatial_insert(ix, id, box)
+}
+
+function spatial_touch(a, b) {
+  a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3]
+}
+
+function spatial_query(ix, box) {
+  let seen = {}
+  let out = []
+  let c = spatial_span(ix, box)
+  for (let cy = c[1]; cy <= c[3]; cy += 1) {
+    for (let cx = c[0]; cx <= c[2]; cx += 1) {
+      let bucket = ix.cells[spatial_key(cx, cy)]
+      if (bucket !== null) {
+        let ids = keys(bucket)
+        for (let i = 0; i < len(ids); i += 1) {
+          let id = ids[i]
+          if (seen[id] === null) {
+            seen[id] = true
+            if (spatial_touch(ix.boxes[id], box)) {
+              push(out, id)
+            }
+          }
+        }
+      }
+    }
+  }
+  out
+}
+
+function spatial_at(ix, p) {
+  spatial_query(ix, [p.x, p.y, p.x, p.y])
+}

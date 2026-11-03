@@ -93,15 +93,29 @@ type Parser struct {
 	prefixParseFns map[token.TokenType]prefixParseFn
 	infixParseFns  map[token.TokenType]infixParseFn
 
-	recovering bool   // an error was found and the statement is being abandoned
-	braceDepth int    // how many '{' are open, of blocks and hashes
-	blockBrace int    // braceDepth inside the innermost block, 0 at the top level
-	parenDepth int    // how many '(' are open
-	brackets   []bool // the open '(', '[' and '{', innermost last: true where a line break is just a space
-	loopDepth  int    // how many loops are open in the current function
-	layerDepth int    // how many layer bodies are open, for the top level of use
-	depth      int    // how many expressions and blocks are being parsed inside each other
-	abandoned  bool   // the program nests too deeply and the rest of it was skipped
+	braceDepth     int         // how many '{' are open, of blocks and hashes
+	blockBrace     int         // braceDepth inside the innermost block, 0 at the top level
+	parenDepth     int         // how many '(' are open
+	brackets       []bracket   // the open '(', '[' and '{', innermost last
+	lineIndent     int         // the column of the first token on the line of curToken
+	statementStart token.Token // the first token of the statement being parsed
+	loopDepth      int         // how many loops are open in the current function
+	layerDepth     int         // how many layer bodies are open, for the top level of use
+	depth          int         // how many expressions and blocks are being parsed inside each other
+	abandoned      bool        // the program nests too deeply and the rest of it was skipped
+
+	// Error recovery, see recovery.go.
+	recovering   bool         // an error was found and the statement is being abandoned
+	errorLine    int          // the line of the last error, 0 before the first one
+	endReported  bool         // an error was found at the end of the input, which the open blocks don't repeat
+	closed       bracket      // what the last closer closed, empty when it closed nothing
+	keepOpen     bool         // the next closer closes nothing: synchronize found it stray
+	blockMissing bool         // the '{' of a block was missing, and no unseen one was opened yet
+	blockIndent  int          // the indentation of the line where the innermost block began
+	blockErrors  int          // how many errors there were when the innermost block began
+	endedEarly   bool         // the block ended before a '}' that closes the one around it
+	misaligned   *token.Token // the '{' of the first block closed by a '}' left of its line
+	useRejected  *token.Token // the block of the last use that was not at the top level
 }
 
 // New creates a Parser that reads its tokens from l.
@@ -170,19 +184,33 @@ func (p *Parser) Errors() []string {
 
 // errorAt records an error at tok, and from then on ignores the rest of the
 // statement: whatever else goes wrong in it is a consequence of this error.
+// Once an error is found at the end of the input, the blocks still open
+// there are a consequence of it too, so they are not reported.
 // An ILLEGAL token is reported as a lexical error, whatever the parser was
 // expecting, because that is the stage where the mistake is.
 func (p *Parser) errorAt(tok token.Token, format string, args ...any) {
-	if p.recovering || p.abandoned {
+	if p.recovering || p.abandoned || (tok.Type == token.EOF && p.endReported) {
 		return
 	}
 	p.recovering = true
+	p.endReported = p.endReported || tok.Type == token.EOF || p.peekTokenIs(token.EOF)
 
 	kind, message := "syntax error", fmt.Sprintf(format, args...)
 	if tok.Type == token.ILLEGAL {
 		kind, message = "lexical error", illegalMessage(tok)
 	}
-	p.errors = append(p.errors, at(tok, kind+": "+message))
+	p.report(tok, kind+": "+message)
+}
+
+// report adds message, at tok, to the errors. An error on the same line as
+// the one before is left out: one mistake often breaks the rest of its line,
+// and a second, independent one there shows up once the first is fixed.
+func (p *Parser) report(tok token.Token, message string) {
+	if tok.Line == p.errorLine {
+		return
+	}
+	p.errorLine = tok.Line
+	p.errors = append(p.errors, at(tok, message))
 }
 
 // at writes message after the position of tok, the way errors show it.
@@ -193,7 +221,7 @@ func at(tok token.Token, message string) string {
 // illegalMessage explains why the lexer rejected tok.
 func illegalMessage(tok token.Token) string {
 	if strings.HasPrefix(tok.Literal, "\"") {
-		return "unterminated string"
+		return "unterminated string: this \" is never closed"
 	}
 	if strings.HasPrefix(tok.Literal, "#") && len(tok.Literal) > 1 {
 		return "bad color " + tok.Literal
@@ -228,28 +256,6 @@ func describeType(t token.TokenType) string {
 	return fmt.Sprintf("%q", string(t))
 }
 
-// synchronize skips the tokens of a broken statement so parsing can go on
-// with the next one. Braces opened by the broken statement are skipped whole,
-// so a ';' or '}' inside them doesn't count. Outside of them it stops on a ';'
-// or '}', or just before the '}' of the enclosing block, or just before the
-// end of input. Stopping there lets the caller's nextToken land on the next
-// statement.
-func (p *Parser) synchronize() {
-	p.recovering = false
-
-	for !p.curTokenIs(token.EOF) {
-		if p.braceDepth <= p.blockBrace {
-			if p.curTokenIs(token.SEMICOLON) || p.curTokenIs(token.RBRACE) {
-				return
-			}
-			if p.peekTokenIs(token.EOF) || (p.blockBrace > 0 && p.peekTokenIs(token.RBRACE)) {
-				return
-			}
-		}
-		p.nextToken()
-	}
-}
-
 // enter counts one more level of nesting. Its caller must defer leave, even
 // when it returns false. Past maxNestingDepth it reports the error and skips
 // the rest of the input, so the levels that are open end quietly instead of
@@ -272,33 +278,20 @@ func (p *Parser) leave() {
 	p.depth--
 }
 
-// nextToken moves one token forward and keeps the depth counters and the
-// stack of open brackets up to date. A '{' goes on the stack as a block;
-// parseHashLiteral marks the ones that open a hash.
+// nextToken moves one token forward and keeps the stack of open brackets
+// and the indentation of the current line up to date.
 func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
 	p.peekToken = p.l.NextToken()
 
-	switch {
-	case p.curTokenIs(token.LBRACE):
-		p.braceDepth++
-	case p.curTokenIs(token.RBRACE) && p.braceDepth > 0:
-		p.braceDepth--
-	case p.curTokenIs(token.LPAREN):
-		p.parenDepth++
-	case p.curTokenIs(token.RPAREN) && p.parenDepth > 0:
-		p.parenDepth--
+	if p.curToken.LineStart {
+		p.lineIndent = p.curToken.Column
 	}
-
 	switch p.curToken.Type {
-	case token.LPAREN, token.LBRACKET:
-		p.brackets = append(p.brackets, true)
-	case token.LBRACE:
-		p.brackets = append(p.brackets, false)
+	case token.LPAREN, token.LBRACKET, token.LBRACE:
+		p.open(p.curToken)
 	case token.RPAREN, token.RBRACKET, token.RBRACE:
-		if len(p.brackets) > 0 {
-			p.brackets = p.brackets[:len(p.brackets)-1]
-		}
+		p.close(p.curToken.Type)
 	}
 }
 
@@ -308,7 +301,7 @@ func (p *Parser) nextToken() {
 // (lexer.ContinuesLine) or a '(', '[' or hash is still open. A block's '{'
 // starts statements again, so inside "f(function() { ... })" lines end.
 func (p *Parser) lineEnds() bool {
-	open := len(p.brackets) > 0 && p.brackets[len(p.brackets)-1]
+	open := len(p.brackets) > 0 && p.brackets[len(p.brackets)-1].space
 	return p.peekToken.LineStart && !open && !lexer.ContinuesLine(p.curToken.Type)
 }
 
@@ -413,16 +406,27 @@ func (p *Parser) finishAt(node ast.Node, line, column int) {
 
 // parseStatementList parses statements until curToken is end or EOF. After a
 // broken statement it synchronizes and carries on, so one run reports as many
-// independent errors as possible.
+// independent errors as possible. A broken statement can end on the '}' of
+// the block, and then the list ends there too.
 func (p *Parser) parseStatementList(end token.TokenType) []ast.Statement {
 	statements := []ast.Statement{}
 
 	for !p.curTokenIs(end) && !p.curTokenIs(token.EOF) {
+		base := p.statementBase()
 		stmt := p.parseStatement()
 		if p.recovering {
-			p.synchronize()
+			p.synchronize(base)
 		} else if stmt != nil {
 			statements = append(statements, stmt)
+		}
+		if len(p.brackets) < base {
+			break
+		}
+		if end == token.RBRACE && p.outdentedBrace(base) {
+			// The block ends here, and the '}' is left to the block around it.
+			p.closeTo(base - 1)
+			p.recovering, p.endedEarly = true, true
+			break
 		}
 		p.nextToken()
 	}
@@ -433,8 +437,10 @@ func (p *Parser) parseStatementList(end token.TokenType) []ast.Statement {
 // parseStatement parses the statement that starts at curToken and sets its
 // span. It returns nil for an empty statement (";") and for a broken one.
 func (p *Parser) parseStatement() ast.Statement {
-	first := p.curToken
+	first, outer := p.curToken, p.statementStart
+	p.statementStart = first
 	stmt := p.parseStatementKind()
+	p.statementStart = outer
 	if stmt != nil {
 		p.finish(stmt, first)
 	}
@@ -509,11 +515,15 @@ func (p *Parser) numberTouchesName() bool {
 func (p *Parser) parseLetStatement() ast.Statement {
 	stmt := &ast.LetStatement{Token: p.curToken}
 
-	if !p.expectPeek(token.IDENT) {
+	if !p.expectName("let") {
 		return nil
 	}
 	stmt.Name = p.currentIdentifier()
 
+	if p.peekTokenIs(token.COLON) {
+		p.errorAt(p.peekToken, "a let gives its value with \"=\", not \":\"")
+		return nil
+	}
 	if !p.expectPeek(token.ASSIGN) {
 		return nil
 	}
@@ -654,7 +664,7 @@ func (p *Parser) parseTryStatement() ast.Statement {
 			return nil
 		}
 	}
-	if !p.expectPeek(token.LBRACE) {
+	if !p.expectBlockOpen() {
 		return nil
 	}
 	stmt.Catch = p.parseBlockStatement()
@@ -684,6 +694,15 @@ func (p *Parser) parseUseStatement() ast.Statement {
 	stmt := &ast.UseStatement{Token: p.curToken}
 
 	if p.blockBrace > 0 || p.layerDepth > 0 {
+		// A block that is never closed holds every use after it, so each
+		// block reports its first one only, and none after an earlier
+		// mistake when the use starts its line like a top-level one.
+		block := p.innermostBlock()
+		if p.useRejected != nil && *p.useRejected == block || len(p.errors) > 0 && p.curToken.Column == 1 {
+			p.recovering = true
+			return nil
+		}
+		p.useRejected = &block
 		p.errorAt(p.curToken, "use must be at the top level of a file, not inside a block or a layer")
 		return nil
 	}
@@ -707,6 +726,17 @@ func (p *Parser) parseUseStatement() ast.Statement {
 
 	p.endStatement()
 	return stmt
+}
+
+// innermostBlock returns the '{' of the innermost open block, or an empty
+// token outside of any.
+func (p *Parser) innermostBlock() token.Token {
+	for i := len(p.brackets) - 1; i >= 0; i-- {
+		if !p.brackets[i].space {
+			return p.brackets[i].tok
+		}
+	}
+	return token.Token{}
 }
 
 // startsLayer reports whether the statement that begins at curToken is a
@@ -750,14 +780,15 @@ func (p *Parser) parseLayerStatement() ast.Statement {
 	for !p.peekTokenIs(token.EOF) && !p.peekTokenIs(token.RBRACE) &&
 		p.peekToken.Line > layer.Line && p.peekToken.Column > layer.Column {
 		p.nextToken()
+		base := p.statementBase()
 		inner := p.parseStatement()
 		if p.recovering {
-			p.synchronize()
-			if p.braceDepth < p.blockBrace {
-				break
-			}
+			p.synchronize(base)
 		} else if inner != nil {
 			stmt.Body.Statements = append(stmt.Body.Statements, inner)
+		}
+		if len(p.brackets) < base {
+			break
 		}
 	}
 	return stmt
@@ -804,36 +835,61 @@ func (p *Parser) parseFunctionDeclaration() ast.Statement {
 	return stmt
 }
 
+// parseExpressionStatement parses an expression used as a statement. When it
+// is broken and starts with a word like "fucntion", the error says which
+// keyword was probably meant.
 func (p *Parser) parseExpressionStatement() ast.Statement {
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
+	errors := len(p.errors)
 
 	stmt.Expression = p.parseExpression(LOWEST)
+	if stmt.Expression != nil {
+		p.endStatement()
+	}
+	if p.recovering {
+		p.misspelledKeyword(stmt.Token, errors)
+	}
 	if stmt.Expression == nil {
 		return nil
 	}
-
-	p.endStatement()
 	return stmt
 }
 
 // parseBlockStatement parses the statements between '{' and '}'. It starts
 // on the '{' and ends on the '}'.
+//
+// A block that is never closed is only found at the end of the input, where
+// every '}' after the missing one has closed the wrong block. The first
+// block closed by a '}' that starts its line left of the line of its '{' is
+// where the '}' was most likely forgotten, so the error goes there. After a
+// mistake inside the block, such a '}' is taken as the end of the block
+// around it instead (see outdentedBrace).
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	block := &ast.BlockStatement{Token: p.curToken}
+	indent := p.lineIndent
 
 	defer p.leave()
 	if !p.enter() {
 		return block
 	}
 
-	outerBlockBrace := p.blockBrace
-	p.blockBrace = p.braceDepth
+	outerBlockBrace, outerIndent, outerErrors := p.blockBrace, p.blockIndent, p.blockErrors
+	p.blockBrace, p.blockIndent, p.blockErrors = p.braceDepth, indent, len(p.errors)
 	p.nextToken()
 	block.Statements = p.parseStatementList(token.RBRACE)
-	p.blockBrace = outerBlockBrace
+	p.blockBrace, p.blockIndent, p.blockErrors = outerBlockBrace, outerIndent, outerErrors
 
-	if !p.curTokenIs(token.RBRACE) {
-		p.errorAt(block.Token, "block is never closed: expected \"}\"")
+	switch {
+	case p.endedEarly:
+		p.endedEarly = false
+	case !p.curTokenIs(token.RBRACE) && !p.endReported:
+		open := block.Token
+		if p.misaligned != nil && p.misaligned.Line > open.Line {
+			open = *p.misaligned
+		}
+		p.errorAt(open, "block is never closed: expected \"}\"")
+	case p.misaligned == nil && p.curToken.LineStart && p.curToken.Column < indent:
+		p.misaligned = &block.Token
 	}
 
 	p.finish(block, block.Token)
@@ -859,7 +915,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
-		p.errorAt(p.curToken, "expected an expression, got %s", describeToken(p.curToken))
+		p.noExpression()
 		return nil
 	}
 	first := p.curToken
@@ -869,7 +925,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	}
 
 	for left != nil && precedence < p.peekPrecedence() {
-		if p.lineEnds() && !p.joinNextLine() {
+		leading := p.lineEnds()
+		if leading && !p.joinNextLine() {
 			return left
 		}
 		infix := p.infixParseFns[p.peekToken.Type]
@@ -878,6 +935,11 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		}
 		start := left.Range()
 		p.nextToken()
+		if leading && (p.peekToken.LineStart || p.peekTokenIs(token.EOF)) {
+			// The operator is alone on its line, so the next line is not its
+			// right side: the error is reported, and the operator skipped.
+			return left
+		}
 		left = infix(left)
 		if left != nil {
 			p.finishAt(left, start.StartLine, start.StartColumn)
@@ -885,6 +947,26 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	}
 
 	return left
+}
+
+// noExpression reports that curToken can't start an expression. A '}' in
+// the middle of a line that closed a block begun on an earlier line is more
+// likely a mistake than the end of the block, so the block is opened again
+// and the '}' closes nothing, as for a ')' or ']' with nothing to close.
+func (p *Parser) noExpression() {
+	tok := p.curToken
+	if b := p.closed; p.closedBlock() && tok.Type == token.RBRACE && !b.unseen &&
+		!tok.LineStart && b.tok.Line < tok.Line {
+		p.brackets = append(p.brackets, b)
+		p.braceDepth++
+		p.closed = bracket{}
+	}
+	switch {
+	case p.closed.tok.Type == "" && (tok.Type == token.RPAREN || tok.Type == token.RBRACKET || tok.Type == token.RBRACE):
+		p.errorAt(tok, "this %q has nothing to close", tok.Literal)
+	default:
+		p.errorAt(tok, "expected an expression, got %s", describeToken(tok))
+	}
 }
 
 // joinNextLine decides what happens to the operator that starts the next
@@ -908,7 +990,7 @@ func (p *Parser) joinNextLine() bool {
 	p.noteChange(operator, message)
 	// Like errorAt, but without abandoning the statement.
 	if !p.recovering && !p.abandoned {
-		p.errors = append(p.errors, at(operator, "syntax error: "+message))
+		p.report(operator, "syntax error: "+message)
 	}
 	return true
 }
@@ -1008,7 +1090,7 @@ func (p *Parser) parseGroupedExpression() ast.Expression {
 		return p.parsePointRest(open, expression)
 	}
 
-	if !p.expectPeek(token.RPAREN) {
+	if !p.expectClose(token.RPAREN) {
 		return nil
 	}
 	return expression
@@ -1032,7 +1114,7 @@ func (p *Parser) parsePointRest(open token.Token, first ast.Expression) ast.Expr
 		point.Coords = append(point.Coords, coord)
 	}
 
-	if !p.expectPeek(token.RPAREN) {
+	if !p.expectClose(token.RPAREN) {
 		return nil
 	}
 	if len(point.Coords) > 3 {
@@ -1049,11 +1131,11 @@ func (p *Parser) parseCondition() ast.Expression {
 	p.nextToken()
 
 	condition := p.parseExpression(LOWEST)
-	if condition == nil {
+	if condition == nil || p.assignInCondition(condition) {
 		return nil
 	}
 
-	if !p.expectPeek(token.LBRACE) {
+	if !p.expectBlockOpen() {
 		return nil
 	}
 	return condition
@@ -1090,7 +1172,7 @@ func (p *Parser) parseIfExpression() ast.Expression {
 			p.nextToken()
 			return p.parseElseIf(expression)
 		}
-		if !p.expectPeek(token.LBRACE) {
+		if !p.expectBlockOpen() {
 			return nil
 		}
 		expression.Alternative = p.parseBlockStatement()
@@ -1153,7 +1235,7 @@ func (p *Parser) parseForExpression() ast.Expression {
 		return nil
 	}
 
-	if !p.expectPeek(token.LBRACE) {
+	if !p.expectBlockOpen() {
 		return nil
 	}
 	expression.Body = p.parseLoopBody()
@@ -1191,7 +1273,7 @@ func (p *Parser) parseForHeader(expression *ast.ForExpression) bool {
 
 	if !p.curTokenIs(token.SEMICOLON) {
 		expression.Condition = p.parseExpression(LOWEST)
-		if expression.Condition == nil {
+		if expression.Condition == nil || p.assignInCondition(expression.Condition) {
 			return false
 		}
 		if !p.expectPeek(token.SEMICOLON) {
@@ -1205,7 +1287,7 @@ func (p *Parser) parseForHeader(expression *ast.ForExpression) bool {
 		if expression.Update == nil {
 			return false
 		}
-		if !p.expectPeek(token.RPAREN) {
+		if !p.expectClose(token.RPAREN) {
 			return false
 		}
 	}
@@ -1237,7 +1319,7 @@ func (p *Parser) parseFunction(function token.Token) ast.Expression {
 		return nil
 	}
 
-	if !p.expectPeek(token.LBRACE) {
+	if !p.expectBlockOpen() {
 		p.loopDepth = outerLoopDepth
 		return nil
 	}
@@ -1265,7 +1347,7 @@ func (p *Parser) parseFunctionParameters() ([]*ast.Identifier, []ast.Expression)
 	}
 
 	for {
-		if !p.expectPeek(token.IDENT) {
+		if !p.expectName("function") {
 			return nil, nil
 		}
 		parameter := p.currentIdentifier()
@@ -1298,7 +1380,7 @@ func (p *Parser) parseFunctionParameters() ([]*ast.Identifier, []ast.Expression)
 		p.nextToken()
 	}
 
-	if !p.expectPeek(token.RPAREN) {
+	if !p.expectClose(token.RPAREN) {
 		return nil, nil
 	}
 	return parameters, defaults
@@ -1318,18 +1400,50 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 // the '}'. Keys and values can be any expression, and a trailing comma is
 // allowed. A '{' can only start a hash, because blocks exist only as the body
 // of an if, loop or function.
+//
+// A broken hash that starts a statement was not meant as a hash. Right after
+// the '{' of a block, as in "if (a) { {", it is most likely one '{' too many,
+// so it is forgotten: it doesn't take the '}' of the block. Otherwise it was
+// probably meant as a block, so it is skipped as one, with its lines.
 func (p *Parser) parseHashLiteral() ast.Expression {
+	open := len(p.brackets) - 1
+	hash := p.parseHashPairs()
+	if hash != nil {
+		return hash
+	}
+	if open < len(p.brackets) && p.brackets[open].tok == p.statementStart {
+		if open > 0 && !p.brackets[open-1].space && p.brackets[open-1].tok.Line == p.statementStart.Line {
+			p.brackets = append(p.brackets[:open], p.brackets[open+1:]...)
+			p.braceDepth--
+		} else {
+			p.brackets[open].space = false
+		}
+	}
+	return nil
+}
+
+// parseHashPairs parses the pairs of a hash and its '}', starting on the '{'.
+// It returns nil on error.
+func (p *Parser) parseHashPairs() *ast.HashLiteral {
 	hash := &ast.HashLiteral{Token: p.curToken, Pairs: []ast.HashPair{}}
 	// Inside a hash a line break is just a space, as inside '(' and '['.
-	p.brackets[len(p.brackets)-1] = true
+	p.brackets[len(p.brackets)-1].space = true
 
 	for !p.peekTokenIs(token.RBRACE) {
+		if p.neverClosed() {
+			return nil
+		}
 		p.nextToken()
-		key := p.parseExpression(LOWEST)
+		// A key stops before '=', so {"a" = 1} gets the error that helps.
+		key := p.parseExpression(ASSIGN)
 		if key == nil {
 			return nil
 		}
 
+		if p.peekTokenIs(token.ASSIGN) {
+			p.errorAt(p.peekToken, "a hash puts \":\" between a key and its value, not \"=\"")
+			return nil
+		}
 		if !p.expectPeek(token.COLON) {
 			return nil
 		}
@@ -1342,7 +1456,7 @@ func (p *Parser) parseHashLiteral() ast.Expression {
 
 		hash.Pairs = append(hash.Pairs, ast.HashPair{Key: key, Value: value})
 
-		if !p.peekTokenIs(token.RBRACE) && !p.expectPeek(token.COMMA) {
+		if !p.peekTokenIs(token.RBRACE) && (p.neverClosed() || !p.expectPeek(token.COMMA)) {
 			return nil
 		}
 	}
@@ -1426,7 +1540,7 @@ func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
 		return nil
 	}
 
-	if !p.expectPeek(token.RBRACKET) {
+	if !p.expectClose(token.RBRACKET) {
 		return nil
 	}
 	return expression
@@ -1477,7 +1591,7 @@ func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
 		list = append(list, next)
 	}
 
-	if !p.expectPeek(end) {
+	if !p.expectClose(end) {
 		return nil
 	}
 	return list

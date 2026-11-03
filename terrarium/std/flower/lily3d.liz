@@ -1,0 +1,82 @@
+-~> lily3d: 3D graphics for every lizard program, drawn into a window, a
+-~> surface or an image: the 3D library of the flower family. Use it with
+-~> a name:
+-~>
+-~>   use "flower/lily3d" as lily3d
+-~>   let s = lily3d.scene()
+-~>   lily3d.add(s, lily3d.cube(1), lily3d.rotate_y(30deg), {"color": #f2a65a})
+-~>   lily3d.render(s, lily3d.camera((0, 1.5, 4), (0, 0, 0), 60deg), w)
+-~>
+-~> Everything is lizard-script (the math, the lights, the clipping) but
+-~> the filling of each triangle's pixels, the Terrarium's triangles. Its
+-~> parts, one idea each, are in flower/lily3d/; docs/flower/LILY3D.md
+-~> documents every function.
+
+use "lily3d/vec" as _vec
+use "lily3d/matrix" as _matrix
+use "lily3d/mesh" as _mesh
+use "lily3d/shapes" as _shapes
+use "lily3d/obj" as _obj
+use "lily3d/light" as _light
+use "lily3d/camera" as _camera
+use "lily3d/scene" as _scene
+use "lily3d/render" as _render
+
+-~> Vectors (points with three coordinates).
+let dot = _vec.dot
+let cross = _vec.cross
+let length = _vec.length
+let normalize = _vec.normalize
+let lerp = _vec.lerp
+
+-~> Matrices: transforms and projections.
+let identity = _matrix.identity
+let translate = _matrix.translate
+let scale = _matrix.scale
+let rotate_x = _matrix.rotate_x
+let rotate_y = _matrix.rotate_y
+let rotate_z = _matrix.rotate_z
+let rotate = _matrix.rotate
+let compose = _matrix.compose
+let multiply = _matrix.multiply
+let apply = _matrix.apply
+let apply_direction = _matrix.apply_direction
+let project = _matrix.project
+let transpose = _matrix.transpose
+let inverse = _matrix.inverse
+let normal_matrix = _matrix.normal_matrix
+let look_at = _matrix.look_at
+let perspective = _matrix.perspective
+let orthographic = _matrix.orthographic
+
+-~> Meshes and the shapes made for you.
+let mesh = _mesh.mesh
+let face_normal = _mesh.face_normal
+let smooth_normals = _mesh.smooth_normals
+let facets = _mesh.facets
+let bounds = _mesh.bounds
+let fit = _mesh.fit
+let transformed = _mesh.transformed
+let merge = _mesh.merge
+let surface = _shapes.surface
+let cube = _shapes.cube
+let plane = _shapes.plane
+let sphere = _shapes.sphere
+let cylinder = _shapes.cylinder
+let cone = _shapes.cone
+let torus = _shapes.torus
+let load_obj = _obj.load_obj
+let parse_obj = _obj.parse_obj
+
+-~> Lights, cameras, scenes and drawing.
+let ambient = _light.ambient
+let directional = _light.directional
+let point_light = _light.point_light
+let camera = _camera.camera
+let ortho_camera = _camera.ortho_camera
+let scene = _scene.scene
+let add = _scene.add
+let remove = _scene.remove
+let light = _scene.light
+let render = _render.render
+let screen_point = _render.screen_point

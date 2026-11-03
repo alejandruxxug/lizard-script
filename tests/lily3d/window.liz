@@ -1,0 +1,23 @@
+-~> lily3d draws into a headless window and its surfaces like into an
+-~> image; each render clears the depth, so frame after frame works.
+use "flower/lily3d" as lily3d
+use "golden"
+
+let w = window.open(160, 100, "lily3d", {"headless": true})
+let side = window.surface(w, "side", [100, 0, 60, 100], 1)
+let s = lily3d.scene({"background": #1d1b22})
+let box = lily3d.add(s, lily3d.cube(1.2), lily3d.identity(), {"color": #f2a65a, "shine": 16})
+let cam = lily3d.camera((0, 1.5, 3), (0, 0, 0), 60deg)
+let frames = 0
+window.run(w, function(events) {
+  box.transform = lily3d.rotate_y(frames * 15deg)
+  lily3d.render(s, cam, w)
+  lily3d.render(s, lily3d.camera((3, 0.5, 0), (0, 0, 0), 50deg), side)
+  frames += 1
+  frames < 3
+})
+puts("frames:", frames)
+check("window", window.screenshot(w))
+
+-~> An empty target and an empty scene draw nothing.
+puts(lily3d.render(lily3d.scene(), cam, img.new(0, 0)), lily3d.render(lily3d.scene(), cam, img.new(4, 4)))

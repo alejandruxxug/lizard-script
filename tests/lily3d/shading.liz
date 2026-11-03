@@ -1,0 +1,28 @@
+-~> One sphere four ways (smooth, flat, unlit, only its edges), a cube that
+-~> sees through, a plane seen from behind with cull off, and an
+-~> orthographic camera.
+use "flower/lily3d" as lily3d
+use "golden"
+
+let picture = img.new(200, 120, #f4efe6)
+let s = lily3d.scene({"background": false})
+let ball = lily3d.sphere(0.45, 12)
+let looks = [{"color": #3b6ea5, "shine": 20}, {"color": #3b6ea5, "shading": "flat"}, {"color": #3b6ea5, "lit": false},
+  {"color": #3b6ea5, "wireframe": true, "line_width": 1.5}]
+for (let i = 0; i < len(looks); i += 1) {
+  lily3d.add(s, ball, lily3d.translate((i * 1.1 - 1.65, 0.55, 0)), looks[i])
+}
+let glass = lily3d.add(s, lily3d.cube(0.7), lily3d.compose(lily3d.rotate_y(30deg), lily3d.translate((-0.6, -0.5, 0.3))), {"color": #e2557b80})
+lily3d.add(s, lily3d.sphere(0.25, 8), lily3d.translate((-0.6, -0.5, 0.3)), {"color": #f6c453})
+lily3d.add(s, lily3d.plane(0.8), lily3d.compose(lily3d.rotate_x(-80deg), lily3d.translate((0.7, -0.5, 0))), {"color": #3fa34d, "cull": false})
+let cam = lily3d.ortho_camera((0, 0.6, 4), (0, 0, 0), 2.4)
+puts("triangles:", lily3d.render(s, cam, picture))
+puts("label at", lily3d.screen_point(cam, img.size(picture), (0, 0, 0)))
+puts("behind the camera:", lily3d.screen_point(cam, img.size(picture), (0, 0, 10)))
+check("shading", picture)
+
+-~> Hidden objects aren't drawn; remove takes one out.
+glass.visible = false
+lily3d.remove(s, glass)
+lily3d.remove(s, glass)
+puts("objects left:", len(s.objects))

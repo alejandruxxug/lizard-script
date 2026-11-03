@@ -1,0 +1,318 @@
+-~> lily2d: anti-aliased 2D vector graphics, the 2D library of the flower
+-~> family. Use it with a name:
+-~>
+-~>   use "flower/lily2d" as lily2d
+-~>   let w = window.open(600, 400, "lily")
+-~>   lily2d.circle(w, (300, 200), 50, #f2a65a)
+-~>
+-~> Every drawing call takes a target first: an image, a window or a
+-~> surface (the shape is painted now), a scene (the shape is added to it,
+-~> see lily2d.scene) or null (the shape is only made). Every one returns
+-~> the shape, a hash that can be drawn again, moved or exported. The style
+-~> is a paint (a color or a gradient) or a hash of style keys; see
+-~> docs/flower/LILY2D.md for all of it.
+-~>
+-~> The parts live in lily2d/: geometry, matrix, paint, style, stroke,
+-~> raster, shapes, pens, font_data, draw, regions, spatial, scene and svg.
+
+use "lily2d/check" as _check
+use "lily2d/geometry" as _geometry
+use "lily2d/matrix" as _matrix
+use "lily2d/paint" as _paint
+use "lily2d/pens" as _pens
+use "lily2d/raster" as _raster
+use "lily2d/shapes" as _shapes
+use "lily2d/draw" as _draw
+use "lily2d/scene" as _scene
+use "lily2d/svg" as _svg
+
+-~> Paints shape on target, adds it to a scene, or only returns it.
+function _out(call, target, shape) {
+  if (target === null) {
+    return shape
+  }
+  if (_scene.is_scene(target)) {
+    return target.add(shape)
+  }
+  if (type(target) != "NATIVE") {
+    _check.fail(call, "target must be an image, a window, a surface, a scene or null, not " + type(target))
+  }
+  _draw.draw_shape(target, shape)
+  shape
+}
+
+-~> ---- shapes ----
+
+-~> Draws a circle.
+-~> target: where it goes (an image, a window, a surface, a scene or null)
+-~> center: its middle, a point
+-~> r: its radius in pixels
+-~> style: a paint for the inside, or a style hash
+-~> example: lily2d.circle(w, (300, 200), 50, #f2a65a)
+function circle(target, center, r, style) {
+  _out("circle", target, _shapes.circle(center, r, style))
+}
+
+-~> Draws an ellipse.
+-~> radii: half its width and half its height, a point
+-~> example: lily2d.ellipse(w, (300, 200), (80, 40), #8fb996)
+function ellipse(target, center, radii, style) {
+  _out("ellipse", target, _shapes.ellipse(center, radii, style))
+}
+
+-~> Draws a rectangle, with round corners when radius is above 0.
+-~> pos: its top-left corner; size: its width and height, a point
+-~> radius: the radius of its corners, cut to half the shorter side
+-~> example: lily2d.rect(w, (20, 20), (160, 90), {"fill": #fff, "stroke": #333, "width": 2}, 12)
+function rect(target, pos, size, style, radius = 0) {
+  _out("rect", target, _shapes.rect(pos, size, style, radius))
+}
+
+-~> Draws a straight line. A paint alone is its color, 1 pixel wide.
+-~> example: lily2d.line(w, (10, 10), (200, 80), {"stroke": #1a1418, "width": 3, "cap": "butt"})
+function line(target, a, b, style) {
+  _out("line", target, _shapes.line(a, b, style))
+}
+
+-~> Draws straight segments through points, not closed. A paint alone is
+-~> the color of the line.
+-~> example: lily2d.polyline(w, [(10, 80), (60, 20), (110, 80)], {"stroke": #333, "width": 4, "join": "miter"})
+function polyline(target, points, style) {
+  _out("polyline", target, _shapes.polyline(points, style))
+}
+
+-~> Draws a closed shape with straight sides.
+-~> example: lily2d.polygon(w, [(100, 20), (180, 120), (20, 120)], #c0392b)
+function polygon(target, points, style) {
+  _out("polygon", target, _shapes.polygon(points, style))
+}
+
+-~> Draws a path. points is either a list of points, which the outline goes
+-~> through smoothly (a point where it turns by more than corner degrees
+-~> stays sharp), or a list of commands: ["M", p] moves, ["L", p] is a line,
+-~> ["C", c1, c2, p] a cubic Bézier, ["Q", c, p] a quadratic one, ["Z"]
+-~> closes. Besides the style keys, the style hash takes, for points:
+-~> closed (true), smooth (true; false is straight sides), corner (55) and
+-~> holes (a list of point lists, cut out of the shape).
+-~> example: lily2d.path(w, [(10, 10), (200, 40), (120, 180)], {"fill": lily2d.linear([#f2a65a, #3b2a5c]), "stroke": #1a1418, "width": 3})
+function path(target, points, style) {
+  _out("path", target, _shapes.path(points, style))
+}
+
+-~> Draws part of a circle from angle from to angle to, clockwise on the
+-~> screen from "to the right". With a fill it is a pie slice; a paint
+-~> alone strokes the curve.
+-~> example: lily2d.arc(w, (100, 100), 40, 0deg, 270deg, {"stroke": #333, "width": 6, "cap": "butt"})
+function arc(target, center, r, from, to, style) {
+  _out("arc", target, _shapes.arc(center, r, from, to, style))
+}
+
+-~> Draws a star of count tips at outer pixels from center and dents at
+-~> inner; the first tip points up.
+-~> example: lily2d.star(w, (100, 100), 5, 50, 20, #f6c453)
+function star(target, center, count, outer, inner, style) {
+  _out("star", target, _shapes.star(center, count, outer, inner, style))
+}
+
+-~> Draws text in the 7x13 bitmap font. Besides the style keys, the style
+-~> hash takes size (1 to 8: each font pixel is size by size), align
+-~> ("left", "center", "right": where pos is across each line) and valign
+-~> ("top", "middle", "bottom", "baseline"). "\n" starts a new line.
+-~> example: lily2d.text(w, (300, 20), "hello", {"fill": #1a1418, "size": 2, "align": "center"})
+function text(target, pos, s, style) {
+  _out("text", target, _shapes.text_shape(pos, s, style))
+}
+
+-~> The size of text in the bitmap font, as a point.
+-~> example: lily2d.measure("hello", 2)   -~> (70, 26)
+function measure(s, size = 1) {
+  _shapes.measure(s, size)
+}
+
+-~> Draws a smooth stroke whose width and opacity follow the pressure at
+-~> each point, the way pen styles it (see lily2d.pens). source is the
+-~> device of the pressures, "mouse", "trackpad" or "tablet" (a window
+-~> event's e.pen.source), for the pen's own settings for it.
+-~> example: lily2d.brush(w, [(40, 300), (120, 210), (260, 240)], [0.2, 0.9, 0.4], #1d1d1f, lily2d.pens.ink)
+function brush(target, points, pressures, color, pen = _pens.pens.ink, source = null) {
+  _out("brush", target, _shapes.brush(points, pressures, color, pen, source))
+}
+
+-~> Draws shapes together and mixes them onto what is below with one
+-~> opacity and blend mode: style is {"opacity": 0 to 1, "blend": mode}.
+-~> example: lily2d.group(w, [a, b], {"opacity": 0.5})
+function group(target, shapes, style = {}) {
+  _out("group", target, _shapes.group(shapes, style))
+}
+
+-~> Draws a shape again (or a list of them, back to front), or adds it to
+-~> a scene. Returns what it was given.
+-~> example: lily2d.draw(w, lily2d.transform(leaf, lily2d.rotate(30deg, (100, 100))))
+function draw(target, shape) {
+  if (type(shape) == "ARRAY") {
+    for (let i = 0; i < len(shape); i += 1) {
+      _shapes.need_shape("draw", "shapes item " + str(i), shape[i])
+      _out("draw", target, shape[i])
+    }
+    return shape
+  }
+  _shapes.need_shape("draw", "shape", shape)
+  _out("draw", target, shape)
+}
+
+-~> ---- paint ----
+
+-~> A linear gradient that fits each shape's box. angle is the way the
+-~> colors go, clockwise from "to the right": 0deg left to right, 90deg
+-~> (the default) top to bottom. steps: 0 smooth, or 2 to 64 flat bands.
+-~> stops: colors, [t, color] pairs or lily2d.hard(color), at least two.
+-~> example: lily2d.linear([#f2a65a, #3b2a5c], 90deg)
+let linear = _paint.linear
+
+-~> A linear gradient pinned to the picture, from one point to another.
+-~> example: lily2d.linear_at((0, 0), (600, 0), [[0, #f2a65a], [1, #3b2a5c]])
+let linear_at = _paint.linear_at
+
+-~> A radial gradient that fits each shape's box: center in fractions of it,
+-~> r a fraction of its longer side.
+-~> example: lily2d.radial([#fff3c4, #e0607a], (0.3, 0.3), 0.7)
+let radial = _paint.radial
+
+-~> A radial gradient pinned to the picture: center in pixels, r in pixels.
+-~> example: lily2d.radial_at((100, 100), 80, [#fff3c4, #e0607a], 4)
+let radial_at = _paint.radial_at
+
+-~> A hard stop: its color starts right where it is, with no blend.
+-~> example: lily2d.linear([#fff, #333, lily2d.hard(#c00), #000])
+let hard = _paint.hard
+
+-~> The pens of lily2d.brush: ink, pencil, marker, brush and calligraphy.
+let pens = _pens.pens
+
+-~> ---- transforms ----
+
+-~> The matrix that changes nothing, [1, 0, 0, 1, 0, 0].
+let identity = _matrix.identity
+
+-~> A move by offset, a point.
+-~> example: lily2d.translate((40, 0))
+let translate = _matrix.translate
+
+-~> A turn by angle, clockwise on the screen, round around ((0, 0)).
+-~> example: lily2d.rotate(45deg, (100, 100))
+let rotate = _matrix.rotate
+
+-~> A resize by k, a number or a point (x and y apart), from around.
+-~> example: lily2d.scale(2, (100, 100))
+let scale = _matrix.scale
+
+-~> The matrix that does first, then second.
+-~> example: lily2d.combine(lily2d.rotate(30deg), lily2d.translate((50, 0)))
+let combine = _matrix.combine
+
+-~> The matrix that undoes m.
+let invert = _matrix.invert
+
+-~> The point p moved by the matrix m.
+-~> example: lily2d.apply(lily2d.translate((5, 5)), (1, 1))   -~> (6.0, 6.0)
+function apply(m, p) {
+  _matrix.need_matrix("apply", m)
+  _check.need_point("apply", "p", p)
+  _matrix.apply(m, p)
+}
+
+-~> A copy of a shape moved by a matrix: its path, its pinned gradients,
+-~> its stroke width and dashes.
+-~> example: lily2d.transform(star, lily2d.rotate(36deg, (100, 100)))
+let transform = _shapes.transform
+
+-~> ---- geometry ----
+
+-~> The box a shape paints, [x, y, w, h] (its stroke included), or null.
+let bounds = _shapes.bounds
+
+-~> Whether the shape paints point p: inside its fill, or on its stroke.
+-~> example: if (lily2d.contains(button, e.pos)) { ... }
+let contains = _shapes.contains
+
+-~> The path of a shape (or a path) as straight lines: a list of
+-~> {"points": [...], "closed": true or false}, one for each sub-path,
+-~> within tolerance pixels of the curves.
+function flatten(shape, tolerance = 0.25) {
+  _check.need_number("flatten", "tolerance", tolerance)
+  if (tolerance <= 0) {
+    _check.fail("flatten", "tolerance must be more than 0")
+  }
+  _geometry.flatten_path(_path_of("flatten", shape), tolerance)
+}
+
+-~> The point at t (0 to 1) on the cubic Bézier p0, c1, c2, p3.
+-~> example: lily2d.bezier((0, 0), (0, 100), (100, 100), (100, 0), 0.5)   -~> (50.0, 75.0)
+function bezier(p0, c1, c2, p3, t) {
+  _check.need_point("bezier", "p0", p0)
+  _check.need_point("bezier", "c1", c1)
+  _check.need_point("bezier", "c2", c2)
+  _check.need_point("bezier", "p3", p3)
+  _check.need_number("bezier", "t", t)
+  _geometry.bezier_point(p0, c1, c2, p3, t)
+}
+
+-~> The points without the ones that bend the line by less than
+-~> tolerance pixels (Ramer-Douglas-Peucker); the ends stay.
+-~> example: lily2d.simplify(samples, 1.5)
+function simplify(points, tolerance) {
+  _check.need_points("simplify", "points", points)
+  _check.need_number("simplify", "tolerance", tolerance)
+  _geometry.simplify(points, tolerance)
+}
+
+-~> The path commands of a smooth curve through points, the one
+-~> lily2d.path draws: sharp where it turns by more than corner degrees.
+-~> example: lily2d.smooth([(0, 0), (50, 40), (100, 0)])
+function smooth(points, closed = false, corner = 55) {
+  _check.need_points("smooth", "points", points)
+  _check.need_number("smooth", "corner", corner)
+  _geometry.smooth_outline(points, closed == true, corner)
+}
+
+-~> The closest spot to p on the outline of a shape (or a path):
+-~> {"point", "dist", "command": the index of the path command, "t": 0 to
+-~> 1 along it}, or null for an empty path.
+function nearest(shape, p) {
+  _check.need_point("nearest", "p", p)
+  _geometry.nearest_on_path(_path_of("nearest", shape), p)
+}
+
+function _path_of(call, v) {
+  if (type(v) == "HASH" && type(v["path"]) == "ARRAY") {
+    return v.path
+  }
+  if (type(v) != "ARRAY") {
+    _check.fail(call, "want a shape or a path, not " + type(v))
+  }
+  v
+}
+
+-~> ---- rasterizer, export, retained mode ----
+
+-~> The spans of a shape, the rows the Terrarium paints: {"fill": spans or
+-~> null, "stroke": spans or null}, each span [y, x0, x1].
+-~> example: img.spans(picture, lily2d.spans(dot).fill, #000)
+function spans(shape) {
+  _shapes.need_shape("spans", "shape", shape)
+  if (shape.kind == "group") {
+    _check.fail("spans", "a group has no spans of its own; ask its shapes")
+  }
+  let r = _raster.shape_spans(shape)
+  {"fill": r.fill, "stroke": r.stroke}
+}
+
+-~> The SVG text of shapes, back to front, on a picture of size (w, h),
+-~> with a background paint or none.
+-~> example: fs.write("art.svg", lily2d.svg(shapes, (600, 400), #ffffff))
+let svg = _svg.svg
+
+-~> A scene: shapes kept back to front, drawn with s.draw(target), which
+-~> only paints again what changed. See docs/flower/LILY2D.md.
+-~> example: let s = lily2d.scene({"background": #f4efe6})
+let scene = _scene.scene

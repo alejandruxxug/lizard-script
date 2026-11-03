@@ -1,0 +1,6 @@
+function check(n) {
+  if (n > 0) {
+    puts("positive")
+  puts("done")
+}
+check(1)

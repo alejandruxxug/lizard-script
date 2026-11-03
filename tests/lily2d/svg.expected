@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <defs>
+    <radialGradient id="g0" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="20">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="1" stop-color="#e0607a"/>
+    </radialGradient>
+    <linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="0" y1="50" x2="100" y2="50">
+      <stop offset="0" stop-color="#000000"/>
+      <stop offset="0.33" stop-color="#000000"/>
+      <stop offset="0.33" stop-color="#808080"/>
+      <stop offset="0.67" stop-color="#808080"/>
+      <stop offset="0.67" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" fill="#ffffff"/>
+  <path d="M 70 50 C 70 61.05 61.05 70 50 70 C 38.95 70 30 61.05 30 50 C 30 38.95 38.95 30 50 30 C 61.05 30 70 38.95 70 50 Z" fill="url(#g0)"/>
+  <path d="M 15 80 L 65 80 C 67.76 80 70 82.24 70 85 L 70 105 C 70 107.76 67.76 110 65 110 L 15 110 C 12.24 110 10 107.76 10 105 L 10 85 C 10 82.24 12.24 80 15 80 Z" fill="#2d6a8f" fill-opacity="0.5" stroke="#1a1418" stroke-width="2" stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="4" stroke-dasharray="4 2"/>
+  <g style="mix-blend-mode: multiply; opacity: 0.5">
+    <path d="M 0 0 L 100 100" fill="none" stroke="url(#g1)" stroke-width="3" stroke-linecap="butt" stroke-linejoin="round"/>
+  </g>
+  <path d="M 0 0 L 10 0 L 5 8 Z" fill="#000000" fill-rule="evenodd" style="opacity: 0.25"/>
+</svg>
+

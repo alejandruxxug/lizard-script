@@ -20,22 +20,66 @@ let price = 10 @ 2
 [line 1, column 16] lexical error: unexpected character "@"
 ```
 
-Los **errores de sintaxis** (`syntax error`) son piezas en el orden equivocado. También se detectan antes de ejecutar nada, y el analizador reporta todos los que puede de una vez (terminar las instrucciones con `;` lo ayuda a encontrarlos todos):
+Los **errores de sintaxis** (`syntax error`) son piezas en el orden equivocado. También se detectan antes de ejecutar nada, y el analizador los reporta todos de una vez: un error por cada equivocación, y las líneas que siguen a una equivocación se siguen revisando:
 
 ```
-puts("this line never runs");
-let = 5;
-let total = (1 + 2;
+puts("this line never runs")
+let = 5
+let total = (1 + 2
 if (true) { break }
 ```
 
 **Salida:**
 
 ```text
-[line 2, column 5] syntax error: expected identifier, got "="
-[line 3, column 19] syntax error: expected ")", got ";"
+[line 2, column 5] syntax error: let needs a name before the "=", like let x = 1
+[line 3, column 19] syntax error: the "(" at line 3, column 13 is never closed
 [line 4, column 13] syntax error: break outside of a loop
 ```
+
+Un `)`, `]` o `}` que falta se reporta justo donde falta, y el mensaje dice dónde se abrió el paréntesis. Una línea tiene como mucho un error: una equivocación suele romper el resto de su línea, así que una segunda equivocación en la misma línea aparece cuando se corrige la primera.
+
+### Mensajes que ayudan
+
+Muchos errores de sintaxis dicen lo que probablemente quisiste escribir:
+
+```
+fucntion double(x) {
+  x * 2
+}
+let n = 3
+if (n = 3) {
+  puts("three")
+} elseif (n > 3) {
+  puts("more")
+}
+let pet = {"name" = "Liz"}
+puts("unclosed"
+let age = 2
+```
+
+**Salida:**
+
+```text
+[line 1, column 1] syntax error: "fucntion" is not a keyword; did you mean "function"?
+[line 5, column 7] syntax error: "=" in a condition gives n a value; did you mean "=="?
+[line 7, column 3] syntax error: "elseif" is not a keyword; did you mean "elif"?
+[line 10, column 19] syntax error: a hash puts ":" between a key and its value, not "="
+[line 11, column 16] syntax error: the "(" at line 11, column 5 is never closed
+```
+
+| El mensaje empieza con | Normalmente significa |
+| --- | --- |
+| `"x" is not a keyword; did you mean ...` | una palabra clave mal escrita, o de otro lenguaje (`elseif`, `var`, `def`) |
+| `"=" in a condition gives x a value` | `=` donde se quería `==`: `if (x == 1)` |
+| `the "(" at line L, column C is never closed` | falta el `)` (o `]`, `}`) del paréntesis que está en ese lugar |
+| `block is never closed` | falta un `}`; la posición es la del `{` que no lo tiene |
+| `this "}" has nothing to close` | sobra un `}` (o `)`, `]`) |
+| `let needs a name before the "="` | `let = 5` en vez de `let x = 5` |
+| `"if" is a reserved word, it can't be a name` | una palabra clave usada como nombre de variable o parámetro |
+| `a hash puts ":" between a key and its value` | `{"a" = 1}` en vez de `{"a": 1}` |
+| `a let gives its value with "=", not ":"` | `let x: 1` en vez de `let x = 1` |
+| `unterminated string: this " is never closed` | un string sin su `"` de cierre; la posición es donde empieza |
 
 Los **errores de ejecución** (`runtime error`) ocurren mientras el programa corre. Todo lo anterior ya pasó:
 
@@ -149,7 +193,6 @@ let n = try { int("12") } catch { 0 }
 
 ```text
 [line 1, column 13] syntax error: expected end of statement, got "{"
-[line 1, column 33] syntax error: expected end of statement, got "{"
 ```
 
 Pero un `try` tiene el valor del bloque que se ejecutó, así que como última instrucción de una función se convierte en el resultado de la función. Ese es el patrón habitual:

@@ -1,0 +1,40 @@
+-~> golden: compares a picture with the golden PNG of a test, pixel by
+-~> pixel. With the environment variable LILY2D_GOLDEN=update set, it writes
+-~> the golden file instead.
+
+-~> How two pictures differ: {"pixels": how many differ, "max": the biggest
+-~> difference of one channel}.
+function difference(a, b) {
+  let pa = img.pixels(a)
+  let pb = img.pixels(b)
+  let count = 0
+  let most = 0
+  for (let i = 0; i < len(pa); i += 1) {
+    let p = pa[i]
+    let q = pb[i]
+    if (p != q) {
+      count += 1
+      most = math.max(most, math.abs(p.r - q.r), math.abs(p.g - q.g), math.abs(p.b - q.b), math.abs(p.a - q.a))
+    }
+  }
+  {"pixels": count, "max": most}
+}
+
+-~> Checks picture against golden/name.png and says how it went.
+function check(name, picture) {
+  let file = fs.join(os.program_dir(), "golden", name + ".png")
+  if (os.env("LILY2D_GOLDEN") == "update") {
+    img.save(picture, file)
+  }
+  let want = img.load(file)
+  if (img.size(want) != img.size(picture)) {
+    puts(name + ": the size is " + str(img.size(picture)) + ", the golden one " + str(img.size(want)))
+    return null
+  }
+  let d = difference(picture, want)
+  if (d.pixels == 0) {
+    puts(name + ": same as the golden picture")
+  } else {
+    puts(name + ": " + str(d.pixels) + " pixels differ, by up to " + str(d.max))
+  }
+}

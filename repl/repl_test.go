@@ -58,9 +58,9 @@ func TestREPL(t *testing.T) {
 		{"let x = 1\nx\n+ 1\n", "1\n[line 1, column 1] syntax error: expected an expression, got \"+\"\n\n"},
 		{"let x = 1; x + 1\n", "2\n\n"},
 		{"foo\n1\n", "[line 1, column 1] runtime error: identifier not found: foo\n1\n\n"},
-		{"let = 1\n2\n", "[line 1, column 5] syntax error: expected identifier, got \"=\"\n2\n\n"},
+		{"let = 1\n2\n", "[line 1, column 5] syntax error: let needs a name before the \"=\", like let x = 1\n2\n\n"},
 		{"(1 +\n\n", "[line 3, column 1] syntax error: expected an expression, got end of input\n\n"},
-		{"let x = (1\n", "\n[line 2, column 1] syntax error: expected \")\", got end of input\n\n"},
+		{"let x = (1\n", "\n[line 1, column 11] syntax error: the \"(\" at line 1, column 9 is never closed\n\n"},
 		{"exit\n1\n", ""},
 		{"1\n  quit  \n", "1\n"},
 	}

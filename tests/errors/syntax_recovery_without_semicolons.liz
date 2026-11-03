@@ -1,0 +1,10 @@
+-~> Each mistake gives one error, and the lines after it are still checked.
+let total = (1 + 2
+puts("this line is fine")
+let = 5
+function area(w, h) {
+  let a = w * h
+  retrun a
+}
+puts(area(2, 3)
+let sizes = [1, 2, 3]

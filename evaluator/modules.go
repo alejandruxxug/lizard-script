@@ -26,6 +26,23 @@ var ReadModule = os.ReadFile
 // next to the file that uses it, in order.
 var ModulePath []string
 
+// StandardModules holds the standard modules: big libraries that come with
+// the language but are not installed into every program, like a 2D
+// graphics library. use finds one after the program's own folder and
+// ModulePath, at the path StandardRoot + "/" + its name, like
+// "std:/lily2d.liz". A host sets it (the Terrarium does); nil has none.
+var StandardModules fs.FS
+
+// StandardRoot starts the source name of a standard module's file.
+const StandardRoot = "std:"
+
+// IsStandardModule reports whether path is the source name of a standard
+// module's file. A tool that bundles a program skips those: they are part
+// of every lizardscript.
+func IsStandardModule(path string) bool {
+	return strings.HasPrefix(filepath.ToSlash(path), StandardRoot+"/")
+}
+
 // ModulePrelude, when it is not nil, fills the scope around every module's
 // top scope, once per run: a host gives modules what it gives the program,
 // like the Terrarium. Without it a module has the builtins and the
@@ -128,8 +145,10 @@ func FindModule(node *ast.UseStatement) (string, []byte, *object.Error) {
 
 // findModule finds the file of the module node names: next to the file
 // that says it (its token's source name), then in each folder of
-// ModulePath. ".liz" is added to a path without it. It returns the path
-// that was found, which becomes the module's source name, and the file.
+// ModulePath, then among the standard modules. ".liz" is added to a path
+// without it. It returns the path that was found, which becomes the
+// module's source name, and the file. The not-found message lists only the
+// files on disk.
 func findModule(node *ast.UseStatement) (string, []byte, *object.Error) {
 	spec := filepath.FromSlash(node.Path.Value)
 	if !strings.HasSuffix(spec, ".liz") {
@@ -146,12 +165,17 @@ func findModule(node *ast.UseStatement) (string, []byte, *object.Error) {
 	}
 
 	for _, candidate := range candidates {
-		source, err := ReadModule(candidate)
+		source, err := readCandidate(candidate)
 		if err == nil {
 			return filepath.ToSlash(candidate), source, nil
 		}
 		if !errors.Is(err, fs.ErrNotExist) {
 			return "", nil, newError(node.Token, "can't read the module %q: %v", node.Path.Value, unwrapPathError(err))
+		}
+	}
+	if !filepath.IsAbs(spec) {
+		if name, source, ok := standardModule(spec); ok {
+			return name, source, nil
 		}
 	}
 	for i := range candidates {
@@ -161,9 +185,44 @@ func findModule(node *ast.UseStatement) (string, []byte, *object.Error) {
 		node.Path.Value, orList(candidates))
 }
 
+// readCandidate reads a file use may find: a standard module's for a path
+// under StandardRoot (a module next to a standard one), else with
+// ReadModule.
+func readCandidate(path string) ([]byte, error) {
+	if IsStandardModule(path) {
+		name, source, ok := standardModule(strings.TrimPrefix(filepath.ToSlash(path), StandardRoot+"/"))
+		if !ok || name != filepath.ToSlash(path) {
+			return nil, fs.ErrNotExist
+		}
+		return source, nil
+	}
+	return ReadModule(path)
+}
+
+// standardModule reads the standard module at spec, a path with ".liz",
+// and gives its source name. A spec that climbs out with ".." is none.
+func standardModule(spec string) (string, []byte, bool) {
+	if StandardModules == nil {
+		return "", nil, false
+	}
+	name := filepath.ToSlash(filepath.Clean(spec))
+	if !fs.ValidPath(name) {
+		return "", nil, false
+	}
+	source, err := fs.ReadFile(StandardModules, name)
+	if err != nil {
+		return "", nil, false
+	}
+	return StandardRoot + "/" + name, source, true
+}
+
 // moduleKey is what tells two modules apart: the absolute path of the file,
-// so two ways of writing the same path load it once.
+// so two ways of writing the same path load it once. A standard module's
+// source name is already one of a kind.
 func moduleKey(name string) string {
+	if IsStandardModule(name) {
+		return name
+	}
 	if abs, err := filepath.Abs(filepath.FromSlash(name)); err == nil {
 		return abs
 	}

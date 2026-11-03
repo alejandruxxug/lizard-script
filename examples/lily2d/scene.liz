@@ -1,0 +1,82 @@
+-~> An animated scene: lilies turn round a pond while a few dots drift.
+-~> Each frame changes some shapes with scene.replace, and the scene
+-~> paints again only around them; the title says how much of the window
+-~> that was. Esc quits.
+-~> Run it with: lizardscript examples/lily2d/scene.liz
+-~> or save frame 30: lizardscript examples/lily2d/scene.liz --save scene.png
+
+use "flower/lily2d" as lily2d
+
+let size = (600, 400)
+let center = (300, 200)
+let pond = lily2d.scene({"background": lily2d.radial([#2d6a8f, #1b3f57], (0.5, 0.5), 0.6)})
+lily2d.ellipse(pond, center, (230, 150), {"fill": rgba(143, 185, 150, 60), "stroke": rgba(255, 255, 255, 50), "width": 2, "dash": [10, 8]})
+
+-~> A lily: a group of petals round a heart, drawn at the origin.
+function lily(color) {
+  let petals = []
+  for (let i = 0; i < 6; i += 1) {
+    let petal = lily2d.ellipse(null, (0, -16), (7, 16), color)
+    push(petals, lily2d.transform(petal, lily2d.rotate(i * 60deg)))
+  }
+  push(petals, lily2d.circle(null, (0, 0), 6, #f6c453))
+  lily2d.group(null, petals)
+}
+
+let kinds = [lily(#f4b6c2), lily(#ffffff), lily(#e0607a)]
+let lilies = []
+for (let i = 0; i < 6; i += 1) {
+  push(lilies, {"angle": i * 60deg, "radius": 120 + (i % 2) * 40, "kind": kinds[i % 3], "shape": null})
+}
+let dots = []
+for (let i = 0; i < 12; i += 1) {
+  push(dots, lily2d.circle(pond, (40 + i * 47, 30 + (i * 71) % 340), 3 + i % 3, #fff3c460))
+}
+
+-~> Moves every lily and dot to where it is at frame t.
+function step(t) {
+  for (let i = 0; i < len(lilies); i += 1) {
+    let l = lilies[i]
+    let a = l.angle + t * 0.02
+    let at = center + (math.cos(a) * l.radius, math.sin(a) * l.radius * 0.66)
+    let m = lily2d.combine(lily2d.rotate(t * 0.05 + i), lily2d.translate(at))
+    let moved = lily2d.transform(l.kind, m)
+    if (l.shape === null) {
+      l.shape = pond.add(moved)
+    } else {
+      l.shape = pond.replace(l.shape, moved)
+    }
+  }
+  let k = t % len(dots)
+  dots[k] = pond.replace(dots[k], lily2d.transform(dots[k], lily2d.translate((math.sin(t) * 3, -2))))
+}
+
+function area(rects) {
+  let sum = 0
+  for (let i = 0; i < len(rects); i += 1) {
+    sum += rects[i][2] * rects[i][3]
+  }
+  sum
+}
+
+let args = os.args()
+let saving = len(args) == 2 && args[0] == "--save"
+let w = window.open(size.x, size.y, "lily2d scene", {"headless": saving})
+let t = 0
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    if (events[i].type == "key" && events[i].key == "Escape") {
+      return false
+    }
+  }
+  step(t)
+  let painted = pond.draw(w)
+  if (!saving && t % 30 == 0) {
+    window.title(w, "lily2d scene · painted " + str(math.round(100 * area(painted) / (size.x * size.y))) + "% of the window")
+  }
+  t += 1
+  !saving || t <= 30
+})
+if (saving) {
+  img.save(window.screenshot(w), args[1])
+}

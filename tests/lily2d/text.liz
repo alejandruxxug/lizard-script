@@ -1,0 +1,17 @@
+-~> Text: sizes, alignments, lines, a gradient fill and measure.
+use "flower/lily2d" as lily2d
+use "golden"
+
+let w = img.new(300, 200, #ffffff)
+img.fill(w, [150, 0, 1, 200], #e0607a)
+img.fill(w, [0, 100, 300, 1], #e0607a)
+lily2d.text(w, (150, 10), "left", #1a1418)
+lily2d.text(w, (150, 30), "center", {"fill": #1a1418, "align": "center"})
+lily2d.text(w, (150, 50), "right", {"fill": #1a1418, "align": "right"})
+lily2d.text(w, (10, 100), "top", {"fill": #2d6a8f, "valign": "top"})
+lily2d.text(w, (60, 100), "mid", {"fill": #2d6a8f, "valign": "middle"})
+lily2d.text(w, (110, 100), "bottom", {"fill": #2d6a8f, "valign": "bottom"})
+lily2d.text(w, (190, 100), "base", {"fill": #2d6a8f, "valign": "baseline", "size": 2})
+lily2d.text(w, (150, 130), "two\nlines ÿ€", {"fill": lily2d.linear([#f2a65a, #3b2a5c], 0deg), "size": 3, "align": "center"})
+check("text", w)
+puts(lily2d.measure("hello"), lily2d.measure("hi\nthere", 2))

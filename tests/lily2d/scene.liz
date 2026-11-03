@@ -1,0 +1,40 @@
+-~> A scene paints again only what changed, and the result is the same as
+-~> painting it all.
+use "flower/lily2d" as lily2d
+use "golden"
+
+let s = lily2d.scene({"background": lily2d.linear([#f4efe6, #d8cfc0])})
+let dots = []
+for (let i = 0; i < 30; i += 1) {
+  push(dots, lily2d.circle(s, (20 + (i * 37) % 260, 20 + (i * 53) % 160), 8 + i % 5 * 3, rgba(40 + i * 6, 110, 200 - i * 5, 210)))
+}
+lily2d.text(s, (10, 180), "scene", {"fill": #1a1418, "size": 2})
+let a = img.new(300, 200)
+puts(s.draw(a))
+puts(s.draw(a))
+
+s.replace(dots[3], lily2d.transform(dots[3], lily2d.translate((30, 12))))
+s.remove(dots[10])
+dots[20].fill = #c0392b
+s.changed(dots[20])
+puts(s.draw(a))
+check("scene", a)
+
+-~> the same shapes in a new scene, painted at once
+let fresh = lily2d.scene({"background": lily2d.linear([#f4efe6, #d8cfc0])})
+lily2d.draw(fresh, s.shapes())
+let b = img.new(300, 200)
+fresh.draw(b)
+puts(img.pixels(a) == img.pixels(b))
+
+puts(same(s.at((20, 20)), dots[0]), s.at((299, 0)))
+puts(len(s.shapes()))
+s.invalidate()
+puts(s.draw(a))
+s.clear()
+puts(len(s.shapes()), s.draw(a))
+try {
+  s.remove(dots[0])
+} catch (e) {
+  puts(e.message)
+}

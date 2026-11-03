@@ -1,0 +1,30 @@
+-~> The Utah teapot, from the .obj file next to this one, rendered to
+-~> teapot.png: smooth shading, a highlight, a warm sun and a cool fill
+-~> light, a floor in fog.
+-~> Run it with: lizardscript --vm examples/lily3d/teapot.liz [out.png]
+
+use "flower/lily3d" as lily3d
+
+let pot = lily3d.load_obj(fs.join(os.program_dir(), "teapot.obj"))
+-~> The floor fades into the background far away.
+let s = lily3d.scene({"background": #f4efe6, "fog": {"color": #f4efe6, "near": 4, "far": 16}})
+lily3d.light(s, lily3d.ambient(#ffffff, 0.2))
+lily3d.light(s, lily3d.directional((-0.6, -1, -0.7), #fff1dc, 0.9))
+lily3d.light(s, lily3d.directional((1, -0.2, 0.4), #9cc4f0, 0.35))
+-~> The model's lid doesn't close its pot: with cull off, the inside shows
+-~> through the gap instead of the background.
+lily3d.add(s, pot, lily3d.compose(lily3d.fit(pot, 3), lily3d.rotate_y(-30deg)),
+  {"color": #3b6ea5, "shine": 40, "cull": false})
+-~> Fog and light are worked out at the corners, so the floor is cut into
+-~> squares for them to change across it.
+lily3d.add(s, lily3d.plane(40, 20), lily3d.translate((0, -0.74, 0)), {"color": #d8ccb6})
+
+let picture = img.new(640, 480)
+let cam = lily3d.camera((0, 1.6, 3.8), (0, -0.1, 0), 50deg)
+let count = lily3d.render(s, cam, picture)
+let out = "teapot.png"
+if (len(os.args()) > 0) {
+  out = os.args()[0]
+}
+img.save(picture, out)
+puts("drew", count, "triangles into", out)

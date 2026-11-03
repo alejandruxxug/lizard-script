@@ -1,0 +1,2 @@
+let pet = {"name" = "Liz"}
+let age: 3

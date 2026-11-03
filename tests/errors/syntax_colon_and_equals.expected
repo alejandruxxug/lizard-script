@@ -1,0 +1,2 @@
+[line 1, column 19] syntax error: a hash puts ":" between a key and its value, not "="
+[line 2, column 8] syntax error: a let gives its value with "=", not ":"

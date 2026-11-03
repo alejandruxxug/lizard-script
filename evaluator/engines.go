@@ -4,6 +4,7 @@ import (
 	"lizardscript/ast"
 	"lizardscript/object"
 	"lizardscript/token"
+	"sort"
 )
 
 // The functions in this file let another engine (the bytecode VM in package
@@ -91,6 +92,18 @@ func Builtin(name string) (object.Object, bool) {
 		return hashLibrary(), true
 	}
 	return nil, false
+}
+
+// BuiltinNames are the names Builtin finds, sorted: the builtins, null and
+// the libraries. A tool that checks programs (package check) knows them
+// from here.
+func BuiltinNames() []string {
+	names := []string{"null", "math", "text", "list", "hash"}
+	for name := range builtins {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // LibraryResets changes each time ResetMath drops the libraries, the only

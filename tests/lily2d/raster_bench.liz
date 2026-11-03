@@ -1,0 +1,17 @@
+-~> How long lily2d takes to rasterize and paint 200 shapes, the cache
+-~> empty each time (new positions) and then full.
+use "flower/lily2d" as lily2d
+
+let w = img.new(512, 512, #ffffff)
+for (let round = 0; round < 3; round += 1) {
+  for (let i = 0; i < 200; i += 1) {
+    let at = (20 + (i * 37) % 470 + round * 0.5, 20 + (i * 53) % 470)
+    if (i % 3 == 0) {
+      lily2d.circle(w, at, 10 + i % 20, rgba(i, 100, 200, 200))
+    } elif (i % 3 == 1) {
+      lily2d.rect(w, at, (30, 20), {"fill": #2d6a8f, "stroke": #000, "width": 2}, 4)
+    } else {
+      lily2d.path(w, [at, at + (40, 10), at + (30, 40), at + (-5, 30)], {"stroke": #3b2a5c, "width": 3, "closed": false})
+    }
+  }
+}
