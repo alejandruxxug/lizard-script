@@ -330,3 +330,51 @@ func TestGestures(t *testing.T) {
 		})
 	}
 }
+
+// dropProgram logs the drop events of a window.
+const dropProgram = `
+let w = window.open(40, 30, "app", {"headless": true, "scale": 2, "fps": 240})
+let log = []
+window.surface(w, "canvas", [20, 0, 20, 30], 1)
+window.automation(w)
+window.inject(w, {"type": "drop", "pos": (1, 2), "paths": ["/a/b.png"]})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "drop") {
+      let on = "-"
+      if (hash.has(e, "surface")) { on = e.surface }
+      push(log, [e.pos, e.paths, on])
+    } elif (e.type == "close") {
+      push(log, "close")
+    }
+  }
+  window.clear(w, #336699)
+})
+log`
+
+func TestDrop(t *testing.T) {
+	want := `[[(1, 2), ["/a/b.png"], "-"], [(25, 3), ["/x/y.png", "/z"], "canvas"], "close"]`
+	session := func(dir string) string {
+		reply, err := drive(t, "Drop", "25", "3", "/x/y.png", "/z")
+		if err != nil {
+			return sprintf("Drop: %v %v", err, reply)
+		}
+		if reply, err = drive(t, "Drop", "1", "1"); err == nil {
+			return sprintf("Drop with no path gave %v", reply)
+		}
+		drive(t, "Quit")
+		return ""
+	}
+	for i, engine := range engines {
+		t.Run(engine.name, func(t *testing.T) {
+			got, problem := runDriven(t, i, dropProgram, session)
+			if problem != "" {
+				t.Fatal(problem)
+			}
+			if got != want {
+				t.Errorf("got\n%s\nwant\n%s", got, want)
+			}
+		})
+	}
+}

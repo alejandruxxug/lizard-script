@@ -696,6 +696,7 @@ Each event is a hash with a `type` and the keys that mean something for it. Posi
 | `up` | `pos`, `button`, `mods`, `pen` | it goes up |
 | `move` | `pos`, `mods`, `pen` | the pointer moved (with or without a button down) |
 | `scroll` | `pos`, `dy`, `mods` | the wheel or a two-finger scroll; `dy` above 0 is up |
+| `drop` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` is a list of their absolute paths, which `fs` reads. The system gives real paths on macOS, Windows and Linux; a file with no real path (a browser) is left out |
 | `key` | `key`, `mods` | a key went down, and again while it is held; `key` is its name: `"A"` to `"Z"`, `"Digit0"` to `"Digit9"`, `"Escape"`, `"Enter"`, `"Space"`, `"Backspace"`, `"Tab"`, `"ArrowLeft"`, ... |
 | `type` | `text`, `mods` | a character was typed, as the keyboard composed it (`"é"`, `"C"`) |
 | `resize` | `size` | the window changed size: the user resized it, or `window.set` did |
@@ -704,7 +705,7 @@ Each event is a hash with a `type` and the keys that mean something for it. Posi
 | `enter` | | the pointer came back over it |
 | `close` | | the user closed the window: the last event |
 
-A pointer event (`down`, `up`, `move`, `scroll`) over a [surface](#surfaces) also has `surface`, the surface's name, and `surface_pos`, the point in the surface's own pixels (the newest surface on top wins). A `move` has `samples`: every point the pointer went through since the last frame, not only the last one, so a fast stroke with a pen keeps its shape. Each sample is a hash with `pos`, `pressure`, `raw`, `t` (seconds, the clock of the system's pen events) and, over a surface, `surface` and `surface_pos`; the last one is the event's own point. Where the system sends no samples (a mouse, an injected event), `samples` has one, the event's point.
+A pointer event (`down`, `up`, `move`, `scroll`, `drop`) over a [surface](#surfaces) also has `surface`, the surface's name, and `surface_pos`, the point in the surface's own pixels (the newest surface on top wins). A `move` has `samples`: every point the pointer went through since the last frame, not only the last one, so a fast stroke with a pen keeps its shape. Each sample is a hash with `pos`, `pressure`, `raw`, `t` (seconds, the clock of the system's pen events) and, over a surface, `surface` and `surface_pos`; the last one is the event's own point. Where the system sends no samples (a mouse, an injected event), `samples` has one, the event's point.
 ```
 if (e.type == "move" && drawing) {
   for (let i = 0; i < len(e.samples); i += 1) {
@@ -756,7 +757,7 @@ img.save(window.screenshot(w, {"full": true}), "screen.png")
 `window.open(w, h, title, {"headless": true})` makes a window with no screen: `window.run` runs its frames one after the other, as fast as `tick` goes, with the events the program injects, and stops when `tick` returns `false` (or when an `on_demand` window has nothing left to do). Everything else is the same, surfaces and screenshots included, so an app's tests and benchmarks run it as it is, in `go test` or on a machine with no display. A headless window doesn't count as the program's one window.
 
 #### window.inject(w, event)
-Adds `event`, a hash like the ones `tick` gets, to the next frame, as if the user made it. Keys left out take a plain value: the left button, no `mods`, a mouse's `pen` (a `pen` hash takes `pressure`, `raw`, `source` and `eraser`). A pointer event needs a `pos`, which can be fractional to reach a finer surface's pixels; its `surface` and `surface_pos` are worked out. A `resize` event resizes the window like `window.set`.
+Adds `event`, a hash like the ones `tick` gets, to the next frame, as if the user made it. Keys left out take a plain value: the left button, no `mods`, a mouse's `pen` (a `pen` hash takes `pressure`, `raw`, `source` and `eraser`). A pointer event needs a `pos`, which can be fractional to reach a finer surface's pixels; its `surface` and `surface_pos` are worked out. A `drop` event needs a `pos` and a list of `paths` (strings). A `resize` event resizes the window like `window.set`.
 ```
 let w = window.open(200, 100, "", {"headless": true})
 window.inject(w, {"type": "down", "pos": (10, 10)})
@@ -808,6 +809,7 @@ Sends one command to the newest running window with automation (or the one of th
 | `Release x y` | the button goes up at the point (after a move there if the pointer is elsewhere), with the pen, button and mods of the `Press`; an error when nothing is down |
 | `Path x1 y1 x2 y2 ... [mods] [--pressure a,b,...] [--steps n] [--samples k] [--close] [--button right]` | a whole gesture: a move to the first point, a press there, `steps` moves (10) along each line to the next point, and a release at the last. `--close` goes back to the first point and releases there, to draw a loop (a lasso). `--pressure` is spread along the length of the path. Not while a `Press` is down |
 | `Scroll dy [x y]` | the wheel |
+| `Drop x y path...` | files dropped on the window at the point; the paths are made absolute, and the files need not exist |
 | `Key name [mods]` | a key, by its name: `Key S cmd` |
 | `Type text` | each character of the text, as `type` events |
 | `Resize w h` | `window.set` with that size, then waits for the program to settle |

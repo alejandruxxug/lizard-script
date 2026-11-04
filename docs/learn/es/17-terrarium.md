@@ -684,6 +684,7 @@ Mientras dibujas, el título de la ventana muestra `pressure 0.42 (raw 0.91) · 
 | `"down"`, `"up"` | `pos`, `button`, `mods`, `pen` | un botón o el lápiz baja o sube |
 | `"move"` | `pos`, `mods`, `pen` | el puntero se movió |
 | `"scroll"` | `pos`, `dy`, `mods` | la rueda o un desplazamiento con dos dedos |
+| `"drop"` | `pos`, `paths`, `mods` | se soltaron archivos sobre la ventana; `paths` son sus rutas absolutas |
 | `"key"` | `key`, `mods` | se presionó una tecla |
 | `"type"` | `text` | se escribió un carácter |
 | `"resize"` | `size` | la ventana cambió de tamaño |

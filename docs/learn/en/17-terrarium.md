@@ -684,6 +684,7 @@ While you draw, the window title shows `pressure 0.42 (raw 0.91) · trackpad`: `
 | `"down"`, `"up"` | `pos`, `button`, `mods`, `pen` | a button or the pen goes down or up |
 | `"move"` | `pos`, `mods`, `pen` | the pointer moved |
 | `"scroll"` | `pos`, `dy`, `mods` | the wheel or a two-finger scroll |
+| `"drop"` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` are their absolute paths |
 | `"key"` | `key`, `mods` | a key went down |
 | `"type"` | `text` | a character was typed |
 | `"resize"` | `size` | the window changed size |

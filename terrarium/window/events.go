@@ -5,6 +5,7 @@ import (
 	"lizardscript/terrarium/internal/arg"
 	"lizardscript/terrarium/pen"
 	"math"
+	"path/filepath"
 	"strings"
 )
 
@@ -39,7 +40,7 @@ type Sample struct {
 
 // Event is one input event. X and Y are buffer pixels.
 type Event struct {
-	Type    string // down, up, move, scroll, key, type, resize, focus, leave, enter or close
+	Type    string // down, up, move, scroll, drop, key, type, resize, focus, leave, enter or close
 	X, Y    int    // the pointer, for down, up, move and scroll
 	Spot    Spot   // the surface under the pointer
 	Button  string // down and up: "left", "right" or "middle"
@@ -51,13 +52,14 @@ type Event struct {
 	Mods    Mods
 	Pen     Pen      // down, up and move
 	Samples []Sample // move: every point since the last frame, the last one at X, Y
+	Paths   []string // drop: the files dropped, as absolute paths
 	T       float64  // when it happened, pen.Now()
 }
 
 // pointer reports whether an event has a position.
 func (e Event) pointer() bool {
 	switch e.Type {
-	case "down", "up", "move", "scroll":
+	case "down", "up", "move", "scroll", "drop":
 		return true
 	}
 	return false
@@ -85,6 +87,12 @@ func (e Event) hash() *object.Hash {
 		arg.Set(h, "size", arg.PointOf(e.W, e.H))
 	case "focus":
 		arg.Set(h, "focused", arg.Bool(e.Focused))
+	case "drop":
+		list := &object.Array{Elements: make([]object.Object, len(e.Paths))}
+		for i, p := range e.Paths {
+			list.Elements[i] = arg.Str(p)
+		}
+		arg.Set(h, "paths", list)
 	}
 	switch e.Type {
 	case "resize", "close", "focus", "leave", "enter":
@@ -171,7 +179,7 @@ func (w *Window) dragSamples(native []pen.Sample, e Event) []Sample {
 var mouse = Pen{Pressure: 1, Raw: 1, Source: "mouse"}
 
 // eventTypes are the types window.inject takes.
-var eventTypes = []string{"close", "down", "enter", "focus", "key", "leave", "move", "resize", "scroll", "type", "up"}
+var eventTypes = []string{"close", "down", "drop", "enter", "focus", "key", "leave", "move", "resize", "scroll", "type", "up"}
 
 // window.inject(w, event) adds an event, a hash like the ones tick gets, to
 // the next frame, as if the user made it: how a program tests itself with
@@ -220,6 +228,19 @@ func (w *Window) eventOf(h *object.Hash) (Event, *object.Error) {
 	e.Text = r.str("text", "")
 	e.DY = r.num("dy", 0)
 	e.Focused = r.flag("focused", true)
+	if e.Type == "drop" {
+		list, ok := r.get("paths").(*object.Array)
+		if !ok {
+			return e, arg.Errorf("a drop event needs a list of paths, got %s", r.show("paths"))
+		}
+		for _, el := range list.Elements {
+			s, ok := el.(*object.String)
+			if !ok {
+				return e, arg.Errorf("a drop event's paths are strings, got %s", el.Inspect())
+			}
+			e.Paths = append(e.Paths, absPath(s.Value))
+		}
+	}
 	if e.Type == "resize" {
 		width, height, ok := arg.XY(r.get("size"))
 		if !ok {
@@ -280,4 +301,13 @@ func (r reader) flag(key string, otherwise bool) bool {
 		return b.Value
 	}
 	return otherwise
+}
+
+// absPath is p made absolute, as a dropped file's path is; a path that can't
+// be (no working folder) stays as it is.
+func absPath(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
 }

@@ -295,6 +295,7 @@ func init() {
 		"DoubleClick": {"DoubleClick x y [mods] [--button right] [--full]", clicks(2)},
 		"Drag":        {"Drag x1 y1 x2 y2 [steps] [mods] [--pressure 0.2,1.0] [--full]", (*automation).drag},
 		"Scroll":      {"Scroll dy [x y] [--full]", (*automation).scroll},
+		"Drop":        {"Drop x y path...", (*automation).drop},
 		"Key":         {"Key name [shift|alt|cmd|ctrl]", (*automation).key},
 		"Type":        {"Type text", (*automation).typeText},
 		"Resize":      {"Resize w h", (*automation).resize},
@@ -585,6 +586,27 @@ func (a *automation) scroll(args []string) (any, error) {
 	return a.injectAfter(func() []Event {
 		sx, sy := a.screenPoint(at[0], at[1], flags)
 		return []Event{a.win.at(Event{Type: "scroll", DY: f[0], T: pen.Now()}, sx, sy)}
+	})
+}
+
+// drop is Drop x y path...: files dropped on the window at a point.
+func (a *automation) drop(args []string) (any, error) {
+	words, flags := split(args)
+	usage := commands["Drop"].usage
+	f, err := numbers(words, 2, usage)
+	if err != nil {
+		return nil, err
+	}
+	if len(words) < 3 {
+		return nil, fmt.Errorf("usage: %s", usage)
+	}
+	paths := make([]string, 0, len(words)-2)
+	for _, p := range words[2:] {
+		paths = append(paths, absPath(p))
+	}
+	return a.injectAfter(func() []Event {
+		sx, sy := a.screenPoint(f[0], f[1], flags)
+		return []Event{a.win.at(Event{Type: "drop", Paths: paths, T: pen.Now()}, sx, sy)}
 	})
 }
 

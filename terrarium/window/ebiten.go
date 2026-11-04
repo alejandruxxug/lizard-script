@@ -2,6 +2,7 @@ package window
 
 import (
 	"image"
+	"io/fs"
 	"lizardscript/terrarium/internal/pixels"
 	"lizardscript/terrarium/pen"
 
@@ -228,6 +229,10 @@ func (g *game) poll() []Event {
 		events = append(events, w.at(Event{Type: "scroll", DY: dy, Mods: mods, T: now}, sx, sy))
 	}
 
+	if paths := droppedPaths(); len(paths) > 0 {
+		events = append(events, w.at(Event{Type: "drop", Paths: paths, Mods: mods, T: now}, sx, sy))
+	}
+
 	for _, k := range inpututil.AppendPressedKeys(nil) {
 		if g.repeats(k) {
 			events = append(events, Event{Type: "key", Key: k.String(), Mods: mods, T: now})
@@ -281,4 +286,22 @@ func penAt(native []pen.Sample, phase string, held bool) Pen {
 // pressure.
 func newPen(raw float64, tilt [2]float64, source string, eraser bool) Pen {
 	return Pen{Pressure: pen.Shape(source, raw), Raw: raw, Tilt: tilt, Source: source, Eraser: eraser}
+}
+
+// droppedPaths are the files dropped on the window this frame, by their
+// real paths. A file the system gives with no real path (a browser) is left
+// out.
+func droppedPaths() []string {
+	files := ebiten.DroppedFiles()
+	entries, err := fs.ReadDir(files, ".")
+	if err != nil {
+		return nil
+	}
+	var paths []string
+	for _, entry := range entries {
+		if p, ok := entry.(ebiten.AbsPather); ok {
+			paths = append(paths, p.AbsPath())
+		}
+	}
+	return paths
 }

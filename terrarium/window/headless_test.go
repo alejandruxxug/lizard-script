@@ -44,6 +44,12 @@ window.run(w, function(events) {
   false
 })
 got`, `["canvas", (5, 2)]`},
+		{"drop event", `
+let w = window.open(20, 10, "", {"headless": true})
+window.inject(w, {"type": "drop", "pos": (3, 4), "paths": ["/tmp/a.png", "/tmp/b.png"]})
+let got = null
+window.run(w, function(events) { got = [events[0].type, events[0].pos, events[0].paths]; false })
+got`, `["drop", (3, 4), ["/tmp/a.png", "/tmp/b.png"]]`},
 		{"on demand", `
 let w = window.open(4, 4, "", {"headless": true, "on_demand": true})
 let ticks = 0
@@ -103,6 +109,8 @@ func TestHeadlessErrors(t *testing.T) {
 		{"unknown set option", `window.set(window.open(1, 1, ""), {"fast": true})`, `unknown option "fast" (the options are center, floating`},
 		{"bad size", `window.set(window.open(1, 1, ""), {"size": (0, 5)})`, "the size must be a point (w, h) of whole numbers from 1 to 8192, got (0, 5)"},
 		{"inject a bad type", `window.inject(window.open(1, 1, ""), {"type": "wave"})`, `an event's type must be one of`},
+		{"inject drop with no paths", `window.inject(window.open(1, 1, ""), {"type": "drop", "pos": (0, 0)})`, "a drop event needs a list of paths, got nothing"},
+		{"inject drop with a number", `window.inject(window.open(1, 1, ""), {"type": "drop", "pos": (0, 0), "paths": [1]})`, "a drop event's paths are strings, got 1"},
 		{"inject with no pos", `window.inject(window.open(1, 1, ""), {"type": "down"})`, "a down event needs a point pos, got nothing"},
 		{"an error in tick", `window.run(window.open(1, 1, "", {"headless": true}), function(e) { 1 + "a" })`, "type mismatch: INTEGER + STRING"},
 	} {
