@@ -800,9 +800,13 @@ Sends one command to the newest running window with automation (or the one of th
 | `Dump` | the window (size, scale, frame), its surfaces, the stats and the `dump` hook's value |
 | `Stats` | `ticks`, `frames` (ticks that drew), `events`, `tick_ms`, `compose_ms` and the `stats` hook's value |
 | `Screenshot [path] [--base64]` | saves `window.screenshot` as a PNG (to a new file in the temp folder without `path`) and gives its path, or with `--base64` gives the PNG itself |
-| `Click x y [mods] [--button right]` | a press and a release; mods are `shift`, `alt`, `cmd`, `ctrl`, or joined: `shift+cmd` |
-| `DoubleClick x y [mods]` | two clicks |
+| `Click x y [mods] [--button right]` | a move to the point (a hand arrives before it presses), a press and a release; mods are `shift`, `alt`, `cmd`, `ctrl`, or joined: `shift+cmd` |
+| `DoubleClick x y [mods]` | a move there, then two clicks |
 | `Drag x1 y1 x2 y2 [steps] [mods] [--pressure a,b,...]` | a press, `steps` moves (10) and a release; `--pressure` ramps the pressure through the values, from a `"tablet"` |
+| `Press x y [mods] [--button right] [--pressure p]` | a move to the point, then the button goes down and stays down until `Release`; with `--pressure` the pen is a `"tablet"` of that pressure |
+| `Move x y [mods] [--pressure a,b,...] [--steps n] [--samples k]` | the pointer goes to the point in `steps` move events (1), from where the last command left it. After `Press` it drags, with the pressure of the press unless `--pressure` ramps it; with nothing down it hovers. `--samples k` puts `k` points in each event's `samples`, as a fast hand does between two frames |
+| `Release x y` | the button goes up at the point (after a move there if the pointer is elsewhere), with the pen, button and mods of the `Press`; an error when nothing is down |
+| `Path x1 y1 x2 y2 ... [mods] [--pressure a,b,...] [--steps n] [--samples k] [--close] [--button right]` | a whole gesture: a move to the first point, a press there, `steps` moves (10) along each line to the next point, and a release at the last. `--close` goes back to the first point and releases there, to draw a loop (a lasso). `--pressure` is spread along the length of the path. Not while a `Press` is down |
 | `Scroll dy [x y]` | the wheel |
 | `Key name [mods]` | a key, by its name: `Key S cmd` |
 | `Type text` | each character of the text, as `type` events |
@@ -818,6 +822,18 @@ lizardscript drive Drag 40 60 250 150 30 --pressure 0.1,1
 lizardscript drive Screenshot shot.png
 lizardscript drive Quit
 ```
+
+`Press`, `Move` and `Release` split a drag so that a driver can look at the window half way (a preview that only shows while the button is down, a selection outline, the stabilizer). `Path` makes a whole gesture, with a loop if it must. `Drag` stays the plain straight line, with no move before its press.
+
+```
+lizardscript drive Press 40 60 --pressure 0.3
+lizardscript drive Move 120 90 --steps 8 --pressure 0.3,0.9
+lizardscript drive Screenshot half-way.png
+lizardscript drive Release 120 90
+lizardscript drive Path 50 50 150 60 140 140 60 130 --close --steps 6
+```
+
+Every command sends the events of the input it names and nothing else: a command that sets the program's own state (a tool, a mode) is the program's own `Call` command, not an input, so the program decides what it arms.
 
 ## pen
 

@@ -58,6 +58,12 @@ type automation struct {
 
 	waiters []*waiter
 	quit    bool
+
+	// Where the driver's pointer is (screen pixels, once it has moved) and
+	// the button Press holds; used on the main goroutine.
+	pos   [2]float64
+	known bool
+	held  *held
 }
 
 // job is work for the main goroutine. run returns the function that makes
@@ -97,6 +103,7 @@ func (a *automation) start(w *Window) error {
 		return err
 	}
 	a.win, a.token, a.quit = w, hex.EncodeToString(secret), false
+	a.known, a.held = false, nil
 	a.mu.Lock()
 	a.done = make(chan struct{})
 	a.mu.Unlock()
@@ -281,6 +288,10 @@ func init() {
 		"Stats":       {"Stats", (*automation).statsCmd},
 		"Screenshot":  {"Screenshot [path] [--base64]", (*automation).screenshot},
 		"Click":       {"Click x y [shift|alt|cmd|ctrl] [--button right] [--full]", clicks(1)},
+		"Press":       {"Press x y [mods] [--button right] [--pressure p] [--full]", (*automation).press},
+		"Move":        {"Move x y [mods] [--pressure a,b,...] [--steps n] [--samples k] [--full]", (*automation).move},
+		"Release":     {"Release x y [--full]", (*automation).release},
+		"Path":        {"Path x1 y1 x2 y2 ... [mods] [--pressure a,b,...] [--steps n] [--samples k] [--close] [--button right] [--full]", (*automation).path},
 		"DoubleClick": {"DoubleClick x y [mods] [--button right] [--full]", clicks(2)},
 		"Drag":        {"Drag x1 y1 x2 y2 [steps] [mods] [--pressure 0.2,1.0] [--full]", (*automation).drag},
 		"Scroll":      {"Scroll dy [x y] [--full]", (*automation).scroll},
@@ -302,7 +313,7 @@ func init() {
 // as its value unless it is one that stands alone.
 func split(args []string) (words []string, flags map[string]string) {
 	flags = map[string]string{}
-	alone := map[string]bool{"full": true, "base64": true, "shift": true, "alt": true, "cmd": true, "ctrl": true}
+	alone := map[string]bool{"full": true, "base64": true, "close": true, "shift": true, "alt": true, "cmd": true, "ctrl": true}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if !strings.HasPrefix(a, "--") {
@@ -488,7 +499,8 @@ func (a *automation) screenshot(args []string) (any, error) {
 	})
 }
 
-// clicks is Click (n = 1) and DoubleClick (n = 2).
+// clicks is Click (n = 1) and DoubleClick (n = 2). The pointer moves to the
+// point first, as a hand arrives before it presses.
 func clicks(n int) func(a *automation, args []string) (any, error) {
 	return func(a *automation, args []string) (any, error) {
 		words, flags := split(args)
@@ -503,7 +515,7 @@ func clicks(n int) func(a *automation, args []string) (any, error) {
 		mods := modsOf(words[2:], flags)
 		return a.injectAfter(func() []Event {
 			sx, sy := a.screenPoint(f[0], f[1], flags)
-			var events []Event
+			events := a.hover(sx, sy, mods, mouse)
 			for i := 0; i < n; i++ {
 				for _, kind := range []string{"down", "up"} {
 					events = append(events, a.win.at(Event{Type: kind, Button: button, Mods: mods, Pen: mouse, T: pen.Now()}, sx, sy))
@@ -533,29 +545,12 @@ func (a *automation) drag(args []string) (any, error) {
 			steps, rest = n, rest[1:]
 		}
 	}
-	var ramp []float64
-	if p := flags["pressure"]; p != "" {
-		for _, part := range strings.Split(p, ",") {
-			v, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
-			if err != nil || v < 0 || v > 1 {
-				return nil, fmt.Errorf("bad pressure %q: want numbers from 0 to 1, like 0.2,1.0", part)
-			}
-			ramp = append(ramp, v)
-		}
+	ramp, err := parsePressure(flags["pressure"])
+	if err != nil {
+		return nil, err
 	}
 	mods := modsOf(rest, flags)
-	penAt := func(t float64) Pen {
-		if len(ramp) == 0 {
-			return mouse
-		}
-		p := ramp[0]
-		if len(ramp) > 1 {
-			segment := t * float64(len(ramp)-1)
-			i := min(int(segment), len(ramp)-2)
-			p = ramp[i] + (ramp[i+1]-ramp[i])*(segment-float64(i))
-		}
-		return Pen{Pressure: p, Raw: p, Source: "tablet"}
-	}
+	penAt := rampPen(ramp, mouse)
 	return a.injectAfter(func() []Event {
 		w := a.win
 		point := func(t float64) (float64, float64) {
@@ -569,6 +564,7 @@ func (a *automation) drag(args []string) (any, error) {
 			events = append(events, w.at(Event{Type: "move", Mods: mods, Pen: penAt(t), T: pen.Now()}, x, y))
 		}
 		x1, y1 := point(1)
+		a.pos, a.known = [2]float64{x1, y1}, true
 		return append(events, w.at(Event{Type: "up", Button: "left", Mods: mods, Pen: penAt(1), T: pen.Now()}, x1, y1))
 	})
 }

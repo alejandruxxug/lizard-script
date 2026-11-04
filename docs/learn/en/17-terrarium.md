@@ -788,11 +788,15 @@ Returning `false` from the first `tick` ends the run after one frame. `window.sc
 ```
 lizardscript drive Click 40 30
 lizardscript drive Drag 10 10 200 80 --pressure 0.2,1
+lizardscript drive Press 20 20
+lizardscript drive Move 100 60 --steps 5
+lizardscript drive Release 100 60
+lizardscript drive Path 20 20 120 20 120 80 --close
 lizardscript drive Screenshot shot.png
 lizardscript drive Quit
 ```
 
-Each reply comes after the frame that handled the command, so the next command sees what the program did. The program can add its own commands, and its own state for `Dump`; the whole list is in [TERRARIUM.md](../../TERRARIUM.md#automation).
+Each reply comes after the frame that handled the command, so the next command sees what the program did. `Click` moves the pointer to the point before it presses, as a hand does. `Drag` goes in a straight line from start to end in one command; to look at the window half way, split it with `Press`, `Move` and `Release`, and to draw a bent line or a loop use `Path` with `--close`. The program can add its own commands, and its own state for `Dump`; the whole list is in [TERRARIUM.md](../../TERRARIUM.md#automation).
 
 > **Try it.** Run `examples/terrarium/layers.liz`, point at the columns and read the mode in the title. Then change `0.9` in `pop_layer` to `0.4` and see which modes change the most.
 

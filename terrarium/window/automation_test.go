@@ -68,7 +68,11 @@ func drive(t *testing.T, args ...string) (map[string]any, error) {
 	return reply, err
 }
 
-func TestAutomation(t *testing.T) {
+// runDriven runs program on engine while session drives it from another
+// goroutine, and gives what the program returned and what the session found
+// wrong.
+func runDriven(t *testing.T, engine int, program string, session func(dir string) string) (string, string) {
+	t.Helper()
 	dir := t.TempDir()
 	configDir = func() (string, error) { return dir, nil }
 	defer func() { configDir = os.UserConfigDir }()
@@ -90,20 +94,30 @@ func TestAutomation(t *testing.T) {
 			done <- "the drive file is not 0600"
 			return
 		}
-		done <- driveSession(t, dir)
+		done <- session(dir)
 	}()
-	got := runProgram(t, driveProgram, nil).Inspect()
-	if problem := <-done; problem != "" {
-		t.Fatal(problem)
+	got := runOn(t, engines[engine].run, program, nil).Inspect()
+	problem := <-done
+	if _, err := os.Stat(DriveFile(filepath.Join(dir, "lizard"), os.Getpid())); !os.IsNotExist(err) {
+		problem += "\nthe drive file is still there after the window closed"
 	}
-	want := `[["down", (15, 12), "left", "canvas", (10, 5), true], ["up", (15, 12), "left", "canvas", (10, 5), true], ` +
+	return got, problem
+}
+
+func TestAutomation(t *testing.T) {
+	want := `[["move", (15, 12), 1.0, 1], ["down", (15, 12), "left", "canvas", (10, 5), true], ["up", (15, 12), "left", "canvas", (10, 5), true], ` +
 		`["down", (0, 0), "left", null, null, false], ["move", (2, 0), 0.5, 1], ["move", (4, 0), 1.0, 1], ["up", (4, 0), "left", null, null, false], ` +
 		`["type", "h"], ["type", "i"], ["key", "S", true], ["focus", false], ["leave"], ["resize", (50, 40)], ["close"]]`
-	if got != want {
-		t.Errorf("the program got\n%s\nwant\n%s", got, want)
-	}
-	if _, err := os.Stat(DriveFile(filepath.Join(dir, "lizard"), os.Getpid())); !os.IsNotExist(err) {
-		t.Errorf("the drive file is still there after the window closed")
+	for i, engine := range engines {
+		t.Run(engine.name, func(t *testing.T) {
+			got, problem := runDriven(t, i, driveProgram, func(dir string) string { return driveSession(t, dir) })
+			if problem != "" {
+				t.Fatal(problem)
+			}
+			if got != want {
+				t.Errorf("the program got\n%s\nwant\n%s", got, want)
+			}
+		})
 	}
 }
 
@@ -142,7 +156,7 @@ func driveSession(t *testing.T, dir string) string {
 
 	dump, err := drive(t, "Dump")
 	app, _ := dump["app"].(map[string]any)
-	check(err == nil && app["events"] == 11.0 && sprintf("%v", dump["surfaces"]) == "[map[name:canvas rect:[10 10 20 10] scale:1 size:[40 20]]]",
+	check(err == nil && app["events"] == 12.0 && sprintf("%v", dump["surfaces"]) == "[map[name:canvas rect:[10 10 20 10] scale:1 size:[40 20]]]",
 		"Dump gave %v, %v", dump, err)
 	stats, err := drive(t, "Stats")
 	check(err == nil && sprintf("%v", stats["app"]) == "map[paint_ms:0.5]" && stats["ticks"].(float64) > 0, "Stats gave %v, %v", stats, err)
@@ -221,5 +235,98 @@ func TestSplitArgs(t *testing.T) {
 	}
 	if m := modsOf(words[2:], flags); !m.Shift || !m.Cmd || m.Alt || m.Ctrl {
 		t.Errorf("mods %+v, want shift and cmd", m)
+	}
+}
+
+// gestureProgram logs the pointer events of a window as short lines.
+const gestureProgram = `
+let w = window.open(40, 30, "app", {"headless": true, "scale": 2, "fps": 240})
+let log = []
+window.automation(w)
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "move" || e.type == "down" || e.type == "up") {
+      if (e.type == "move") {
+        push(log, [e.type, e.pos, e.pen.pressure, e.pen.source, len(e.samples)])
+      } else {
+        push(log, [e.type, e.pos, e.button, e.pen.pressure, e.mods.shift])
+      }
+    } else {
+      push(log, [e.type])
+    }
+  }
+  window.clear(w, #336699)
+})
+log`
+
+func TestGestures(t *testing.T) {
+	want := `[` +
+		// Press: a hover, then the button, with the pressure of a tablet.
+		`["move", (2, 2), 0.0, "tablet", 1], ["down", (2, 2), "right", 0.5, true], ` +
+		// Move while held: the pressure goes on, three samples in each event.
+		`["move", (6, 2), 0.5, "tablet", 3], ["move", (10, 2), 0.5, "tablet", 3], ` +
+		// Release elsewhere: a move there first.
+		`["move", (10, 6), 0.5, "tablet", 1], ["up", (10, 6), "right", 0.5, true], ` +
+		// Move with nothing held is a hover; --full is in screen pixels.
+		`["move", (5, 5), 1.0, "mouse", 1], ` +
+		// A closed path of three points with a ramp, spread along its length:
+		// a hover, the press, 2 moves per line, the release at the start.
+		`["move", (0, 0), 0.0, "tablet", 1], ["down", (0, 0), "left", 0.0, false], ` +
+		`["move", (2, 0), 0.14644660940672624, "tablet", 1], ["move", (4, 0), 0.2928932188134525, "tablet", 1], ` +
+		`["move", (4, 2), 0.4393398282201787, "tablet", 1], ["move", (4, 4), 0.585786437626905, "tablet", 1], ` +
+		`["move", (2, 2), 0.7928932188134525, "tablet", 1], ["move", (0, 0), 1.0, "tablet", 1], ["up", (0, 0), "left", 1.0, false], ` +
+		// Press and Release with nothing between, then a Click: both hover first.
+		`["move", (1, 1), 1.0, "mouse", 1], ["down", (1, 1), "left", 1.0, false], ["up", (1, 1), "left", 1.0, false], ` +
+		`["move", (3, 3), 1.0, "mouse", 1], ["down", (3, 3), "left", 1.0, false], ["up", (3, 3), "left", 1.0, false], ` +
+		`["close"]]`
+	session := func(dir string) string {
+		var problems []string
+		send := func(args ...string) map[string]any {
+			reply, err := drive(t, args...)
+			if err != nil {
+				problems = append(problems, sprintf("%v: %v %v", args, err, reply))
+			}
+			return reply
+		}
+		fails := func(sub string, args ...string) {
+			reply, err := drive(t, args...)
+			if err == nil || !strings.Contains(sprintf("%v", reply["error"]), sub) {
+				problems = append(problems, sprintf("%v gave %v, want an error with %q", args, reply, sub))
+			}
+		}
+		send("Press", "2", "2", "shift", "--button", "right", "--pressure", "0.5")
+		send("Move", "10", "2", "--steps", "2", "--samples", "3")
+		send("Release", "10", "6")
+		send("Move", "10", "10", "--full")
+		send("Path", "0", "0", "4", "0", "4", "4", "--steps", "2", "--close", "--pressure", "0,1")
+		fails("no button is down", "Release", "1", "1")
+		send("Press", "1", "1")
+		fails("already down", "Press", "1", "1")
+		fails("already down", "Path", "0", "0", "1", "1")
+		send("Release", "1", "1")
+		fails("usage: Press", "Press", "1")
+		fails("bad pressure", "Press", "1", "1", "--pressure", "2")
+		fails("one pressure", "Press", "1", "1", "--pressure", "0.1,0.2")
+		fails("--button must be", "Press", "1", "1", "--button", "back")
+		fails("--steps must be", "Move", "1", "1", "--steps", "0")
+		fails("--samples must be", "Move", "1", "1", "--samples", "x")
+		fails("pairs of numbers", "Path", "1", "1", "2")
+		fails("pairs of numbers", "Path", "1", "1")
+		fails("more than", "Path", "0", "0", "1", "1", "2", "2", "3", "3", "4", "4", "5", "5", "6", "6", "7", "7", "8", "8", "9", "9", "10", "10", "11", "11", "--steps", "10000")
+		send("Click", "3", "3")
+		send("Quit")
+		return strings.Join(problems, "\n")
+	}
+	for i, engine := range engines {
+		t.Run(engine.name, func(t *testing.T) {
+			got, problem := runDriven(t, i, gestureProgram, session)
+			if problem != "" {
+				t.Fatal(problem)
+			}
+			if got != want {
+				t.Errorf("got\n%s\nwant\n%s", got, want)
+			}
+		})
 	}
 }

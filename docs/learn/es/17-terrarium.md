@@ -788,11 +788,15 @@ Devolver `false` en el primer `tick` termina la ejecución después de un cuadro
 ```
 lizardscript drive Click 40 30
 lizardscript drive Drag 10 10 200 80 --pressure 0.2,1
+lizardscript drive Press 20 20
+lizardscript drive Move 100 60 --steps 5
+lizardscript drive Release 100 60
+lizardscript drive Path 20 20 120 20 120 80 --close
 lizardscript drive Screenshot shot.png
 lizardscript drive Quit
 ```
 
-Cada respuesta llega después del cuadro que atendió el comando, así el siguiente comando ve lo que hizo el programa. El programa puede agregar sus propios comandos, y su propio estado para `Dump`; la lista completa está en [TERRARIUM.md](../../TERRARIUM.md#automation) (en inglés).
+Cada respuesta llega después del cuadro que atendió el comando, así el siguiente comando ve lo que hizo el programa. `Click` mueve el puntero al punto antes de presionar, como lo hace una mano. `Drag` va en línea recta de inicio a fin en un solo comando; para mirar la ventana a mitad del camino, pártelo con `Press`, `Move` y `Release`, y para dibujar una línea quebrada o un lazo usa `Path` con `--close`. El programa puede agregar sus propios comandos, y su propio estado para `Dump`; la lista completa está en [TERRARIUM.md](../../TERRARIUM.md#automation) (en inglés).
 
 > **Pruébalo.** Ejecuta `examples/terrarium/layers.liz`, apunta a las columnas y lee el modo en el título. Luego cambia `0.9` en `pop_layer` por `0.4` y mira qué modos cambian más.
 
