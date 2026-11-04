@@ -86,7 +86,7 @@ false true
 | `pen.` | `available`; la presión es `e.pen.pressure` en los eventos de la ventana |
 | dibujo (`img.` y `window.`) | `size clear fill(t, [x, y, w, h], c) span(t, y, x0, x1, c) spans blit(t, source, pos, {"scale": k, "filter": "linear"})` |
 
-Los errores dicen `fs.read: can't read x.txt: ...` y `try` los atrapa. Eventos: `e.type` es `down up move scroll key type resize close`; `e.pos`, `e.button`, `e.key`, `e.text`, `e.pen.pressure`.
+Los errores dicen `fs.read: can't read x.txt: ...` y `try` los atrapa. Eventos: `e.type` es `down up move scroll pinch key keyup type resize close`; `e.pos`, `e.button`, `e.key`, `e.text`, `e.pen.pressure`.
 
 ## Errores comunes
 

@@ -86,7 +86,7 @@ false true
 | `pen.` | `available`; pressure is `e.pen.pressure` in window events |
 | drawing (`img.` and `window.`) | `size clear fill(t, [x, y, w, h], c) span(t, y, x0, x1, c) spans blit(t, source, pos, {"scale": k, "filter": "linear"})` |
 
-Errors read `fs.read: can't read x.txt: ...` and `try` catches them. Events: `e.type` is `down up move scroll key type resize close`; `e.pos`, `e.button`, `e.key`, `e.text`, `e.pen.pressure`.
+Errors read `fs.read: can't read x.txt: ...` and `try` catches them. Events: `e.type` is `down up move scroll pinch key keyup type resize close`; `e.pos`, `e.button`, `e.key`, `e.text`, `e.pen.pressure`.
 
 ## Common errors
 

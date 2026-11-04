@@ -668,6 +668,9 @@ window.run(w, function(events) {
 ### window.title(w, text)
 Changes the title.
 
+### window.cursor(w, name)
+Sets the mouse cursor shown over the window. `name` is one of `"default"`, `"text"`, `"pointer"`, `"grab"`, `"crosshair"`, `"resize-ew"` and `"resize-ns"`; any other is an error. The window changes it at the end of the frame, and only when it changed. Ebitengine has no open-hand cursor, so `"grab"` is shown as its four-arrow move cursor, the closest shape. A headless window keeps the name and shows nothing.
+
 ### window.set(w, options)
 Changes the window while it runs, or before: the options of `window.open` but `transparent`, `headless` and `automation`, and these:
 
@@ -712,9 +715,11 @@ Each event is a hash with a `type` and the keys that mean something for it. Posi
 | `up` | `pos`, `button`, `mods`, `pen` | it goes up |
 | `move` | `pos`, `mods`, `pen` | the pointer moved (with or without a button down) |
 | `scroll` | `pos`, `dy`, `dx`, `mods` | the wheel or a two-finger scroll; `dy` above 0 is up (content moves up) and `dx` above 0 is right (content moves right); the event comes when either is not 0 |
+| `pinch` | `pos`, `scale`, `mods` | the trackpad's pinch gesture; `scale` is the factor of this step (above 1 spreads the fingers: zoom in; 1.02 is 2% bigger), steps of one frame are multiplied into one event, and `pos` is where the pointer is. Only on macOS for now: Windows and Linux send none |
 | `drop` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` is a list of their absolute paths, which `fs` reads. The system gives real paths on macOS, Windows and Linux; a file with no real path (a browser) is left out |
 | `chosen` | `paths` | a [`window.choose_file`](#windowchoose_filew-options--) dialog ended; `paths` is the list of absolute paths picked, empty on cancel. It has no `pos` |
 | `key` | `key`, `mods` | a key went down, and again while it is held; `key` is its name: `"A"` to `"Z"`, `"Digit0"` to `"Digit9"`, `"Escape"`, `"Enter"`, `"Space"`, `"Backspace"`, `"Tab"`, `"ArrowLeft"`, ... |
+| `keyup` | `key`, `mods` | a key was released; `key` has the same names as `key` and comes once, with no repeat |
 | `type` | `text`, `mods` | a character was typed, as the keyboard composed it (`"é"`, `"C"`) |
 | `resize` | `size` | the window changed size: the user resized it, or `window.set` did |
 | `focus` | `focused` | the window got (`true`) or lost (`false`) the keyboard focus |
@@ -722,7 +727,7 @@ Each event is a hash with a `type` and the keys that mean something for it. Posi
 | `enter` | | the pointer came back over it |
 | `close` | | the user closed the window: the last event |
 
-A pointer event (`down`, `up`, `move`, `scroll`, `drop`) over a [surface](#surfaces) also has `surface`, the surface's name, and `surface_pos`, the point in the surface's own pixels (the newest surface on top wins). A `move` has `samples`: every point the pointer went through since the last frame, not only the last one, so a fast stroke with a pen keeps its shape. Each sample is a hash with `pos`, `pressure`, `raw`, `t` (seconds, the clock of the system's pen events) and, over a surface, `surface` and `surface_pos`; the last one is the event's own point. Where the system sends no samples (a mouse, an injected event), `samples` has one, the event's point.
+A pointer event (`down`, `up`, `move`, `scroll`, `pinch`, `drop`) over a [surface](#surfaces) also has `surface`, the surface's name, and `surface_pos`, the point in the surface's own pixels (the newest surface on top wins). A `move` has `samples`: every point the pointer went through since the last frame, not only the last one, so a fast stroke with a pen keeps its shape. Each sample is a hash with `pos`, `pressure`, `raw`, `t` (seconds, the clock of the system's pen events) and, over a surface, `surface` and `surface_pos`; the last one is the event's own point. Where the system sends no samples (a mouse, an injected event), `samples` has one, the event's point.
 ```
 if (e.type == "move" && drawing) {
   for (let i = 0; i < len(e.samples); i += 1) {
@@ -774,7 +779,7 @@ img.save(window.screenshot(w, {"full": true}), "screen.png")
 `window.open(w, h, title, {"headless": true})` makes a window with no screen: `window.run` runs its frames one after the other, as fast as `tick` goes, with the events the program injects, and stops when `tick` returns `false` (or when an `on_demand` window has nothing left to do). Everything else is the same, surfaces and screenshots included, so an app's tests and benchmarks run it as it is, in `go test` or on a machine with no display. A headless window doesn't count as the program's one window.
 
 #### window.inject(w, event)
-Adds `event`, a hash like the ones `tick` gets, to the next frame, as if the user made it. Keys left out take a plain value: the left button, no `mods`, a mouse's `pen` (a `pen` hash takes `pressure`, `raw`, `source` and `eraser`). A pointer event needs a `pos`, which can be fractional to reach a finer surface's pixels; its `surface` and `surface_pos` are worked out. A `drop` event needs a `pos` and a list of `paths` (strings); a `chosen` event needs only the `paths`. A `resize` event resizes the window like `window.set`.
+Adds `event`, a hash like the ones `tick` gets, to the next frame, as if the user made it. Keys left out take a plain value: the left button, no `mods`, a mouse's `pen` (a `pen` hash takes `pressure`, `raw`, `source` and `eraser`). A pointer event needs a `pos`, which can be fractional to reach a finer surface's pixels; its `surface` and `surface_pos` are worked out. A `drop` event needs a `pos` and a list of `paths` (strings); a `chosen` event needs only the `paths`. A `pinch` event takes a `scale` (1 if left out) and a `pos`; a `keyup` event takes a `key`. A `resize` event resizes the window like `window.set`.
 ```
 let w = window.open(200, 100, "", {"headless": true})
 window.inject(w, {"type": "down", "pos": (10, 10)})
@@ -828,6 +833,8 @@ Sends one command to the newest running window with automation (or the one of th
 | `Scroll dy [x y] [--dx N]` | the wheel; `--dx` also scrolls sideways (`Scroll 0 --dx 3`) |
 | `Drop x y path...` | files dropped on the window at the point; the paths are made absolute, and the files need not exist |
 | `Key name [mods]` | a key, by its name: `Key S cmd` |
+| `Pinch scale [x y] [mods] [--full]` | a trackpad pinch of that factor (above 0) at the point (0 0 without one): `Pinch 1.1 100 80` |
+| `KeyUp name [mods]` | a key released, by its name: `KeyUp Space` |
 | `Type text` | each character of the text, as `type` events |
 | `Resize w h` | `window.set` with that size, then waits for the program to settle |
 | `Focus true\|false`, `Leave`, `Enter` | the window gets or loses the focus; the pointer leaves or comes back |

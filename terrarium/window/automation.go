@@ -296,7 +296,9 @@ func init() {
 		"Drag":        {"Drag x1 y1 x2 y2 [steps] [mods] [--pressure 0.2,1.0] [--full]", (*automation).drag},
 		"Scroll":      {"Scroll dy [x y] [--dx N] [--full]", (*automation).scroll},
 		"Drop":        {"Drop x y path...", (*automation).drop},
+		"Pinch":       {"Pinch scale [x y] [mods] [--full]", (*automation).pinch},
 		"Key":         {"Key name [shift|alt|cmd|ctrl]", (*automation).key},
+		"KeyUp":       {"KeyUp name [shift|alt|cmd|ctrl]", (*automation).keyUp},
 		"Type":        {"Type text", (*automation).typeText},
 		"Resize":      {"Resize w h", (*automation).resize},
 		"Focus":       {"Focus true|false", (*automation).focus},
@@ -624,6 +626,43 @@ func (a *automation) key(args []string) (any, error) {
 	mods := modsOf(words[1:], flags)
 	return a.injectAfter(func() []Event {
 		return []Event{{Type: "key", Key: words[0], Mods: mods, T: pen.Now()}}
+	})
+}
+
+// keyUp is KeyUp name: a key released.
+func (a *automation) keyUp(args []string) (any, error) {
+	words, flags := split(args)
+	if len(words) < 1 {
+		return nil, fmt.Errorf("usage: %s", commands["KeyUp"].usage)
+	}
+	mods := modsOf(words[1:], flags)
+	return a.injectAfter(func() []Event {
+		return []Event{{Type: "keyup", Key: words[0], Mods: mods, T: pen.Now()}}
+	})
+}
+
+// pinch is Pinch scale [x y] [mods]: a trackpad pinch of that factor.
+func (a *automation) pinch(args []string) (any, error) {
+	words, flags := split(args)
+	usage := commands["Pinch"].usage
+	f, err := numbers(words, 1, usage)
+	if err != nil {
+		return nil, err
+	}
+	if f[0] <= 0 {
+		return nil, fmt.Errorf("the scale must be above 0 (usage: %s)", usage)
+	}
+	at, rest := []float64{0, 0}, words[1:]
+	if len(words) >= 3 {
+		if at, err = numbers(words[1:], 2, usage); err != nil {
+			return nil, err
+		}
+		rest = words[3:]
+	}
+	mods := modsOf(rest, flags)
+	return a.injectAfter(func() []Event {
+		sx, sy := a.screenPoint(at[0], at[1], flags)
+		return []Event{a.win.at(Event{Type: "pinch", Scale: f[0], Mods: mods, T: pen.Now()}, sx, sy)}
 	})
 }
 

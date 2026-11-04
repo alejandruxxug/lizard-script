@@ -42,6 +42,7 @@ type game struct {
 	premultiplied  []byte // the buffer as the screen takes it
 	lastX, lastY   int
 	presence       presence
+	cursor         string // the cursor shown
 }
 
 // applyChrome gives the system window the options the program chose: its
@@ -92,6 +93,7 @@ func (g *game) Update() error {
 	if !g.started {
 		g.started = true
 		pen.Start()
+		startPinch()
 	}
 	events := g.poll()
 	if g.expect > 0 {
@@ -106,6 +108,7 @@ func (g *game) Update() error {
 		events = append(events, Event{Type: "resize", W: g.layoutW, H: g.layoutH})
 	}
 	closing := ebiten.IsWindowBeingClosed()
+	g.applyCursor()
 	if closing {
 		events = append(events, Event{Type: "close"})
 	}
@@ -229,6 +232,10 @@ func (g *game) poll() []Event {
 		events = append(events, w.at(Event{Type: "scroll", DX: dx, DY: dy, Mods: mods, T: now}, sx, sy))
 	}
 
+	if scale, ok := drainPinch(); ok {
+		events = append(events, w.at(Event{Type: "pinch", Scale: scale, Mods: mods, T: now}, sx, sy))
+	}
+
 	if paths := droppedPaths(); len(paths) > 0 {
 		events = append(events, w.at(Event{Type: "drop", Paths: paths, Mods: mods, T: now}, sx, sy))
 	}
@@ -238,6 +245,9 @@ func (g *game) poll() []Event {
 			events = append(events, Event{Type: "key", Key: k.String(), Mods: mods, T: now})
 		}
 	}
+	for _, k := range inpututil.AppendJustReleasedKeys(nil) {
+		events = append(events, Event{Type: "keyup", Key: k.String(), Mods: mods, T: now})
+	}
 	// The text as the system composed it (dead keys, option combinations).
 	for _, r := range ebiten.AppendInputChars(nil) {
 		if r >= 32 && r != 127 {
@@ -246,6 +256,26 @@ func (g *game) poll() []Event {
 	}
 	fw, fh := w.frameSize()
 	return append(events, g.presence.update(ebiten.IsFocused(), cx, cy, fw, fh)...)
+}
+
+// cursorShapes are the cursors window.cursor takes, as Ebitengine's shapes.
+// Ebitengine has no open-hand cursor, so "grab" is its four-arrow move.
+var cursorShapes = map[string]ebiten.CursorShapeType{
+	"default":   ebiten.CursorShapeDefault,
+	"text":      ebiten.CursorShapeText,
+	"pointer":   ebiten.CursorShapePointer,
+	"grab":      ebiten.CursorShapeMove,
+	"crosshair": ebiten.CursorShapeCrosshair,
+	"resize-ew": ebiten.CursorShapeEWResize,
+	"resize-ns": ebiten.CursorShapeNSResize,
+}
+
+// applyCursor shows the cursor the program chose, when it changed.
+func (g *game) applyCursor() {
+	if g.w.cursor != g.cursor {
+		g.cursor = g.w.cursor
+		ebiten.SetCursorShape(cursorShapes[g.cursor])
+	}
 }
 
 // repeats reports whether a held key sends an event this frame: when it

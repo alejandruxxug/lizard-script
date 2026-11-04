@@ -70,6 +70,7 @@ type Window struct {
 
 	screen screen  // the surfaces and the composed frame (surface.go)
 	queued []Event // events for the next frame: injected, or made by window.set
+	cursor string  // the cursor the program chose (window.cursor)
 	choose chooser // file dialogs (choose.go)
 	auto   *automation
 	stats  stats
@@ -109,6 +110,7 @@ func Module() *object.Hash {
 		"set":         set,
 		"needs_paint": needsPaint,
 		"inject":      inject,
+		"cursor":      cursorFunc,
 		"choose_file": chooseFile,
 		"surface":     surfaceFunc,
 		"dirty":       dirty,
@@ -325,6 +327,31 @@ func set(args ...object.Object) object.Object {
 	if err := w.setOptions(options, setOptions); err != nil {
 		return err
 	}
+	return arg.Null
+}
+
+// cursorNames are the names window.cursor takes.
+var cursorNames = []string{"default", "text", "pointer", "grab", "crosshair", "resize-ew", "resize-ns"}
+
+// window.cursor(w, name) sets the mouse cursor shown over the window: one of
+// cursorNames. "grab" is shown as a four-arrow move cursor, the closest
+// Ebitengine has. A headless window keeps the name and shows nothing.
+func cursorFunc(args ...object.Object) object.Object {
+	if err := arg.Count(args, 2, 2); err != nil {
+		return err
+	}
+	w, err := windowArg(args, 0)
+	if err != nil {
+		return err
+	}
+	name, err := arg.String(args, 1, "name")
+	if err != nil {
+		return err
+	}
+	if !contains(cursorNames, name) {
+		return arg.Errorf("a cursor must be one of %s, got %q", strings.Join(cursorNames, ", "), name)
+	}
+	w.cursor = name
 	return arg.Null
 }
 

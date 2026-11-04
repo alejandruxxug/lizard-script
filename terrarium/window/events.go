@@ -40,12 +40,13 @@ type Sample struct {
 
 // Event is one input event. X and Y are buffer pixels.
 type Event struct {
-	Type    string  // down, up, move, scroll, drop, chosen, key, type, resize, focus, leave, enter or close
+	Type    string  // down, up, move, scroll, pinch, drop, chosen, key, keyup, type, resize, focus, leave, enter or close
 	X, Y    int     // the pointer, for down, up, move and scroll
 	Spot    Spot    // the surface under the pointer
 	Button  string  // down and up: "left", "right" or "middle"
-	Key     string  // key: the key's name, like "A", "Escape" or "ArrowLeft"
+	Key     string  // key and keyup: the key's name, like "A", "Escape" or "ArrowLeft"
 	Text    string  // type: the character typed
+	Scale   float64 // pinch: the factor of this gesture step, above 1 spreading the fingers
 	DX, DY  float64 // scroll: how far the content moves right and up
 	W, H    int     // resize: the new size
 	Focused bool    // focus: the window got (true) or lost (false) the focus
@@ -59,7 +60,7 @@ type Event struct {
 // pointer reports whether an event has a position.
 func (e Event) pointer() bool {
 	switch e.Type {
-	case "down", "up", "move", "scroll", "drop":
+	case "down", "up", "move", "scroll", "pinch", "drop":
 		return true
 	}
 	return false
@@ -77,13 +78,15 @@ func (e Event) hash() *object.Hash {
 	switch e.Type {
 	case "down", "up":
 		arg.Set(h, "button", arg.Str(e.Button))
-	case "key":
+	case "key", "keyup":
 		arg.Set(h, "key", arg.Str(e.Key))
 	case "type":
 		arg.Set(h, "text", arg.Str(e.Text))
 	case "scroll":
 		arg.Set(h, "dy", arg.Float(e.DY))
 		arg.Set(h, "dx", arg.Float(e.DX))
+	case "pinch":
+		arg.Set(h, "scale", arg.Float(e.Scale))
 	case "resize":
 		arg.Set(h, "size", arg.PointOf(e.W, e.H))
 	case "focus":
@@ -180,7 +183,7 @@ func (w *Window) dragSamples(native []pen.Sample, e Event) []Sample {
 var mouse = Pen{Pressure: 1, Raw: 1, Source: "mouse"}
 
 // eventTypes are the types window.inject takes.
-var eventTypes = []string{"chosen", "close", "down", "drop", "enter", "focus", "key", "leave", "move", "resize", "scroll", "type", "up"}
+var eventTypes = []string{"chosen", "close", "down", "drop", "enter", "focus", "key", "keyup", "leave", "move", "pinch", "resize", "scroll", "type", "up"}
 
 // window.inject(w, event) adds an event, a hash like the ones tick gets, to
 // the next frame, as if the user made it: how a program tests itself with
@@ -229,6 +232,7 @@ func (w *Window) eventOf(h *object.Hash) (Event, *object.Error) {
 	e.Text = r.str("text", "")
 	e.DX = r.num("dx", 0)
 	e.DY = r.num("dy", 0)
+	e.Scale = r.num("scale", 1)
 	e.Focused = r.flag("focused", true)
 	if e.Type == "drop" || e.Type == "chosen" {
 		list, ok := r.get("paths").(*object.Array)

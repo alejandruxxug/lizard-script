@@ -426,3 +426,57 @@ func TestScroll(t *testing.T) {
 		})
 	}
 }
+
+// pinchProgram logs the pinch and keyup events of a window.
+const pinchProgram = `
+let w = window.open(40, 30, "app", {"headless": true, "scale": 2, "fps": 240})
+let log = []
+window.automation(w)
+window.inject(w, {"type": "pinch", "pos": (1, 2), "scale": 1.5})
+window.inject(w, {"type": "keyup", "key": "Space"})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "pinch") {
+      push(log, ["pinch", e.scale, e.pos, e.mods.cmd])
+    } elif (e.type == "keyup") {
+      push(log, ["keyup", e.key, e.mods.shift])
+    } elif (e.type == "close") {
+      push(log, "close")
+    }
+  }
+  window.clear(w, #336699)
+})
+log`
+
+func TestPinchAndKeyUp(t *testing.T) {
+	want := `[["pinch", 1.5, (1, 2), false], ["keyup", "Space", false], ["pinch", 0.5, (0, 0), false], ["pinch", 2.0, (5, 6), true], ` +
+		`["pinch", 1.25, (10, 10), false], ["keyup", "A", true], "close"]`
+	session := func(dir string) string {
+		defer drive(t, "Quit")
+		for _, args := range [][]string{
+			{"Pinch", "0.5"}, {"Pinch", "2", "5", "6", "cmd"}, {"Pinch", "1.25", "20", "20", "--full"}, {"KeyUp", "A", "shift"},
+		} {
+			if reply, err := drive(t, args...); err != nil {
+				return sprintf("%v: %v %v", args, err, reply)
+			}
+		}
+		for _, args := range [][]string{{"Pinch"}, {"Pinch", "x"}, {"Pinch", "0"}, {"Pinch", "1", "2", "x"}, {"KeyUp"}} {
+			if reply, err := drive(t, args...); err == nil {
+				return sprintf("%v gave %v", args, reply)
+			}
+		}
+		return ""
+	}
+	for i, engine := range engines {
+		t.Run(engine.name, func(t *testing.T) {
+			got, problem := runDriven(t, i, pinchProgram, session)
+			if problem != "" {
+				t.Fatal(problem)
+			}
+			if got != want {
+				t.Errorf("got\n%s\nwant\n%s", got, want)
+			}
+		})
+	}
+}

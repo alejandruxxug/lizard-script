@@ -684,16 +684,43 @@ Mientras dibujas, el título de la ventana muestra `pressure 0.42 (raw 0.91) · 
 | `"down"`, `"up"` | `pos`, `button`, `mods`, `pen` | un botón o el lápiz baja o sube |
 | `"move"` | `pos`, `mods`, `pen` | el puntero se movió |
 | `"scroll"` | `pos`, `dy`, `dx`, `mods` | la rueda o un desplazamiento con dos dedos |
-| `"drop"` | `pos`, `paths`, `mods` | se soltaron archivos sobre la ventana; `paths` son sus rutas absolutas |
+|| `"drop"` | `pos`, `paths`, `mods` | se soltaron archivos sobre la ventana; `paths` son sus rutas absolutas |
 | `"chosen"` | `paths` | terminó un diálogo de `window.choose_file`; `paths` está vacío si el usuario canceló |
 | `"key"` | `key`, `mods` | se presionó una tecla |
-| `"type"` | `text` | se escribió un carácter |
+ | `"type"` | `text` | se escribió un carácter |
 | `"resize"` | `size` | la ventana cambió de tamaño |
 | `"focus"` | `focused` | la ventana ganó o perdió el foco del teclado |
 | `"leave"`, `"enter"` | | el puntero salió de la ventana, o volvió |
 | `"close"` | | la ventana se está cerrando: el último evento |
 
 Un `"move"` también trae `samples`, todos los puntos por los que pasó el puntero desde el cuadro anterior (más abajo).
+
+**Pellizco y soltar tecla.** Un evento `"pinch"` es el pellizco del trackpad (solo en macOS por ahora); su `scale` es un factor por el que multiplicar el zoom. Un evento `"keyup"` llega cuando se suelta una tecla, así un modo que dura mientras se mantiene una tecla (Espacio para desplazar) puede terminar justo entonces. Ambos se pueden inyectar en pruebas:
+```
+let w = window.open(40, 30, "zoom", {"headless": true})
+let zoom = 1.0
+window.cursor(w, "crosshair")
+window.inject(w, {"type": "pinch", "pos": (20, 15), "scale": 1.5})
+window.inject(w, {"type": "key", "key": "Space"})
+window.inject(w, {"type": "keyup", "key": "Space"})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "pinch") {
+      zoom = zoom * e.scale
+    } elif (e.type == "key" && e.key == "Space") {
+      window.cursor(w, "grab")
+    } elif (e.type == "keyup" && e.key == "Space") {
+      window.cursor(w, "crosshair")
+    }
+  }
+  false
+})
+puts(zoom)
+```
+Salida: `1.5`.
+
+**Cambiar el cursor.** `window.cursor(w, name)` cambia el cursor del ratón: `"default"`, `"text"`, `"pointer"`, `"grab"` (se muestra como el cursor de mover de cuatro flechas, el más cercano que tiene Ebitengine), `"crosshair"`, `"resize-ew"` o `"resize-ns"`. Una ventana headless solo lo recuerda.
 
 **Pedir un archivo.** `window.choose_file(w, {"types": ["png", "jpg"]})` abre el diálogo "abrir archivo" del sistema y vuelve al instante, así que la ventana sigue funcionando. Cuando el usuario elige o cancela, llega un evento `"chosen"` con `paths`, una lista que está vacía si canceló. Las opciones son `title`, `types`, `folder` y `many`. Para probar el manejo sin diálogo, inyecta el evento en una ventana headless; este programa se ejecutó y muestra las dos líneas de abajo:
 ```

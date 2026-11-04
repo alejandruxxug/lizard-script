@@ -684,16 +684,43 @@ While you draw, the window title shows `pressure 0.42 (raw 0.91) · trackpad`: `
 | `"down"`, `"up"` | `pos`, `button`, `mods`, `pen` | a button or the pen goes down or up |
 | `"move"` | `pos`, `mods`, `pen` | the pointer moved |
 | `"scroll"` | `pos`, `dy`, `dx`, `mods` | the wheel or a two-finger scroll |
-| `"drop"` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` are their absolute paths |
+|| `"drop"` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` are their absolute paths |
 | `"chosen"` | `paths` | a file dialog from `window.choose_file` ended; `paths` is empty if the user cancelled |
 | `"key"` | `key`, `mods` | a key went down |
-| `"type"` | `text` | a character was typed |
+ | `"type"` | `text` | a character was typed |
 | `"resize"` | `size` | the window changed size |
 | `"focus"` | `focused` | the window got or lost the keyboard focus |
 | `"leave"`, `"enter"` | | the pointer left the window, or came back |
 | `"close"` | | the window is being closed: the last event |
 
 A `"move"` also has `samples`, every point the pointer went through since the last frame (see below).
+
+**Pinch and key release.** A `"pinch"` event is the trackpad's pinch (macOS only for now); its `scale` is a factor to multiply the zoom by. A `"keyup"` event comes when a key is released, so a mode that lasts while a key is held (Space for panning) can end exactly then. Both can be injected for tests:
+```
+let w = window.open(40, 30, "zoom", {"headless": true})
+let zoom = 1.0
+window.cursor(w, "crosshair")
+window.inject(w, {"type": "pinch", "pos": (20, 15), "scale": 1.5})
+window.inject(w, {"type": "key", "key": "Space"})
+window.inject(w, {"type": "keyup", "key": "Space"})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "pinch") {
+      zoom = zoom * e.scale
+    } elif (e.type == "key" && e.key == "Space") {
+      window.cursor(w, "grab")
+    } elif (e.type == "keyup" && e.key == "Space") {
+      window.cursor(w, "crosshair")
+    }
+  }
+  false
+})
+puts(zoom)
+```
+Output: `1.5`.
+
+**Changing the cursor.** `window.cursor(w, name)` sets the mouse cursor: `"default"`, `"text"`, `"pointer"`, `"grab"` (shown as the four-arrow move cursor, the closest Ebitengine has), `"crosshair"`, `"resize-ew"` or `"resize-ns"`. A headless window just remembers it.
 
 **Asking for a file.** `window.choose_file(w, {"types": ["png", "jpg"]})` opens the system's "open file" dialog and returns at once, so the window keeps running. When the user picks or cancels, a `"chosen"` event arrives with `paths`, a list that is empty on cancel. The options are `title`, `types`, `folder` and `many`. To try the handling without a dialog, inject the event in a headless window; this program was run and prints the two lines below it:
 ```

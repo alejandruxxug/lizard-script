@@ -208,6 +208,9 @@ func TestEventHash(t *testing.T) {
 		{Event{Type: "scroll", X: 5, Y: 6, DY: -1.5},
 			`{"type": "scroll", "pos": (5, 6), "dy": -1.5, "dx": 0.0, "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
 		{Event{Type: "key", Key: "A"}, `{"type": "key", "key": "A", "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
+		{Event{Type: "keyup", Key: "Space"}, `{"type": "keyup", "key": "Space", "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
+		{Event{Type: "pinch", X: 3, Y: 4, Scale: 1.25},
+			`{"type": "pinch", "pos": (3, 4), "scale": 1.25, "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
 		{Event{Type: "type", Text: "é"}, `{"type": "type", "text": "é", "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
 		{Event{Type: "resize", W: 30, H: 20}, `{"type": "resize", "size": (30, 20)}`},
 		{Event{Type: "close"}, `{"type": "close"}`},
@@ -260,5 +263,43 @@ func TestPenAt(t *testing.T) {
 func TestPathsOfNoDrop(t *testing.T) {
 	if got := pathsOf(nil); got != nil {
 		t.Fatalf("pathsOf(nil) = %v, want nil", got)
+	}
+}
+
+func TestCursor(t *testing.T) {
+	for _, engine := range engines {
+		t.Run(engine.name, func(t *testing.T) {
+			got := runOn(t, engine.run, `let w = window.open(4, 4, "", {"headless": true})
+window.cursor(w, "grab")
+w`, nil)
+			if c := got.(*object.Native).Value.(*Window).cursor; c != "grab" {
+				t.Errorf("cursor = %q, want grab", c)
+			}
+			for name := range cursorShapes {
+				if !contains(cursorNames, name) {
+					t.Errorf("%s is shaped but not accepted", name)
+				}
+			}
+			if len(cursorShapes) != len(cursorNames) {
+				t.Errorf("%d shapes for %d names", len(cursorShapes), len(cursorNames))
+			}
+		})
+	}
+	for _, src := range []string{`window.cursor(window.open(4, 4, "", {"headless": true}), "hand")`, `window.cursor(1, "text")`} {
+		if _, ok := runProgram(t, src, nil).(*object.Error); !ok {
+			t.Errorf("%s: want an error", src)
+		}
+	}
+}
+
+func TestPinchSum(t *testing.T) {
+	drainPinch()
+	if _, ok := drainPinch(); ok {
+		t.Fatal("a pinch with no gesture")
+	}
+	recordPinch(0.5)
+	recordPinch(-0.5)
+	if s, ok := drainPinch(); !ok || s != 0.75 {
+		t.Errorf("pinch = %v %v, want 0.75", s, ok)
 	}
 }
