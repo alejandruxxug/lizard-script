@@ -292,7 +292,15 @@ func newPen(raw float64, tilt [2]float64, source string, eraser bool) Pen {
 // real paths. A file the system gives with no real path (a browser) is left
 // out.
 func droppedPaths() []string {
-	files := ebiten.DroppedFiles()
+	return pathsOf(ebiten.DroppedFiles())
+}
+
+// pathsOf is the absolute paths of the files in a drop. Ebitengine gives
+// nil on every frame where nothing was dropped.
+func pathsOf(files fs.FS) []string {
+	if files == nil {
+		return nil
+	}
 	entries, err := fs.ReadDir(files, ".")
 	if err != nil {
 		return nil

@@ -254,3 +254,11 @@ func TestPenAt(t *testing.T) {
 		t.Errorf("no samples gave %+v, want a mouse", p)
 	}
 }
+
+// TestPathsOfNoDrop checks the frames where nothing was dropped: Ebitengine
+// gives a nil file system then, and reading it must not panic.
+func TestPathsOfNoDrop(t *testing.T) {
+	if got := pathsOf(nil); got != nil {
+		t.Fatalf("pathsOf(nil) = %v, want nil", got)
+	}
+}
