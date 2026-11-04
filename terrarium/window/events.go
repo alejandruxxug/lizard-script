@@ -40,19 +40,19 @@ type Sample struct {
 
 // Event is one input event. X and Y are buffer pixels.
 type Event struct {
-	Type    string // down, up, move, scroll, drop, key, type, resize, focus, leave, enter or close
-	X, Y    int    // the pointer, for down, up, move and scroll
-	Spot    Spot   // the surface under the pointer
-	Button  string // down and up: "left", "right" or "middle"
-	Key     string // key: the key's name, like "A", "Escape" or "ArrowLeft"
-	Text    string // type: the character typed
-	DY      float64
-	W, H    int  // resize: the new size
-	Focused bool // focus: the window got (true) or lost (false) the focus
+	Type    string  // down, up, move, scroll, drop, chosen, key, type, resize, focus, leave, enter or close
+	X, Y    int     // the pointer, for down, up, move and scroll
+	Spot    Spot    // the surface under the pointer
+	Button  string  // down and up: "left", "right" or "middle"
+	Key     string  // key: the key's name, like "A", "Escape" or "ArrowLeft"
+	Text    string  // type: the character typed
+	DX, DY  float64 // scroll: how far the content moves right and up
+	W, H    int     // resize: the new size
+	Focused bool    // focus: the window got (true) or lost (false) the focus
 	Mods    Mods
 	Pen     Pen      // down, up and move
 	Samples []Sample // move: every point since the last frame, the last one at X, Y
-	Paths   []string // drop: the files dropped, as absolute paths
+	Paths   []string // drop: the files dropped; chosen: the files picked, none on cancel (absolute paths)
 	T       float64  // when it happened, pen.Now()
 }
 
@@ -83,11 +83,12 @@ func (e Event) hash() *object.Hash {
 		arg.Set(h, "text", arg.Str(e.Text))
 	case "scroll":
 		arg.Set(h, "dy", arg.Float(e.DY))
+		arg.Set(h, "dx", arg.Float(e.DX))
 	case "resize":
 		arg.Set(h, "size", arg.PointOf(e.W, e.H))
 	case "focus":
 		arg.Set(h, "focused", arg.Bool(e.Focused))
-	case "drop":
+	case "drop", "chosen":
 		list := &object.Array{Elements: make([]object.Object, len(e.Paths))}
 		for i, p := range e.Paths {
 			list.Elements[i] = arg.Str(p)
@@ -95,7 +96,7 @@ func (e Event) hash() *object.Hash {
 		arg.Set(h, "paths", list)
 	}
 	switch e.Type {
-	case "resize", "close", "focus", "leave", "enter":
+	case "resize", "close", "focus", "leave", "enter", "chosen":
 	default:
 		arg.Set(h, "mods", modsHash(e.Mods))
 	}
@@ -179,7 +180,7 @@ func (w *Window) dragSamples(native []pen.Sample, e Event) []Sample {
 var mouse = Pen{Pressure: 1, Raw: 1, Source: "mouse"}
 
 // eventTypes are the types window.inject takes.
-var eventTypes = []string{"close", "down", "drop", "enter", "focus", "key", "leave", "move", "resize", "scroll", "type", "up"}
+var eventTypes = []string{"chosen", "close", "down", "drop", "enter", "focus", "key", "leave", "move", "resize", "scroll", "type", "up"}
 
 // window.inject(w, event) adds an event, a hash like the ones tick gets, to
 // the next frame, as if the user made it: how a program tests itself with
@@ -226,9 +227,10 @@ func (w *Window) eventOf(h *object.Hash) (Event, *object.Error) {
 	e.Button = r.str("button", e.Button)
 	e.Key = r.str("key", "")
 	e.Text = r.str("text", "")
+	e.DX = r.num("dx", 0)
 	e.DY = r.num("dy", 0)
 	e.Focused = r.flag("focused", true)
-	if e.Type == "drop" {
+	if e.Type == "drop" || e.Type == "chosen" {
 		list, ok := r.get("paths").(*object.Array)
 		if !ok {
 			return e, arg.Errorf("a drop event needs a list of paths, got %s", r.show("paths"))

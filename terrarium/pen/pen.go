@@ -3,8 +3,10 @@
 //
 // On macOS it listens to the system events the app already receives (Force
 // Touch trackpads and tablets); on Windows it reads Windows Ink pointer
-// messages. Neither touches the window itself. Other systems have no
-// pressure: every pointer is a plain mouse.
+// messages; on Linux it reads XInput2 raw events from its own connection to
+// the X server (XWayland included). None of them changes what the window
+// itself receives. Other systems have no pressure: every pointer is a plain
+// mouse.
 package pen
 
 import (
@@ -43,6 +45,16 @@ func setEraser(e bool) {
 	mu.Lock()
 	state.Eraser = e
 	mu.Unlock()
+}
+
+// forgetPen hands the reading to a plain pointer: when a mouse or a finger
+// moves after the pen, its drag doesn't take the pen's last pressure.
+func forgetPen() {
+	mu.Lock()
+	defer mu.Unlock()
+	if state.Source == "tablet" {
+		state = State{Source: "mouse", OK: true}
+	}
 }
 
 // Latest returns the last reading. OK is false when nothing has been read

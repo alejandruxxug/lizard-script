@@ -378,3 +378,51 @@ func TestDrop(t *testing.T) {
 		})
 	}
 }
+
+// scrollProgram logs the scroll events of a window.
+const scrollProgram = `
+let w = window.open(40, 30, "app", {"headless": true, "scale": 2, "fps": 240})
+let log = []
+window.automation(w)
+window.inject(w, {"type": "scroll", "pos": (1, 2), "dy": 2, "dx": -1})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "scroll") {
+      push(log, [e.dy, e.dx])
+    } elif (e.type == "close") {
+      push(log, "close")
+    }
+  }
+  window.clear(w, #336699)
+})
+log`
+
+func TestScroll(t *testing.T) {
+	want := `[[2.0, -1.0], [3.0, 0.0], [0.0, 4.5], [-1.0, 2.0], "close"]`
+	session := func(dir string) string {
+		for _, args := range [][]string{
+			{"3"}, {"0", "--dx", "4.5"}, {"-1", "5", "5", "--dx=2"},
+		} {
+			if reply, err := drive(t, append([]string{"Scroll"}, args...)...); err != nil {
+				return sprintf("Scroll %v: %v %v", args, err, reply)
+			}
+		}
+		if reply, err := drive(t, "Scroll", "1", "--dx", "x"); err == nil {
+			return sprintf("a bad --dx gave %v", reply)
+		}
+		drive(t, "Quit")
+		return ""
+	}
+	for i, engine := range engines {
+		t.Run(engine.name, func(t *testing.T) {
+			got, problem := runDriven(t, i, scrollProgram, session)
+			if problem != "" {
+				t.Fatal(problem)
+			}
+			if got != want {
+				t.Errorf("got\n%s\nwant\n%s", got, want)
+			}
+		})
+	}
+}

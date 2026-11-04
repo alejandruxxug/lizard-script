@@ -686,6 +686,22 @@ window.set(w, {"frameless": false, "floating": false, "scale": 2, "size": (640, 
 ### window.needs_paint(w)
 Asks for one more frame: with `on_demand`, `tick` runs next frame even if nothing happens. An animation calls it in every `tick` until it ends.
 
+### window.choose_file(w, options = {})
+Opens the system's "open file" dialog and returns `null` at once: the window keeps running while the dialog is open. When the user picks files or cancels, the next frame has a `chosen` event with `paths`, a list of absolute paths (empty on cancel). Only one dialog at a time per window; asking for a second is an error.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `title` | the system's | the dialog's title or prompt |
+| `types` | any file | extensions to show, like `["png", "jpg"]` (a leading dot is fine) |
+| `folder` | the system's | the folder the dialog starts in |
+| `many` | false | the user may pick more than one file |
+
+```
+window.choose_file(w, {"title": "Pick an image", "types": ["png", "jpg"], "folder": "/Users/ana/Pictures"})
+// then, in tick: if (e.type == "chosen" && len(e.paths) > 0) { ... e.paths[0] ... }
+```
+The dialog is the system's own program, run beside the window: `osascript` on macOS, PowerShell's `OpenFileDialog` on Windows, and `zenity` or else `kdialog` on Linux; with neither installed, `window.choose_file` is an error that says so. If the program fails, the program sees the same as a cancel.
+
 ### Events
 
 Each event is a hash with a `type` and the keys that mean something for it. Positions are buffer pixels from the top left.
@@ -695,8 +711,9 @@ Each event is a hash with a `type` and the keys that mean something for it. Posi
 | `down` | `pos`, `button`, `mods`, `pen` | a mouse button or the pen goes down; `button` is `"left"`, `"right"` or `"middle"` |
 | `up` | `pos`, `button`, `mods`, `pen` | it goes up |
 | `move` | `pos`, `mods`, `pen` | the pointer moved (with or without a button down) |
-| `scroll` | `pos`, `dy`, `mods` | the wheel or a two-finger scroll; `dy` above 0 is up |
+| `scroll` | `pos`, `dy`, `dx`, `mods` | the wheel or a two-finger scroll; `dy` above 0 is up (content moves up) and `dx` above 0 is right (content moves right); the event comes when either is not 0 |
 | `drop` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` is a list of their absolute paths, which `fs` reads. The system gives real paths on macOS, Windows and Linux; a file with no real path (a browser) is left out |
+| `chosen` | `paths` | a [`window.choose_file`](#windowchoose_filew-options--) dialog ended; `paths` is the list of absolute paths picked, empty on cancel. It has no `pos` |
 | `key` | `key`, `mods` | a key went down, and again while it is held; `key` is its name: `"A"` to `"Z"`, `"Digit0"` to `"Digit9"`, `"Escape"`, `"Enter"`, `"Space"`, `"Backspace"`, `"Tab"`, `"ArrowLeft"`, ... |
 | `type` | `text`, `mods` | a character was typed, as the keyboard composed it (`"é"`, `"C"`) |
 | `resize` | `size` | the window changed size: the user resized it, or `window.set` did |
@@ -757,7 +774,7 @@ img.save(window.screenshot(w, {"full": true}), "screen.png")
 `window.open(w, h, title, {"headless": true})` makes a window with no screen: `window.run` runs its frames one after the other, as fast as `tick` goes, with the events the program injects, and stops when `tick` returns `false` (or when an `on_demand` window has nothing left to do). Everything else is the same, surfaces and screenshots included, so an app's tests and benchmarks run it as it is, in `go test` or on a machine with no display. A headless window doesn't count as the program's one window.
 
 #### window.inject(w, event)
-Adds `event`, a hash like the ones `tick` gets, to the next frame, as if the user made it. Keys left out take a plain value: the left button, no `mods`, a mouse's `pen` (a `pen` hash takes `pressure`, `raw`, `source` and `eraser`). A pointer event needs a `pos`, which can be fractional to reach a finer surface's pixels; its `surface` and `surface_pos` are worked out. A `drop` event needs a `pos` and a list of `paths` (strings). A `resize` event resizes the window like `window.set`.
+Adds `event`, a hash like the ones `tick` gets, to the next frame, as if the user made it. Keys left out take a plain value: the left button, no `mods`, a mouse's `pen` (a `pen` hash takes `pressure`, `raw`, `source` and `eraser`). A pointer event needs a `pos`, which can be fractional to reach a finer surface's pixels; its `surface` and `surface_pos` are worked out. A `drop` event needs a `pos` and a list of `paths` (strings); a `chosen` event needs only the `paths`. A `resize` event resizes the window like `window.set`.
 ```
 let w = window.open(200, 100, "", {"headless": true})
 window.inject(w, {"type": "down", "pos": (10, 10)})
@@ -808,7 +825,7 @@ Sends one command to the newest running window with automation (or the one of th
 | `Move x y [mods] [--pressure a,b,...] [--steps n] [--samples k]` | the pointer goes to the point in `steps` move events (1), from where the last command left it. After `Press` it drags, with the pressure of the press unless `--pressure` ramps it; with nothing down it hovers. `--samples k` puts `k` points in each event's `samples`, as a fast hand does between two frames |
 | `Release x y` | the button goes up at the point (after a move there if the pointer is elsewhere), with the pen, button and mods of the `Press`; an error when nothing is down |
 | `Path x1 y1 x2 y2 ... [mods] [--pressure a,b,...] [--steps n] [--samples k] [--close] [--button right]` | a whole gesture: a move to the first point, a press there, `steps` moves (10) along each line to the next point, and a release at the last. `--close` goes back to the first point and releases there, to draw a loop (a lasso). `--pressure` is spread along the length of the path. Not while a `Press` is down |
-| `Scroll dy [x y]` | the wheel |
+| `Scroll dy [x y] [--dx N]` | the wheel; `--dx` also scrolls sideways (`Scroll 0 --dx 3`) |
 | `Drop x y path...` | files dropped on the window at the point; the paths are made absolute, and the files need not exist |
 | `Key name [mods]` | a key, by its name: `Key S cmd` |
 | `Type text` | each character of the text, as `type` events |
@@ -839,10 +856,10 @@ Every command sends the events of the input it names and nothing else: a command
 
 ## pen
 
-Pen pressure comes in the window's pointer events, as `e.pen`. macOS reports it from Force Touch trackpads and tablets; Windows 8 and later from Windows Ink pens (Wacom, Surface, Huion, XP-Pen). Other systems, and a plain mouse anywhere, report a pressure of 1. Each source has a response curve that shapes the pressure.
+Pen pressure comes in the window's pointer events, as `e.pen`. macOS reports it from Force Touch trackpads and tablets; Windows 8 and later from Windows Ink pens (Wacom, Surface, Huion, XP-Pen); Linux from pen tablets through XInput 2.1 or later, on an X11 desktop or under XWayland on a Wayland one (Wacom, Huion, XP-Pen: any tablet whose X driver gives it a pressure axis). Other systems, a plain mouse anywhere, and touch screens and touchpads on Windows and Linux report a pressure of 1 as a `"mouse"`. A pen gives its tilt everywhere and its eraser end on all three; its barrel rotation on macOS, on Windows when the pen reports it, and on Linux when the driver names an `Abs Rz` axis. Each source has a response curve that shapes the pressure.
 
 ### pen.available()
-Whether this system can report pressure at all. Even when it is true, a mouse reports 1.
+Whether this system can report pressure at all: always on macOS, on Windows 8 and later, and on Linux when the X server has XInput 2.1 or later. Even when it is true, a mouse reports 1.
 ```
 let size = 2 + e.pen.pressure * 14
 ```

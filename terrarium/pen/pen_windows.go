@@ -15,7 +15,8 @@ import (
 // other pen the system exposes. No cgo: the Ebitengine window is subclassed
 // with a callback that sees WM_POINTER* and always forwards to the original
 // window procedure, so GLFW still gets everything, including the mouse
-// messages Windows synthesizes from pointer input.
+// messages Windows synthesizes from pointer input. What a message means is
+// decided in ink.go; this file only makes the calls.
 
 const (
 	wmPointerEnter  = 0x0249
@@ -23,8 +24,6 @@ const (
 	wmPointerUpdate = 0x0245
 	wmPointerDown   = 0x0246
 	wmPointerUp     = 0x0247
-
-	ptPen = 3 // PT_PEN
 
 	gwlpWndProc = ^uintptr(3) // GWLP_WNDPROC is -4
 )
@@ -167,61 +166,56 @@ func findWindow() uintptr {
 
 // windowProc sees every message of the window and forwards each one.
 func windowProc(h, msg, wparam, lparam uintptr) uintptr {
+	id := uint32(wparam & 0xFFFF)
 	switch msg {
 	case wmPointerDown, wmPointerUpdate, wmPointerUp:
-		handlePointer(h, uint32(wparam&0xFFFF))
+		inkPointer(win32{h}, id, Now())
 	case wmPointerLeave:
-		if isPen(uint32(wparam & 0xFFFF)) {
-			update(func(s *State) { *s = State{OK: true} })
-		}
+		inkLeave(win32{h}, id)
 	}
 	r, _, _ := pCallWindowProc.Call(oldProc, h, msg, wparam, lparam)
 	return r
 }
 
-func isPen(id uint32) bool {
+// win32 is the real inkSystem, for the window h.
+type win32 struct{ h uintptr }
+
+func (w win32) pointerType(id uint32) (uint32, bool) {
 	var t uint32
 	ok, _, _ := pGetPointerType.Call(uintptr(id), uintptr(unsafe.Pointer(&t)))
-	return ok != 0 && t == ptPen
+	return t, ok != 0
 }
 
-// handlePointer reads every sample the pen produced since the last message.
-func handlePointer(h uintptr, id uint32) {
-	if !isPen(id) {
-		return
-	}
+// penHistory reads the pen frames Windows kept for the pointer and puts each
+// point in client pixels.
+func (w win32) penHistory(id uint32) []penRecord {
 	var n uint32
 	if ok, _, _ := pGetPenHistory.Call(uintptr(id), uintptr(unsafe.Pointer(&n)), 0); ok == 0 || n == 0 {
-		return
+		return nil
 	}
 	infos := make([]penInfo, n)
 	if ok, _, _ := pGetPenHistory.Call(uintptr(id), uintptr(unsafe.Pointer(&n)), uintptr(unsafe.Pointer(&infos[0]))); ok == 0 {
-		return
+		return nil
 	}
-	infos = infos[:n]
+	infos = infos[:min(int(n), len(infos))]
 	recs := make([]penRecord, len(infos))
 	for i, in := range infos {
 		p := point{in.Pointer.PixelX, in.Pointer.PixelY}
-		pScreenToClient.Call(h, uintptr(unsafe.Pointer(&p)))
+		pScreenToClient.Call(w.h, uintptr(unsafe.Pointer(&p)))
 		recs[i] = penRecord{
 			PointerFlags: in.Pointer.PointerFlags, PenFlags: in.PenFlags, PenMask: in.PenMask,
 			Pressure: in.Pressure, Rotation: in.Rotation, TiltX: in.TiltX, TiltY: in.TiltY,
 			X: p.X, Y: p.Y, Time: in.Pointer.Time,
 		}
 	}
-	oldestFirst(recs) // Windows lists the newest first
-	dpi := windowDPI(h)
-	tick, _, _ := pGetTickCount.Call()
-	now := Now()
-	for _, r := range recs {
-		s := penSample(r, dpi, now, uint32(tick))
-		eraser := penEraser(r.PenFlags)
-		record(s)
-		update(func(st *State) {
-			st.Pressure, st.Tilt, st.Rotation = s.Pressure, s.Tilt, s.Rotation
-			st.Source, st.Eraser = "tablet", eraser
-		})
-	}
+	return recs
+}
+
+func (w win32) dpi() uint32 { return windowDPI(w.h) }
+
+func (w win32) tick() uint32 {
+	t, _, _ := pGetTickCount.Call()
+	return uint32(t)
 }
 
 // windowDPI is the window's dpi, 96 when the call is missing.

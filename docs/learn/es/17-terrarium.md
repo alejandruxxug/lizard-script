@@ -605,7 +605,7 @@ window.run(w, function(events) {
 })
 ```
 
-Los eventos del puntero traen `e.pen`, y `e.pen.pressure` va de 0 a 1. `brush` la convierte en un radio de 2 a 16. Un mouse siempre dice 1, así que con mouse la línea simplemente es gruesa; con un trackpad Force Touch en un Mac, o una tableta con lápiz en macOS o Windows, presionar más fuerte dibuja una línea más ancha. `e.pen.source` dice cuál es (`"mouse"`, `"trackpad"` o `"tablet"`), y `pen.available()` dice si tu sistema puede reportar presión.
+Los eventos del puntero traen `e.pen`, y `e.pen.pressure` va de 0 a 1. `brush` la convierte en un radio de 2 a 16. Un mouse siempre dice 1, así que con mouse la línea simplemente es gruesa; con un trackpad Force Touch en un Mac, o una tableta con lápiz en macOS, Windows o Linux, presionar más fuerte dibuja una línea más ancha. `e.pen.source` dice cuál es (`"mouse"`, `"trackpad"` o `"tablet"`), y `pen.available()` dice si tu sistema puede reportar presión.
 
 ### Paso 7: las teclas
 
@@ -683,8 +683,9 @@ Mientras dibujas, el título de la ventana muestra `pressure 0.42 (raw 0.91) · 
 | --- | --- | --- |
 | `"down"`, `"up"` | `pos`, `button`, `mods`, `pen` | un botón o el lápiz baja o sube |
 | `"move"` | `pos`, `mods`, `pen` | el puntero se movió |
-| `"scroll"` | `pos`, `dy`, `mods` | la rueda o un desplazamiento con dos dedos |
+| `"scroll"` | `pos`, `dy`, `dx`, `mods` | la rueda o un desplazamiento con dos dedos |
 | `"drop"` | `pos`, `paths`, `mods` | se soltaron archivos sobre la ventana; `paths` son sus rutas absolutas |
+| `"chosen"` | `paths` | terminó un diálogo de `window.choose_file`; `paths` está vacío si el usuario canceló |
 | `"key"` | `key`, `mods` | se presionó una tecla |
 | `"type"` | `text` | se escribió un carácter |
 | `"resize"` | `size` | la ventana cambió de tamaño |
@@ -693,6 +694,26 @@ Mientras dibujas, el título de la ventana muestra `pressure 0.42 (raw 0.91) · 
 | `"close"` | | la ventana se está cerrando: el último evento |
 
 Un `"move"` también trae `samples`, todos los puntos por los que pasó el puntero desde el cuadro anterior (más abajo).
+
+**Pedir un archivo.** `window.choose_file(w, {"types": ["png", "jpg"]})` abre el diálogo "abrir archivo" del sistema y vuelve al instante, así que la ventana sigue funcionando. Cuando el usuario elige o cancela, llega un evento `"chosen"` con `paths`, una lista que está vacía si canceló. Las opciones son `title`, `types`, `folder` y `many`. Para probar el manejo sin diálogo, inyecta el evento en una ventana headless; este programa se ejecutó y muestra las dos líneas de abajo:
+```
+let w = window.open(40, 30, "pick", {"headless": true})
+window.inject(w, {"type": "chosen", "paths": ["/tmp/photo.png"]})
+window.inject(w, {"type": "chosen", "paths": []})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "chosen") {
+      if (len(e.paths) == 0) { puts("cancelled") } else { puts("picked " + e.paths[0]) }
+    }
+  }
+  false
+})
+```
+```text
+picked /tmp/photo.png
+cancelled
+```
 
 `mods` dice cuáles de `shift`, `alt`, `cmd` y `ctrl` estaban presionadas. Las opciones van en un hash después del título: `window.open(160, 100, "game", {"scale": 3, "fps": 30})` muestra cada píxel como un cuadrado de 3x3, ideal para pixel art. Un programa muestra una sola ventana. El REPL tiene todos los módulos menos `window` y `pen`; ahí, `window` da `identifier not found`.
 

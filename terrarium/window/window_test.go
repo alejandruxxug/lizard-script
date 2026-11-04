@@ -206,7 +206,7 @@ func TestEventHash(t *testing.T) {
 		{Event{Type: "down", X: 1, Y: 2, Button: "right", Mods: mods, Pen: Pen{Pressure: 1, Source: "mouse"}},
 			`{"type": "down", "pos": (1, 2), "button": "right", "mods": {"shift": true, "alt": false, "cmd": false, "ctrl": false}, "pen": {"pressure": 1.0, "raw": 0.0, "source": "mouse", "tilt": (0.0, 0.0), "eraser": false}}`},
 		{Event{Type: "scroll", X: 5, Y: 6, DY: -1.5},
-			`{"type": "scroll", "pos": (5, 6), "dy": -1.5, "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
+			`{"type": "scroll", "pos": (5, 6), "dy": -1.5, "dx": 0.0, "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
 		{Event{Type: "key", Key: "A"}, `{"type": "key", "key": "A", "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
 		{Event{Type: "type", Text: "é"}, `{"type": "type", "text": "é", "mods": {"shift": false, "alt": false, "cmd": false, "ctrl": false}}`},
 		{Event{Type: "resize", W: 30, H: 20}, `{"type": "resize", "size": (30, 20)}`},

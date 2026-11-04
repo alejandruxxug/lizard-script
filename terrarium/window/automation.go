@@ -294,7 +294,7 @@ func init() {
 		"Path":        {"Path x1 y1 x2 y2 ... [mods] [--pressure a,b,...] [--steps n] [--samples k] [--close] [--button right] [--full]", (*automation).path},
 		"DoubleClick": {"DoubleClick x y [mods] [--button right] [--full]", clicks(2)},
 		"Drag":        {"Drag x1 y1 x2 y2 [steps] [mods] [--pressure 0.2,1.0] [--full]", (*automation).drag},
-		"Scroll":      {"Scroll dy [x y] [--full]", (*automation).scroll},
+		"Scroll":      {"Scroll dy [x y] [--dx N] [--full]", (*automation).scroll},
 		"Drop":        {"Drop x y path...", (*automation).drop},
 		"Key":         {"Key name [shift|alt|cmd|ctrl]", (*automation).key},
 		"Type":        {"Type text", (*automation).typeText},
@@ -583,9 +583,15 @@ func (a *automation) scroll(args []string) (any, error) {
 			return nil, err
 		}
 	}
+	var dx float64
+	if v, ok := flags["dx"]; ok {
+		if dx, err = strconv.ParseFloat(v, 64); err != nil || math.IsInf(dx, 0) || math.IsNaN(dx) {
+			return nil, fmt.Errorf("--dx %q is not a number (usage: %s)", v, usage)
+		}
+	}
 	return a.injectAfter(func() []Event {
 		sx, sy := a.screenPoint(at[0], at[1], flags)
-		return []Event{a.win.at(Event{Type: "scroll", DY: f[0], T: pen.Now()}, sx, sy)}
+		return []Event{a.win.at(Event{Type: "scroll", DX: dx, DY: f[0], T: pen.Now()}, sx, sy)}
 	})
 }
 

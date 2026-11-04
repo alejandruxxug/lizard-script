@@ -225,8 +225,8 @@ func (g *game) poll() []Event {
 			pointer("up", b.name, penAt(native, pen.PhaseUp, false))
 		}
 	}
-	if _, dy := ebiten.Wheel(); dy != 0 {
-		events = append(events, w.at(Event{Type: "scroll", DY: dy, Mods: mods, T: now}, sx, sy))
+	if dx, dy := ebiten.Wheel(); dx != 0 || dy != 0 {
+		events = append(events, w.at(Event{Type: "scroll", DX: dx, DY: dy, Mods: mods, T: now}, sx, sy))
 	}
 
 	if paths := droppedPaths(); len(paths) > 0 {

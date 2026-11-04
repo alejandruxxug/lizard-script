@@ -70,6 +70,7 @@ type Window struct {
 
 	screen screen  // the surfaces and the composed frame (surface.go)
 	queued []Event // events for the next frame: injected, or made by window.set
+	choose chooser // file dialogs (choose.go)
 	auto   *automation
 	stats  stats
 }
@@ -108,6 +109,7 @@ func Module() *object.Hash {
 		"set":         set,
 		"needs_paint": needsPaint,
 		"inject":      inject,
+		"choose_file": chooseFile,
 		"surface":     surfaceFunc,
 		"dirty":       dirty,
 		"screenshot":  screenshot,
@@ -405,6 +407,7 @@ func run(args ...object.Object) object.Object {
 func (w *Window) frame(tick object.Object, events []Event) (bool, *object.Error) {
 	replies := w.auto.runJobs()
 	events = append(events, w.queued...)
+	events = append(events, w.choose.take()...)
 	w.queued = nil
 	busy := len(events) > 0 || len(replies) > 0 || w.wake || !w.started
 	keepGoing := true

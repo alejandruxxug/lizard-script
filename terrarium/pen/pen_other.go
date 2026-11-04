@@ -1,8 +1,8 @@
-//go:build !darwin && !windows
+//go:build !darwin && !windows && !linux
 
 package pen
 
-// Start does nothing: only macOS and Windows report pressure.
+// Start does nothing: only macOS, Windows and Linux report pressure.
 func Start() bool { return false }
 
 // Supported is false: this system reports no pressure.

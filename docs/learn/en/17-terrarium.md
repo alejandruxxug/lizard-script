@@ -605,7 +605,7 @@ window.run(w, function(events) {
 })
 ```
 
-Pointer events carry `e.pen`, and `e.pen.pressure` goes from 0 to 1. `brush` turns it into a radius from 2 to 16. A mouse always says 1, so with a mouse the line is simply thick; with a Force Touch trackpad on a Mac, or a pen tablet on macOS or Windows, pressing harder draws a wider line. `e.pen.source` says which one it is (`"mouse"`, `"trackpad"` or `"tablet"`), and `pen.available()` says whether your system can report pressure at all.
+Pointer events carry `e.pen`, and `e.pen.pressure` goes from 0 to 1. `brush` turns it into a radius from 2 to 16. A mouse always says 1, so with a mouse the line is simply thick; with a Force Touch trackpad on a Mac, or a pen tablet on macOS, Windows or Linux, pressing harder draws a wider line. `e.pen.source` says which one it is (`"mouse"`, `"trackpad"` or `"tablet"`), and `pen.available()` says whether your system can report pressure at all.
 
 ### Step 7: keys
 
@@ -683,8 +683,9 @@ While you draw, the window title shows `pressure 0.42 (raw 0.91) · trackpad`: `
 | --- | --- | --- |
 | `"down"`, `"up"` | `pos`, `button`, `mods`, `pen` | a button or the pen goes down or up |
 | `"move"` | `pos`, `mods`, `pen` | the pointer moved |
-| `"scroll"` | `pos`, `dy`, `mods` | the wheel or a two-finger scroll |
+| `"scroll"` | `pos`, `dy`, `dx`, `mods` | the wheel or a two-finger scroll |
 | `"drop"` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` are their absolute paths |
+| `"chosen"` | `paths` | a file dialog from `window.choose_file` ended; `paths` is empty if the user cancelled |
 | `"key"` | `key`, `mods` | a key went down |
 | `"type"` | `text` | a character was typed |
 | `"resize"` | `size` | the window changed size |
@@ -693,6 +694,26 @@ While you draw, the window title shows `pressure 0.42 (raw 0.91) · trackpad`: `
 | `"close"` | | the window is being closed: the last event |
 
 A `"move"` also has `samples`, every point the pointer went through since the last frame (see below).
+
+**Asking for a file.** `window.choose_file(w, {"types": ["png", "jpg"]})` opens the system's "open file" dialog and returns at once, so the window keeps running. When the user picks or cancels, a `"chosen"` event arrives with `paths`, a list that is empty on cancel. The options are `title`, `types`, `folder` and `many`. To try the handling without a dialog, inject the event in a headless window; this program was run and prints the two lines below it:
+```
+let w = window.open(40, 30, "pick", {"headless": true})
+window.inject(w, {"type": "chosen", "paths": ["/tmp/photo.png"]})
+window.inject(w, {"type": "chosen", "paths": []})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "chosen") {
+      if (len(e.paths) == 0) { puts("cancelled") } else { puts("picked " + e.paths[0]) }
+    }
+  }
+  false
+})
+```
+```text
+picked /tmp/photo.png
+cancelled
+```
 
 `mods` says which of `shift`, `alt`, `cmd` and `ctrl` were held. Options go in a hash after the title: `window.open(160, 100, "game", {"scale": 3, "fps": 30})` shows each pixel as a 3x3 square, nice for pixel art. A program shows one window. The REPL has every module but `window` and `pen`; there, `window` is `identifier not found`.
 
