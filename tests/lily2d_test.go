@@ -2,7 +2,7 @@ package tests
 
 import (
 	"bytes"
-	"lizardscript/tools/testrunner"
+	"github.com/alejandruxxug/lizard-script/tools/testrunner"
 	"testing"
 )
 

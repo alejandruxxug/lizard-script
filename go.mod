@@ -1,4 +1,4 @@
-module lizardscript
+module github.com/alejandruxxug/lizard-script
 
 go 1.27.0
 

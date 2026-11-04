@@ -1,11 +1,11 @@
 package terrarium
 
 import (
-	"lizardscript/ast"
-	"lizardscript/lexer"
-	"lizardscript/object"
-	"lizardscript/parser"
-	"lizardscript/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/lang/ast"
+	"github.com/alejandruxxug/lizard-script/lang/lexer"
+	"github.com/alejandruxxug/lizard-script/lang/parser"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
 	"regexp"
 	"strings"
 )

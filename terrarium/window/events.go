@@ -1,9 +1,9 @@
 package window
 
 import (
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
-	"lizardscript/terrarium/pen"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/terrarium/pen"
 	"math"
 	"path/filepath"
 	"strings"

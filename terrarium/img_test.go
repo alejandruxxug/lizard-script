@@ -2,10 +2,10 @@ package terrarium
 
 import (
 	"bytes"
+	"github.com/alejandruxxug/lizard-script/tools/bundle"
 	"image"
 	"image/color"
 	"image/png"
-	"lizardscript/bundle"
 	"os"
 	"path/filepath"
 	"testing"

@@ -1,6 +1,6 @@
 # Editor support
 
-Tools that help people write lizard-script in an editor. Nothing in this folder is part of the interpreter: `go build` and `go test ./...` don't look at it. The language server they start is: `lizardscript lsp` (package `lsp/`).
+Tools that help people write lizard-script in an editor. Nothing in this folder is part of the interpreter: `go build` and `go test ./...` don't look at it. The language server they start is: `lizardscript lsp` (package `tools/lsp/`).
 
 | Folder | What it is |
 | --- | --- |
@@ -28,9 +28,9 @@ Neither extension is published to the VS Code Marketplace or the Zed registry: t
 | Semantic tokens | functions, parameters, modules, builtins (`defaultLibrary`), layer names (`label`), and two types of lizard's own: `color` (`#f2a65a`) and `point` (the brackets of `(x, y)`). |
 | Colors | every color literal shows the editor's color picker; a color picked is written back as `#rrggbb` (`#rrggbbaa` with alpha) or as `rgb(...)`. |
 
-The signatures and the text of the builtins come from `docs/SEMANTICS.md` and `docs/TERRARIUM.md`: `go generate ./lsp` makes `lsp/builtin_docs.go` from them, and a test fails when a document changed and the file was not made again.
+The signatures and the text of the builtins come from `docs/SEMANTICS.md` and `docs/TERRARIUM.md`: `go generate ./tools/lsp` makes `tools/lsp/builtin_docs.go` from them, and a test fails when a document changed and the file was not made again.
 
-The tests (`go test ./lsp/...`) drive a server in the same process through the protocol, the way an editor does, on the files of `lsp/testdata`. No editor is needed.
+The tests (`go test ./tools/lsp/...`) drive a server in the same process through the protocol, the way an editor does, on the files of `tools/lsp/testdata`. No editor is needed.
 
 ### Getting `lizardscript`
 
@@ -137,7 +137,7 @@ language-servers = ["lizardscript"]
 
 ## Syntax grammars
 
-Two grammars describe the syntax for editors. They only mark up the text (colors, folding, indentation); the parser in `parser/` is still the one that decides what a program means and what is an error.
+Two grammars describe the syntax for editors. They only mark up the text (colors, folding, indentation); the parser in `lang/parser/` is still the one that decides what a program means and what is an error.
 
 | Grammar | Folder | Used by |
 | --- | --- | --- |
@@ -148,7 +148,7 @@ The Tree-sitter grammar is the exact one: it builds a tree of the program. The T
 
 ### Tree-sitter (`tree-sitter-lizard/`)
 
-It covers the whole language as in `docs/GRAMMAR.md`, [LEP 0001](../proposals/0001-statement-ends-at-newline.md) and [LEP 0002](../proposals/0002-modules.md): every statement and expression, numbers with exponents and units (`1e3`, `90deg`, `2px`), colors, points, strings with escapes, hashes, arrays, dot access, default parameters, `try` / `catch`, `use "path" as name` and `-~>` comments.
+It covers the whole language as in `docs/GRAMMAR.md`, [LEP 0001](../docs/proposals/0001-statement-ends-at-newline.md) and [LEP 0002](../docs/proposals/0002-modules.md): every statement and expression, numbers with exponents and units (`1e3`, `90deg`, `2px`), colors, points, strings with escapes, hashes, arrays, dot access, default parameters, `try` / `catch`, `use "path" as name` and `-~>` comments.
 
 Three parts of the language need more than rules, and are done in the external scanner (`src/scanner.c`, plain C):
 

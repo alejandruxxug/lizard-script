@@ -1,7 +1,7 @@
 package terrarium
 
 import (
-	"lizardscript/bundle"
+	"github.com/alejandruxxug/lizard-script/tools/bundle"
 	"os"
 	"path/filepath"
 	"testing"

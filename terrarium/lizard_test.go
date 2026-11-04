@@ -2,9 +2,9 @@ package terrarium
 
 import (
 	"bytes"
-	"lizardscript/evaluator"
-	"lizardscript/lexer"
-	"lizardscript/token"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/lang/lexer"
+	"github.com/alejandruxxug/lizard-script/lang/token"
 	"os"
 	"path/filepath"
 	"strings"

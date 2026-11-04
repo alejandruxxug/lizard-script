@@ -14,13 +14,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/lang/ast"
+	"github.com/alejandruxxug/lizard-script/lang/lexer"
+	"github.com/alejandruxxug/lizard-script/lang/parser"
+	"github.com/alejandruxxug/lizard-script/tools/bundle"
 	"io"
 	"io/fs"
-	"lizardscript/ast"
-	"lizardscript/bundle"
-	"lizardscript/evaluator"
-	"lizardscript/lexer"
-	"lizardscript/parser"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -312,5 +312,5 @@ func isSource(dir string) bool {
 		return false
 	}
 	first, _, _ := strings.Cut(string(mod), "\n")
-	return strings.Join(strings.Fields(first), " ") == "module lizardscript"
+	return strings.Join(strings.Fields(first), " ") == "module github.com/alejandruxxug/lizard-script"
 }

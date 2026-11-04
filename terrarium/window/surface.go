@@ -1,13 +1,13 @@
 package window
 
 import (
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/canvas"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/pixels"
 	"image"
 	"image/color"
-	"lizardscript/object"
-	"lizardscript/terrarium"
-	"lizardscript/terrarium/internal/arg"
-	"lizardscript/terrarium/internal/canvas"
-	"lizardscript/terrarium/internal/pixels"
 	"math"
 	"time"
 )

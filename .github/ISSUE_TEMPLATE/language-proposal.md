@@ -18,4 +18,4 @@ labels: proposal
 
 **Would any existing program behave differently?**
 
-See [proposals/README.md](../../proposals/README.md) for how ideas become LEPs.
+See [proposals/README.md](../../docs/proposals/README.md) for how ideas become LEPs.

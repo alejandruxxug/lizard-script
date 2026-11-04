@@ -1,10 +1,10 @@
 package window
 
 import (
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/pixels"
 	"image"
 	"image/color"
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/pixels"
 	"strings"
 	"testing"
 )

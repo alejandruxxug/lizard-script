@@ -1,0 +1,46 @@
+package vm
+
+import (
+	"github.com/alejandruxxug/lizard-script/engine/code"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+)
+
+// Names that are not plain locals: captured variables that may not be set
+// yet, and globals. The compiler decided the order to try them in (see
+// compiler/scopes.go); this follows it at run time.
+
+// lookup reads a name through n: the captured variables that might be set,
+// then the one that surely is, or the globals and the builtins (see
+// globals.go).
+func lookup(n *code.Name, free []*Cell, globals *object.Environment) (object.Value, *object.Error) {
+	for _, i := range n.Checked {
+		if value := free[i].Value; !value.IsEmpty() {
+			return value, nil
+		}
+	}
+	if n.Final >= 0 {
+		return free[n.Final].Value, nil
+	}
+	return global(n, globals)
+}
+
+// assign does name = value through n, like lookup finds it. Builtins can't
+// be assigned.
+func assign(n *code.Name, value object.Value, free []*Cell, globals *object.Environment) *object.Error {
+	for _, i := range n.Checked {
+		if !free[i].Value.IsEmpty() {
+			free[i].Value = value
+			return nil
+		}
+	}
+	if n.Final >= 0 {
+		free[n.Final].Value = value
+		return nil
+	}
+	if !globals.Assign(n.Name, value.Object()) {
+		return evaluator.NewError(n.Token, "can't assign to %s: it was never declared, use let %s = ...",
+			n.Name, n.Name)
+	}
+	return nil
+}

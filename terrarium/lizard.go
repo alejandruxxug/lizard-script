@@ -3,12 +3,12 @@ package terrarium
 import (
 	"embed"
 	"fmt"
-	"lizardscript/evaluator"
-	"lizardscript/lexer"
-	"lizardscript/object"
-	"lizardscript/parser"
-	"lizardscript/terrarium/internal/arg"
-	"lizardscript/token"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/lang/lexer"
+	"github.com/alejandruxxug/lizard-script/lang/parser"
+	"github.com/alejandruxxug/lizard-script/lang/token"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
 	"strings"
 )
 

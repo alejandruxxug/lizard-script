@@ -17,7 +17,7 @@ package tests
 import (
 	"bytes"
 	"flag"
-	"lizardscript/repl"
+	"github.com/alejandruxxug/lizard-script/tools/repl"
 	"os"
 	"path/filepath"
 	"strings"

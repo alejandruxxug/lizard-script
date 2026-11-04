@@ -2,11 +2,11 @@ package terrarium
 
 import (
 	"errors"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/tools/bundle"
 	"io/fs"
-	"lizardscript/bundle"
-	"lizardscript/evaluator"
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
 	"os"
 	"path/filepath"
 	"sort"

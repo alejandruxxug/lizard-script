@@ -12,9 +12,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/alejandruxxug/lizard-script/lang/lexer"
+	"github.com/alejandruxxug/lizard-script/lang/parser"
 	"io"
-	"lizardscript/lexer"
-	"lizardscript/parser"
 	"os"
 )
 

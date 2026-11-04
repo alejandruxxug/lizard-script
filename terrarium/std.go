@@ -2,8 +2,8 @@ package terrarium
 
 import (
 	"embed"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
 	"io/fs"
-	"lizardscript/evaluator"
 )
 
 // The standard modules: libraries written in lizard-script that are part of

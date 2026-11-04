@@ -895,12 +895,12 @@ The file is read once, when the program starts. A file that doesn't exist is fin
 
 ## In Go
 
-`terrarium.Install(env)` defines the modules in an environment; `terrarium.InstallCore(env)` defines all but `window` and `pen`, for a program with no screen (the REPL, a server). `window` and `pen` live in their own package, `lizardscript/terrarium/window`, which adds them to `Install` when a host imports it, so a host that doesn't want a window doesn't link one:
+`terrarium.Install(env)` defines the modules in an environment; `terrarium.InstallCore(env)` defines all but `window` and `pen`, for a program with no screen (the REPL, a server). `window` and `pen` live in their own package, `github.com/alejandruxxug/lizard-script/terrarium/window`, which adds them to `Install` when a host imports it, so a host that doesn't want a window doesn't link one:
 
 ```go
 import (
-	"lizardscript/terrarium"
-	_ "lizardscript/terrarium/window"
+	"github.com/alejandruxxug/lizard-script/terrarium"
+	_ "github.com/alejandruxxug/lizard-script/terrarium/window"
 )
 
 env := object.NewEnvironment()

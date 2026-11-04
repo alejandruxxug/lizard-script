@@ -1,10 +1,10 @@
 package fuzz
 
 import (
-	"lizardscript/ast"
-	"lizardscript/evaluator"
-	"lizardscript/object"
-	"lizardscript/token"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/lang/ast"
+	"github.com/alejandruxxug/lizard-script/lang/token"
 	"math/rand"
 	"os"
 	"path/filepath"

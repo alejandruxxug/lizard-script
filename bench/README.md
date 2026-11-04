@@ -53,7 +53,7 @@ With the device made on the first window (M4, best of 5, 2026-11-03; before is c
 
 What is left behind CPython is startup (above) and hashes, whose Go maps are large for a few keys; DESIGN.md section 8 has both.
 
-The Go benchmarks of the VM (`go test ./vm -bench . -benchmem`, best of 3, each run compiling its program), before and after, with the tree-walker's for comparison:
+The Go benchmarks of the VM (`go test ./engine/vm -bench . -benchmem`, best of 3, each run compiling its program), before and after, with the tree-walker's for comparison:
 
 | Benchmark | VM before | VM after | | allocs before → after | tree before | tree after |
 |---|---|---|---|---|---|---|

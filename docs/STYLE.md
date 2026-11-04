@@ -59,7 +59,7 @@ A file with a syntax error is left alone: fmt prints the errors and ends with ex
 
 ## What fmt never does
 
-- **Change what the program means.** It only changes the spaces between tokens, and the line breaks the parser reads as a space: inside brackets and hashes, before a block's `{`, before an `else`, `elif` or `catch` after a `}`, before a `layer` after a `;`. Every other line break stays where it is, so a statement still ends at the end of its line ([LEP 0001](../proposals/0001-statement-ends-at-newline.md)), and an operator that continues a line stays at its end. Before giving its result, fmt checks that the tokens and the syntax tree are the ones of the input; if they weren't (a bug), it leaves the file alone.
+- **Change what the program means.** It only changes the spaces between tokens, and the line breaks the parser reads as a space: inside brackets and hashes, before a block's `{`, before an `else`, `elif` or `catch` after a `}`, before a `layer` after a `;`. Every other line break stays where it is, so a statement still ends at the end of its line ([LEP 0001](proposals/0001-statement-ends-at-newline.md)), and an operator that continues a line stays at its end. Before giving its result, fmt checks that the tokens and the syntax tree are the ones of the input; if they weren't (a bug), it leaves the file alone.
 - **Reflow long lines.** A long line stays long; split it yourself after an operator or a comma.
 - **Touch strings.** A string, even one over several lines, is written exactly as it was, and so is a number with a unit (`45deg`) or an escape (`"\u{1F98E}"`).
 - **Add or take away semicolons.**

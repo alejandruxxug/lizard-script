@@ -2,7 +2,7 @@ package fuzz
 
 import (
 	"fmt"
-	"lizardscript/format"
+	"github.com/alejandruxxug/lizard-script/tools/format"
 	"math/rand"
 	"regexp"
 	"strings"

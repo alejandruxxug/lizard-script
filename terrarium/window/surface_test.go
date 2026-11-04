@@ -1,13 +1,13 @@
 package window
 
 import (
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/lang/lexer"
+	"github.com/alejandruxxug/lizard-script/lang/parser"
+	"github.com/alejandruxxug/lizard-script/terrarium"
+	"github.com/alejandruxxug/lizard-script/terrarium/pen"
 	"image"
-	"lizardscript/evaluator"
-	"lizardscript/lexer"
-	"lizardscript/object"
-	"lizardscript/parser"
-	"lizardscript/terrarium"
-	"lizardscript/terrarium/pen"
 	"strings"
 	"testing"
 )

@@ -8,8 +8,8 @@
 package pen
 
 import (
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
 	"os"
 	"sync"
 	"time"

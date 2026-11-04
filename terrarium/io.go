@@ -5,10 +5,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
 	"io"
-	"lizardscript/evaluator"
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
 	"os"
 	"sync"
 )

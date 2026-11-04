@@ -39,7 +39,7 @@ parameter  = IDENT [ "=" expression ] ;
 
 ### Where a statement ends
 
-**A statement ends at the end of its line. It goes on to the next line only when the line ends with an operator, a `,` or an opening bracket, or while a `(`, `[` or hash `{` is still open.** ([LEP 0001](../proposals/0001-statement-ends-at-newline.md))
+**A statement ends at the end of its line. It goes on to the next line only when the line ends with an operator, a `,` or an opening bracket, or while a `(`, `[` or hash `{` is still open.** ([LEP 0001](proposals/0001-statement-ends-at-newline.md))
 
 - The tokens that let a line go on are the binary operators (`+ - * / // % ** == != === !== < > <= >= && ||`), `=` and the compound assignments, `!`, `.`, `,`, `(`, `[` and `{` (`lexer.ContinuesLine`, which the REPL uses too). A comment at the end of the line doesn't count, so `a + -~> note` still goes on, and blank lines in between are skipped.
 - Inside `(`, `[` and the `{` of a hash a line break is just a space, so calls, arrays, points, hashes and conditions in parentheses can be split anywhere. The `{` of a block (the body of an `if`, a loop or a function) starts statements again, even when the block is inside brackets, as in `f(function() { ... })`.
@@ -160,7 +160,7 @@ The `{ statement }` in the rule is the body, and it is measured by columns, not 
 
 ## use
 
-`use` and `as` are not reserved words. A statement is a use statement when it starts with the identifier `use` followed, on the same line, by a string: `use "draw/shapes"` or `use "draw/shapes" as shapes`. A name and a string side by side were never valid, so every program that worked before reads the same: `let use = 1`, `use + 1`, `use("x")` and `f(use)` use `use` as the ordinary identifier it is, and `as` is read as a word only right after the string, on the same line. ([LEP 0002](../proposals/0002-modules.md))
+`use` and `as` are not reserved words. A statement is a use statement when it starts with the identifier `use` followed, on the same line, by a string: `use "draw/shapes"` or `use "draw/shapes" as shapes`. A name and a string side by side were never valid, so every program that worked before reads the same: `let use = 1`, `use + 1`, `use("x")` and `f(use)` use `use` as the ordinary identifier it is, and `as` is read as a word only right after the string, on the same line. ([LEP 0002](proposals/0002-modules.md))
 
 - A use is only allowed at the **top level** of a file: inside a block (a function, an `if`, a loop) or a layer it is the syntax error `use must be at the top level of a file, not inside a block or a layer`. It may come anywhere among the file's top-level statements, not only at the start.
 - The string is the module's path, written with `/` on every system; `".liz"` is added when it doesn't end with it. An empty string is the syntax error `use needs the path of a module, like use "shapes"`.

@@ -11,7 +11,7 @@ Go native fuzz tests (`go test -fuzz`) for the parser and the two engines.
 | `FuzzFormat` | mutated programs of the repo | a program that parses can be formatted (`format.Source`), formatting twice gives the same text, and the formatted program does the same on the evaluator: output, value, steps and hook calls, without the positions, which move with the layout |
 | `FuzzFormatGenerated` | generated programs | the same as `FuzzFormat` |
 
-"Agree" is the contract of `vm/differential_test.go`: with a step limit of 20000, the same output, the same value (or the same error message, line, column and catchability), the same number of steps and the same hook calls (`OnStatement`, `OnLayer`), both without and with the hooks. A panic of an engine is a failure too.
+"Agree" is the contract of `engine/vm/differential_test.go`: with a step limit of 20000, the same output, the same value (or the same error message, line, column and catchability), the same number of steps and the same hook calls (`OnStatement`, `OnLayer`), both without and with the hooks. A panic of an engine is a failure too.
 
 ## Running
 

@@ -2,9 +2,9 @@ package fuzz
 
 import (
 	"fmt"
-	"lizardscript/lexer"
-	"lizardscript/parser"
-	"lizardscript/token"
+	"github.com/alejandruxxug/lizard-script/lang/lexer"
+	"github.com/alejandruxxug/lizard-script/lang/parser"
+	"github.com/alejandruxxug/lizard-script/lang/token"
 	"regexp"
 	"strconv"
 	"strings"

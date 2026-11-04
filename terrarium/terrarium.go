@@ -21,7 +21,7 @@
 package terrarium
 
 import (
-	"lizardscript/object"
+	"github.com/alejandruxxug/lizard-script/engine/object"
 	"sync"
 )
 
@@ -40,7 +40,7 @@ var (
 // package calls it from its init, so a host gets that module by importing
 // the package, and a host that doesn't import it doesn't link it:
 //
-//	import _ "lizardscript/terrarium/window"
+//	import _ "github.com/alejandruxxug/lizard-script/terrarium/window"
 func Register(install func(env *object.Environment)) {
 	extrasMu.Lock()
 	defer extrasMu.Unlock()

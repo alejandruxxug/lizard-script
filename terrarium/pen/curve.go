@@ -2,8 +2,8 @@ package pen
 
 import (
 	"fmt"
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
 	"math"
 )
 

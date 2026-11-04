@@ -1,9 +1,9 @@
 package terrarium
 
 import (
-	"lizardscript/bundle"
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/tools/bundle"
 	"os"
 	"path/filepath"
 	"runtime"

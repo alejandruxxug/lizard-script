@@ -12,10 +12,10 @@ package testrunner
 import (
 	"bytes"
 	"fmt"
+	"github.com/alejandruxxug/lizard-script/terrarium"
+	"github.com/alejandruxxug/lizard-script/tools/repl"
 	"io"
 	"io/fs"
-	"lizardscript/repl"
-	"lizardscript/terrarium"
 	"os"
 	"path/filepath"
 	"sort"

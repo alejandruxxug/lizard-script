@@ -9,7 +9,7 @@ Thanks for wanting to help! lizard-script is open source under the [MIT license]
 | Fix a bug | Open an issue with the program, what it printed and what you expected (the **Bug** template), or send a pull request with the fix and a test. |
 | Improve the docs or the guide | Send a pull request. Guide changes go in both `docs/learn/en` and `docs/learn/es`; every output shown must come from running the code. |
 | Add to the Terrarium (a new module or function) | Open an issue first so we agree on the name and shape, then a pull request. See "Adding a module" in [docs/TERRARIUM.md](docs/TERRARIUM.md). |
-| **Change the language** (syntax, semantics, a new builtin) | Write a **proposal** (a LEP): see [proposals/](proposals/README.md). |
+| **Change the language** (syntax, semantics, a new builtin) | Write a **proposal** (a LEP): see [docs/proposals/](docs/proposals/README.md). |
 
 ## Building and testing
 

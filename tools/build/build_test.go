@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"lizardscript/bundle"
+	"github.com/alejandruxxug/lizard-script/tools/bundle"
 )
 
 // writeTree writes files (name to text) under a new folder.

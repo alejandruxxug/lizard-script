@@ -21,10 +21,10 @@
 package canvas
 
 import (
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/pixels"
 	"image"
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
-	"lizardscript/terrarium/internal/pixels"
 	"math"
 )
 

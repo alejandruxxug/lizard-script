@@ -1,10 +1,10 @@
 package terrarium
 
 import (
-	checker "lizardscript/check" // named apart from the tests' check helper
-	"lizardscript/evaluator"
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
+	checker "github.com/alejandruxxug/lizard-script/tools/check" // named apart from the tests' check helper
 	"sync"
 )
 

@@ -1,10 +1,10 @@
 package window
 
 import (
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/pixels"
+	"github.com/alejandruxxug/lizard-script/terrarium/pen"
 	"image"
 	"io/fs"
-	"lizardscript/terrarium/internal/pixels"
-	"lizardscript/terrarium/pen"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"

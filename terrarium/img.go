@@ -3,16 +3,16 @@ package terrarium
 import (
 	"bytes"
 	"encoding/base64"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/canvas"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/pixels"
+	"github.com/alejandruxxug/lizard-script/tools/bundle"
 	"image"
 	"image/color"
 	_ "image/gif"  // registers the GIF decoder for image.Decode
 	_ "image/jpeg" // registers the JPEG decoder
 	_ "image/png"  // registers the PNG decoder
-	"lizardscript/bundle"
-	"lizardscript/object"
-	"lizardscript/terrarium/internal/arg"
-	"lizardscript/terrarium/internal/canvas"
-	"lizardscript/terrarium/internal/pixels"
 )
 
 // img: images. An image is a NATIVE value of kind "image" that holds its

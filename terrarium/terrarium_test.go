@@ -2,12 +2,12 @@ package terrarium
 
 import (
 	"bytes"
-	"lizardscript/ast"
-	"lizardscript/evaluator"
-	"lizardscript/lexer"
-	"lizardscript/object"
-	"lizardscript/parser"
-	"lizardscript/vm"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/engine/vm"
+	"github.com/alejandruxxug/lizard-script/lang/ast"
+	"github.com/alejandruxxug/lizard-script/lang/lexer"
+	"github.com/alejandruxxug/lizard-script/lang/parser"
 	"strings"
 	"testing"
 )

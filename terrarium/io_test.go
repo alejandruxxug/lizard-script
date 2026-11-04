@@ -2,7 +2,7 @@ package terrarium
 
 import (
 	"bytes"
-	"lizardscript/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
 	"strings"
 	"testing"
 )

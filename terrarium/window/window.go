@@ -8,19 +8,19 @@
 // the same ticks with no screen at all, for tests and benchmarks. Importing
 // this package adds window and pen to terrarium.Install:
 //
-//	import _ "lizardscript/terrarium/window"
+//	import _ "github.com/alejandruxxug/lizard-script/terrarium/window"
 package window
 
 import (
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
+	"github.com/alejandruxxug/lizard-script/lang/token"
+	"github.com/alejandruxxug/lizard-script/terrarium"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/arg"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/canvas"
+	"github.com/alejandruxxug/lizard-script/terrarium/internal/pixels"
+	"github.com/alejandruxxug/lizard-script/terrarium/pen"
 	"image/color"
-	"lizardscript/evaluator"
-	"lizardscript/object"
-	"lizardscript/terrarium"
-	"lizardscript/terrarium/internal/arg"
-	"lizardscript/terrarium/internal/canvas"
-	"lizardscript/terrarium/internal/pixels"
-	"lizardscript/terrarium/pen"
-	"lizardscript/token"
 	"os"
 	"strings"
 	"time"

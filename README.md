@@ -82,26 +82,36 @@ The lexer always takes the longest operator it can, so `====` lexes as `===` fol
 
 ```
 lizard-script/
-├── token/     # token types, keywords and identifier lookup
-├── lexer/     # turns source code into a stream of tokens (+ tests)
-├── ast/       # the nodes of the abstract syntax tree
-├── parser/    # turns tokens into an AST with a Pratt parser (+ tests)
-├── object/    # the values of a running program and the environments that hold variables
-├── evaluator/ # runs the AST by walking it, plus the builtins (+ tests)
-├── code/      # the bytecode: opcodes and how instructions are encoded
-├── compiler/  # turns the AST into bytecode (+ tests)
-├── vm/        # runs the bytecode on a stack machine (+ tests)
-├── terrarium/ # the standard library: fs, os, time, json, img, clip, window, pen
-├── repl/      # the interactive REPL, and running whole files (+ tests)
-├── examples/  # one program per feature, and programs that show each kind of error
-├── tests/     # valid and failing programs with their expected output
-├── docs/      # design, grammar, semantics, the Terrarium, and the teaching guide (docs/learn)
-├── proposals/ # Lizard Enhancement Proposals (LEPs)
-├── lsp/       # the language server, lizardscript lsp (+ tests)
-├── editors/   # the VS Code and Zed extensions and the syntax grammars
-├── tools/     # checknewlines: lists lines whose meaning changed with LEP 0001; ebitencopy: makes third_party/ebiten
-├── third_party/ # a copy of Ebitengine with its Metal device made on the first window (see its README)
-└── main.go    # the lizardscript command
+├── main.go       # the lizardscript command
+├── lang/         # the front end
+│   ├── token/    #   token types, keywords and identifier lookup
+│   ├── lexer/    #   turns source code into a stream of tokens (+ tests)
+│   ├── ast/      #   the nodes of the abstract syntax tree
+│   └── parser/   #   turns tokens into an AST with a Pratt parser (+ tests)
+├── engine/       # the two ways to run a program
+│   ├── object/   #   the values of a running program and the environments that hold variables
+│   ├── evaluator/#   runs the AST by walking it, plus the builtins (+ tests)
+│   ├── code/     #   the bytecode: opcodes and how instructions are encoded
+│   ├── compiler/ #   turns the AST into bytecode (+ tests)
+│   └── vm/       #   runs the bytecode on a stack machine (+ tests)
+├── terrarium/    # the standard library: fs, os, time, json, img, clip, window, pen
+├── tools/        # what the command does besides running
+│   ├── repl/     #   the interactive REPL, and running whole files (+ tests)
+│   ├── testrunner/ # lizardscript test
+│   ├── build/    #   lizardscript build: a program and the runtime in one file
+│   ├── bundle/   #   the file a built program carries
+│   ├── format/   #   lizardscript fmt
+│   ├── check/    #   lizardscript check
+│   ├── lsp/      #   the language server, lizardscript lsp (+ tests)
+│   ├── checknewlines/ # lists lines whose meaning changed with LEP 0001
+│   └── ebitencopy/    # makes third_party/ebiten
+├── editors/      # the VS Code and Zed extensions and the syntax grammars
+├── docs/         # design, grammar, semantics, the Terrarium, the guide (docs/learn) and the proposals (docs/proposals: LEPs)
+├── examples/     # one program per feature, and programs that show each kind of error
+├── tests/        # valid and failing programs with their expected output
+├── bench/        # the same programs in lizard-script, Python and Lua
+├── fuzz/         # random programs through both engines
+└── third_party/  # a copy of Ebitengine with its Metal device made on the first window (see its README)
 ```
 
 ## Getting started
@@ -200,7 +210,7 @@ This project follows the structure of the interpreter built in class, the `evalu
 
 ## Contributing
 
-lizard-script is open source, and anyone is welcome to tweak it, build on it and propose changes. Bug fixes, docs and Terrarium additions go through normal pull requests; changes to the language itself start as a **Lizard Enhancement Proposal**. See [CONTRIBUTING.md](CONTRIBUTING.md) and [proposals/](proposals/README.md).
+lizard-script is open source, and anyone is welcome to tweak it, build on it and propose changes. Bug fixes, docs and Terrarium additions go through normal pull requests; changes to the language itself start as a **Lizard Enhancement Proposal**. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/proposals/](docs/proposals/README.md).
 
 ## License
 

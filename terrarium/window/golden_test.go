@@ -1,8 +1,8 @@
 package window
 
 import (
+	"github.com/alejandruxxug/lizard-script/engine/object"
 	"image/color"
-	"lizardscript/object"
 	"testing"
 )
 

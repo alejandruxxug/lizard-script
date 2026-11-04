@@ -8,9 +8,9 @@ package arg
 
 import (
 	"fmt"
+	"github.com/alejandruxxug/lizard-script/engine/evaluator"
+	"github.com/alejandruxxug/lizard-script/engine/object"
 	"image/color"
-	"lizardscript/evaluator"
-	"lizardscript/object"
 	"math"
 	"sort"
 )

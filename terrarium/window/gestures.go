@@ -2,7 +2,7 @@ package window
 
 import (
 	"fmt"
-	"lizardscript/terrarium/pen"
+	"github.com/alejandruxxug/lizard-script/terrarium/pen"
 	"math"
 	"strconv"
 	"strings"

@@ -2,10 +2,10 @@ package tests
 
 import (
 	"bytes"
-	"lizardscript/tools/testrunner"
+	"github.com/alejandruxxug/lizard-script/tools/testrunner"
 	"testing"
 
-	_ "lizardscript/terrarium/window" // the tests draw into headless windows too
+	_ "github.com/alejandruxxug/lizard-script/terrarium/window" // the tests draw into headless windows too
 )
 
 // TestLily3D runs the tests of the standard module flower/lily3d in
