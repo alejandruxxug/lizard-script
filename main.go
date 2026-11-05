@@ -56,6 +56,8 @@ import (
 )
 
 func main() {
+	// Before anything reads a relative path, tasks included.
+	bundle.RestoreWorkingDir()
 	// Started to run a task of another lizardscript (see package task).
 	task.ServeIfWorker()
 	evaluator.ReadModule = bundle.ReadFile
