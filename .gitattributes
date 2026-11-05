@@ -1,3 +1,11 @@
 # Test programs and their expected output compare byte for byte.
 *.liz text eol=lf
 *.expected text eol=lf
+
+# GitHub's language bar: the Tree-sitter parser is generated from grammar.js,
+# and third_party/ is a vendored copy of Ebitengine. Neither is ours to count.
+editors/tree-sitter-lizard/src/parser.c linguist-generated
+editors/tree-sitter-lizard/src/tree_sitter/** linguist-generated
+editors/tree-sitter-lizard/src/grammar.json linguist-generated
+editors/tree-sitter-lizard/src/node-types.json linguist-generated
+third_party/** linguist-vendored
