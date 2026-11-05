@@ -3,7 +3,7 @@
 <p align="center"><i>The programming language so easy that even a lizard can understand it.</i></p>
 
 <p align="center">
-  <a href="https://github.com/alejandruxxug/lizard-script/releases/latest"><img src="https://img.shields.io/github/v/release/alejandruxxug/lizard-script?label=download&color=3fa34d" alt="Download"></a>
+  <a href="https://github.com/alejandruxxug/lizard-script/releases/latest"><img src="https://img.shields.io/github/v/release/alejandruxxug/lizard-script?label=download&color=3fa34d&cacheSeconds=3600" alt="Download"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-e0a526" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/written%20in-Go-00add8" alt="Written in Go">
   <img src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-1d1d1f" alt="macOS, Windows, Linux">
