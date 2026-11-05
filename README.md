@@ -1,8 +1,108 @@
-# lizard-script 🦎
+<h1 align="center">lizard-script 🦎</h1>
 
-> The programming language so easy that even a lizard can understand it.
+<p align="center"><i>The programming language so easy that even a lizard can understand it.</i></p>
 
-lizard-script is a small interpreted language written in Go, built phase by phase as the team project of the Compilers course at Universidad EIA.
+<p align="center">
+  <a href="https://github.com/alejandruxxug/lizard-script/releases/latest"><img src="https://img.shields.io/github/v/release/alejandruxxug/lizard-script?label=download&color=3fa34d" alt="Download"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-e0a526" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/written%20in-Go-00add8" alt="Written in Go">
+  <img src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-1d1d1f" alt="macOS, Windows, Linux">
+  <a href="docs/learn/README.md"><img src="https://img.shields.io/badge/guide-English%20·%20Español-6f5bd8" alt="Guide in English and Spanish"></a>
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#a-taste-of-the-language">Taste</a> ·
+  <a href="#whats-inside">What's inside</a> ·
+  <a href="#speed">Speed</a> ·
+  <a href="docs/learn/README.md">Learn it</a> ·
+  <a href="#built-with-lizard-script">Built with it</a>
+</p>
+
+lizard-script is a small, friendly language with a big standard library. It started as the team project of the Compilers course at Universidad EIA, following the interpreter built in class, and grew from there: a bytecode VM that keeps up with Python, a standard library called **the Terrarium** that opens windows and reads pen pressure, a formatter, a checker, a language server for VS Code and Zed, and a guide to teach it in English and Spanish.
+
+## A taste of the language
+
+```
+-~> lizards count their toes
+let liz = {"name": "Liz", "color": #3fa34d, "home": (12, 4), "toes": [5, 5, 5, 5]}
+
+function total(list) {
+  let sum = 0
+  for (let i = 0; i < len(list); i += 1) {
+    sum += list[i]
+  }
+  return sum
+}
+
+let friends = list.sort(["iguana", "gecko", "chameleon"], function(a, b) { len(a) < len(b) })
+puts(liz.name + " has " + str(total(liz.toes)) + " toes and lives at " + str(liz.home))
+puts(liz.home + (1, 2), friends)
+```
+
+```
+$ lizardscript taste.liz
+Liz has 20 toes and lives at (12, 4)
+(13, 6) ["gecko", "iguana", "chameleon"]
+```
+
+Colors (`#3fa34d`) and points (`(12, 4)`) are values of their own, `-~>` starts a comment (it looks like a lizard), and a statement ends at the end of its line.
+
+## What's inside
+
+| | |
+|---|---|
+| **Two engines, one language** | a tree-walking evaluator and a bytecode VM (`--vm`) that give the same output for every program, checked by a differential fuzzer |
+| **The Terrarium** | the standard library: files, the system, time, JSON, images, the clipboard, windows with drawing surfaces and blend modes, input, pen pressure and tilt, file dialogs, background tasks. See [TERRARIUM.md](docs/TERRARIUM.md) |
+| **Modules** | `use "shapes"` and `use "flower/lily2d" as lily`, with the 2D and 3D graphics libraries of the **flower** family |
+| **Tools** | `lizardscript fmt`, `check`, `test`, `build` (one executable for macOS, Windows or Linux, with an icon), `drive` (automate a running window) and `lsp` |
+| **Editors** | a language server, VS Code and Zed extensions, Tree-sitter and TextMate grammars: [editors/](editors/README.md) |
+| **Learn it** | a teaching guide with exercises, projects and a cheat sheet, in [English](docs/learn/en/) and [Spanish](docs/learn/es/) |
+| **Changes in the open** | language changes start as a Lizard Enhancement Proposal: [docs/proposals/](docs/proposals/README.md) |
+
+## Install
+
+Download `lizardscript` for your system from the [latest release](https://github.com/alejandruxxug/lizard-script/releases/latest) (macOS Apple Silicon and Intel, Windows, Linux), unpack it and put it on your PATH. On macOS the first run may need `xattr -d com.apple.quarantine lizardscript`, since the binary isn't notarized.
+
+Or build it from source with [Go](https://go.dev/dl/) 1.27 or newer:
+
+```sh
+git clone https://github.com/alejandruxxug/lizard-script.git
+cd lizard-script
+go build              # makes ./lizardscript
+./lizardscript examples/05_functions.liz
+```
+
+More in [Getting started](#getting-started) below.
+
+## Speed
+
+The VM against CPython 3.14 and Lua 5.5 on an M4 (best of 5, startup included; the full table and how to run it are in [bench/](bench/README.md)):
+
+| Benchmark | lizard VM | Python | Lua |
+|---|---|---|---|
+| loop | 0.080 s | 0.230 s | 0.053 s |
+| closures | 0.019 s | 0.046 s | 0.014 s |
+| fib | 0.013 s | 0.028 s | 0.007 s |
+| strings | 0.015 s | 0.024 s | 0.205 s |
+| hashes | 0.068 s | 0.049 s | 0.025 s |
+
+lizard is faster than Python on loops, closures, recursion, floats and strings, and slower on hashes; Lua is still the one to beat.
+
+## Built with lizard-script
+
+<a href="https://github.com/alejandruxxug/linkz"><img src="https://raw.githubusercontent.com/alejandruxxug/linkz/main/docs/Readme/artist-mode.png" width="560" alt="Linkz, a vector art app written in lizard-script"></a>
+
+**[Linkz](https://github.com/alejandruxxug/linkz)** (*lizard inkz*) is a vector art app where the drawing is code, written entirely in lizard-script: about 60,000 lines of it, with the editor, the rasterizer, an image tracer and an MCP server, shipped with `lizardscript build`.
+
+## Documentation
+
+- [docs/DESIGN.md](docs/DESIGN.md): the design document. It has the grammar in EBNF, the architecture, the design decisions, the known limitations and how we used AI.
+- [docs/GRAMMAR.md](docs/GRAMMAR.md): the full grammar, with precedence and associativity.
+- [docs/SEMANTICS.md](docs/SEMANTICS.md): what each construct does when it runs, such as truthiness, `==` vs `===`, `/` vs `//`, scopes and the builtins.
+- [docs/TERRARIUM.md](docs/TERRARIUM.md): the Terrarium, the standard library. Examples are in `examples/terrarium/`.
+- [editors/](editors/README.md): editor support.
+- [docs/learn/](docs/learn/README.md): a teaching guide to the language, in English and Spanish. / Guía para aprender y enseñar el lenguaje, en inglés y español.
 
 ## Team
 
@@ -10,52 +110,9 @@ lizard-script is a small interpreted language written in Go, built phase by phas
 - Maria José Sosa Fernández
 - Samuel Buelvas Cabrales
 
-## Status
+## Language reference
 
-| Phase | Component | Status |
-| --- | --- | --- |
-| 1 | Tokens + lexer | ✅ Done |
-| 2 | Parser / AST | ✅ Done |
-| 3 | Evaluator | ✅ Done |
-| 4 | REPL | ✅ Done |
-| 5 | Bytecode compiler + VM (`--vm`) | ✅ Done |
-| 6 | The Terrarium, the standard library | ✅ Done |
-
-## A taste of the language
-
-```
-let five = 5;
-let ten = 10;
-
-function add(x, y) {
-  return x + y;
-}
-
-let result = add(five, ten); -~> this is a comment
-
-while (result > 0) {
-  if (result > 10 && five != 0) {
-    result = result // 2;
-  } elif (result == 10) {
-    result = result - 1;
-  } else {
-    break;
-  }
-}
-
-let lizard = {"name": "Liz", "toes": [5, 5, 5, 5]};
-```
-
-## Documentation
-
-- [docs/DESIGN.md](docs/DESIGN.md): the design document. It has the grammar in EBNF, the architecture, the design decisions, the known limitations and how we used AI.
-- [docs/GRAMMAR.md](docs/GRAMMAR.md): the full grammar, with precedence and associativity.
-- [docs/SEMANTICS.md](docs/SEMANTICS.md): what each construct does when it runs, such as truthiness, `==` vs `===`, `/` vs `//`, scopes and the builtins.
-- [docs/TERRARIUM.md](docs/TERRARIUM.md): the Terrarium, the standard library: files, the system, time, JSON, images, the clipboard, and a window to draw in with its input. Examples are in `examples/terrarium/`.
-- [editors/](editors/README.md): editor support: the language server (`lizardscript lsp`), the VS Code and Zed extensions, and the Tree-sitter and TextMate grammars.
-- [docs/learn/](docs/learn/README.md): a teaching guide to the language, in English and Spanish, with exercises, projects and a cheat sheet. / Guía para aprender y enseñar el lenguaje, en inglés y español.
-
-## Tokens
+### Tokens
 
 **Keywords:** `let`, `function`, `return`, `if`, `elif`, `else`, `for`, `while`, `break`, `true`, `false`
 

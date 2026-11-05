@@ -9,3 +9,10 @@ editors/tree-sitter-lizard/src/tree_sitter/** linguist-generated
 editors/tree-sitter-lizard/src/grammar.json linguist-generated
 editors/tree-sitter-lizard/src/node-types.json linguist-generated
 third_party/** linguist-vendored
+
+# The Python and Lua programs in bench/ are the other side of a comparison,
+# not part of lizard-script.
+bench/*.py linguist-detectable=false
+bench/*.lua linguist-detectable=false
+# Tree-sitter queries are .scm files, which GitHub would call Scheme.
+*.scm linguist-language=Tree-sitter-Query
