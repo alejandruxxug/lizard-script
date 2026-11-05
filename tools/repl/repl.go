@@ -160,6 +160,7 @@ func RunFile(name, source string, out, errOut io.Writer, onVM bool) bool {
 	evaluator.ModulePrelude = terrarium.Install
 	terrarium.Stderr = errOut
 	terrarium.ProgramFile = name
+	terrarium.OnVM = onVM
 	env := object.NewEnvironment()
 	terrarium.Install(env)
 	var result object.Object

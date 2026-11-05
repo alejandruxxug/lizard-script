@@ -1,0 +1,32 @@
+-~> The functions tasks.liz runs in tasks.
+
+function total(list) {
+  let sum = 0
+  for (let i = 0; i < len(list); i += 1) {
+    sum += list[i]
+  }
+  sum
+}
+
+function mark(h) {
+  h["marked"] = true
+  push(h["list"], 3)
+  h
+}
+
+function fail() {
+  error("the task broke")
+}
+
+function spin() {
+  while true {
+  }
+}
+
+function shapes(n) {
+  [(n, n * 2), #3fa34d, n / 2.0, null, {"ok": true}]
+}
+
+function sneaky() {
+  {"draw": function() { 1 }}
+}

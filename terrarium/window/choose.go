@@ -24,10 +24,13 @@ type chooseOptions struct {
 	Types  []string // extensions, without the dot: "png"
 	Folder string   // where the dialog starts
 	Many   bool     // more than one file may be picked
+	Name   string   // save: the file name the dialog offers
+	ID     string   // echoed back in the "chosen" event
+	Save   bool     // a save dialog (window.choose_save), not an open one
 }
 
 // chooseKeys are the options window.choose_file takes.
-var chooseKeys = []string{"title", "types", "folder", "many"}
+var chooseKeys = []string{"title", "types", "folder", "many", "id"}
 
 // dialogCommand is a program to run, with extra environment variables.
 type dialogCommand struct {
@@ -56,11 +59,16 @@ func (c *chooser) start() bool {
 }
 
 // finish adds the "chosen" event of a dialog that ended.
-func (c *chooser) finish(paths []string) {
+// It says which dialog answered and carries the program's own id for it.
+func (c *chooser) finish(o chooseOptions, paths []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.open = false
-	c.pending = append(c.pending, Event{Type: "chosen", Paths: paths})
+	dialog := "open"
+	if o.Save {
+		dialog = "save"
+	}
+	c.pending = append(c.pending, Event{Type: "chosen", Paths: paths, Dialog: dialog, ID: o.ID})
 }
 
 // take returns the events of the dialogs that ended since the last frame.
@@ -84,6 +92,9 @@ var runDialog = func(c dialogCommand) (string, error) {
 	return string(out), err
 }
 
+// dialogOS is the system the dialogs are made for. Tests replace it.
+var dialogOS = runtime.GOOS
+
 // hasTool reports whether a program is installed. Tests replace it.
 var hasTool = func(name string) bool {
 	_, err := exec.LookPath(name)
@@ -105,11 +116,17 @@ func chooseFile(args ...object.Object) object.Object {
 		if err != nil {
 			return err
 		}
-		if opts, err = chooseOptionsOf(h); err != nil {
+		if opts, err = chooseOptionsOf(h, chooseKeys); err != nil {
 			return err
 		}
 	}
-	cmd, cerr := dialogFor(runtime.GOOS, opts, hasTool)
+	return launch(w, opts)
+}
+
+// launch starts the dialog for opts in a goroutine and returns null. The
+// answer is a "chosen" event on a later frame.
+func launch(w *Window, opts chooseOptions) object.Object {
+	cmd, cerr := dialogFor(dialogOS, opts, hasTool)
 	if cerr != nil {
 		return arg.Errorf("%v", cerr)
 	}
@@ -121,24 +138,30 @@ func chooseFile(args ...object.Object) object.Object {
 		if err != nil {
 			out = "" // cancelled, or the program failed: nothing was chosen
 		}
-		w.choose.finish(parsePaths(out))
+		paths := parsePaths(out)
+		if opts.Save {
+			paths = savedPath(dialogOS, paths, opts.Types)
+		}
+		w.choose.finish(opts, paths)
 	}()
 	return arg.Null
 }
 
 // chooseOptionsOf reads the options hash.
-func chooseOptionsOf(h *object.Hash) (chooseOptions, *object.Error) {
+func chooseOptionsOf(h *object.Hash, keys []string) (chooseOptions, *object.Error) {
 	var o chooseOptions
 	for _, key := range h.Order {
 		name := h.Pairs[key].Key.(*object.String).Value
-		if !contains(chooseKeys, name) {
-			return o, unknownOption(name, chooseKeys)
+		if !contains(keys, name) {
+			return o, unknownOption(name, keys)
 		}
 	}
 	r := reader{h: h}
 	o.Title = r.str("title", "")
 	o.Folder = r.str("folder", "")
+	o.ID = r.str("id", "")
 	o.Many = r.flag("many", false)
+	o.Name = r.str("name", "")
 	if v := r.get("types"); v != nil {
 		list, ok := v.(*object.Array)
 		if !ok {
@@ -172,7 +195,11 @@ func dialogFor(goos string, o chooseOptions, have func(string) bool) (dialogComm
 	case have("kdialog"):
 		return kdialogDialog(o), nil
 	}
-	return dialogCommand{}, errors.New("window.choose_file needs zenity or kdialog installed to show a file dialog")
+	name := "window.choose_file"
+	if o.Save {
+		name = "window.choose_save"
+	}
+	return dialogCommand{}, errors.New(name + " needs zenity or kdialog installed to show a file dialog")
 }
 
 // appleString is s as an AppleScript string literal.
@@ -183,6 +210,9 @@ func appleString(s string) string {
 
 // macDialog is osascript's "choose file", which prints one path per line.
 func macDialog(o chooseOptions) dialogCommand {
+	if o.Save {
+		return macSaveDialog(o)
+	}
 	choose := "choose file"
 	if o.Title != "" {
 		choose += " with prompt " + appleString(o.Title)
@@ -215,6 +245,9 @@ func macDialog(o chooseOptions) dialogCommand {
 // windowsDialog is PowerShell's OpenFileDialog. The options go in
 // environment variables, so nothing in them is read as PowerShell.
 func windowsDialog(o chooseOptions) dialogCommand {
+	if o.Save {
+		return windowsSaveDialog(o)
+	}
 	script := strings.Join([]string{
 		"Add-Type -AssemblyName System.Windows.Forms",
 		"[Console]::OutputEncoding=[Text.Encoding]::UTF8",
@@ -257,6 +290,9 @@ func windowsFilter(types []string) string {
 
 // zenityDialog is zenity's file selection, with the paths one per line.
 func zenityDialog(o chooseOptions) dialogCommand {
+	if o.Save {
+		return zenitySaveDialog(o)
+	}
 	args := []string{"--file-selection"}
 	if o.Title != "" {
 		args = append(args, "--title="+o.Title)
@@ -279,6 +315,9 @@ func zenityDialog(o chooseOptions) dialogCommand {
 
 // kdialogDialog is kdialog's open-file dialog, with the paths one per line.
 func kdialogDialog(o chooseOptions) dialogCommand {
+	if o.Save {
+		return kdialogSaveDialog(o)
+	}
 	start := o.Folder
 	if start == "" {
 		start = "."

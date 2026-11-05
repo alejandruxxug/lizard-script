@@ -8,6 +8,7 @@ import (
 	"github.com/alejandruxxug/lizard-script/lang/lexer"
 	"github.com/alejandruxxug/lizard-script/lang/parser"
 	"github.com/alejandruxxug/lizard-script/terrarium"
+	_ "github.com/alejandruxxug/lizard-script/terrarium/task"   // and the tests' programs task
 	_ "github.com/alejandruxxug/lizard-script/terrarium/window" // the guide's programs use window and pen
 	"github.com/alejandruxxug/lizard-script/tools/check"
 	"os"

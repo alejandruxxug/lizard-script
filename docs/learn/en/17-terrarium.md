@@ -685,7 +685,7 @@ While you draw, the window title shows `pressure 0.42 (raw 0.91) · trackpad`: `
 | `"move"` | `pos`, `mods`, `pen` | the pointer moved |
 | `"scroll"` | `pos`, `dy`, `dx`, `mods` | the wheel or a two-finger scroll |
 || `"drop"` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` are their absolute paths |
-| `"chosen"` | `paths` | a file dialog from `window.choose_file` ended; `paths` is empty if the user cancelled |
+| `"chosen"` | `paths` | a file dialog from `window.choose_file` or `window.choose_save` ended; `paths` is empty if the user cancelled; `dialog` is `"open"` or `"save"`, and `id` is the dialog's `id` option |
 | `"key"` | `key`, `mods` | a key went down |
  | `"type"` | `text` | a character was typed |
 | `"resize"` | `size` | the window changed size |
@@ -740,6 +740,25 @@ window.run(w, function(events) {
 ```text
 picked /tmp/photo.png
 cancelled
+```
+
+**Asking where to save.** `window.choose_save(w, {"name": "art.png", "types": ["png"], "id": "export"})` opens the system's "save file" dialog (the user picks the folder and the name, and the system asks before overwriting) and returns at once. Its answer is also a `"chosen"` event, now with `dialog` set to `"save"` or `"open"` so you know which dialog answered, and with the `id` you gave it (both dialogs take `id`). `paths` holds the one path, or is empty on cancel. The options are `title`, `name`, `types`, `folder` and `id`. This program was run and prints the two lines below it:
+```
+let w = window.open(40, 30, "save", {"headless": true})
+window.inject(w, {"type": "chosen", "dialog": "save", "id": "export", "paths": ["/tmp/art.png"]})
+window.inject(w, {"type": "chosen", "dialog": "open", "paths": []})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "chosen" && e.dialog == "save" && len(e.paths) > 0) { puts("save " + e.id + ": " + e.paths[0]) }
+    if (e.type == "chosen" && e.dialog == "open") { puts("open dialog ended") }
+  }
+  false
+})
+```
+```text
+save export: /tmp/art.png
+open dialog ended
 ```
 
 `mods` says which of `shift`, `alt`, `cmd` and `ctrl` were held. Options go in a hash after the title: `window.open(160, 100, "game", {"scale": 3, "fps": 30})` shows each pixel as a 3x3 square, nice for pixel art. A program shows one window. The REPL has every module but `window` and `pen`; there, `window` is `identifier not found`.

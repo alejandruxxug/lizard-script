@@ -8,7 +8,7 @@
 //	lizardscript run [--vm] dir [args]     runs the program of a folder, dir/main.liz
 //	lizardscript test [--vm] [--bench] [--update] [dir]
 //	                                       runs the tests of a folder (see tools/testrunner)
-//	lizardscript build [--vm] [--os OS] [--arch ARCH] [--runtime FILE] dir -o FILE
+//	lizardscript build [--vm] [--os OS] [--arch ARCH] [--runtime FILE] [--icon PNG [--icon-small PNG]] dir -o FILE
 //	                                       makes one executable of a program folder
 //	                                       (see tools/build)
 //	lizardscript drive [--pid N] Command   sends a command to a running window
@@ -39,6 +39,7 @@ import (
 	"github.com/alejandruxxug/lizard-script/engine/evaluator"
 	"github.com/alejandruxxug/lizard-script/engine/vm"
 	"github.com/alejandruxxug/lizard-script/terrarium"
+	"github.com/alejandruxxug/lizard-script/terrarium/task"   // adds task to terrarium.Install
 	"github.com/alejandruxxug/lizard-script/terrarium/window" // adds window and pen to terrarium.Install
 	"github.com/alejandruxxug/lizard-script/tools/build"
 	"github.com/alejandruxxug/lizard-script/tools/bundle"
@@ -55,6 +56,8 @@ import (
 )
 
 func main() {
+	// Started to run a task of another lizardscript (see package task).
+	task.ServeIfWorker()
 	evaluator.ReadModule = bundle.ReadFile
 	evaluator.ModulePath = filepath.SplitList(os.Getenv("LIZARD_PATH"))
 	if program := builtProgram(); program != nil {
@@ -112,7 +115,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage: lizardscript [--vm | --profile] [file [args...]]
        lizardscript run [--vm] dir [args...]
        lizardscript test [--vm] [--bench] [--update] [dir]
-       lizardscript build [--vm] [--os OS] [--arch ARCH] [--runtime FILE] dir -o FILE
+       lizardscript build [--vm] [--os OS] [--arch ARCH] [--runtime FILE] [--icon PNG [--icon-small PNG]] dir -o FILE
        lizardscript drive [--pid N] Command [args...]
        lizardscript fmt [-w] [--check] path...
        lizardscript check [--json] [--names a,b,...] path...
@@ -184,6 +187,8 @@ func buildCommand(args []string) int {
 	goos := flags.String("os", "", "the system to build for: darwin, windows, linux (default: this one)")
 	goarch := flags.String("arch", "", "the processor to build for: amd64, arm64 (default: this one)")
 	runtimeFile := flags.String("runtime", "", "a lizardscript built for that system, to use")
+	icon := flags.String("icon", "", "a square PNG of 256 pixels or more (1024 is best): the program's icon")
+	iconSmall := flags.String("icon-small", "", "a PNG for the 16 pixel icon, drawn by hand (needs --icon)")
 	var dirs []string
 	for len(args) > 0 {
 		if err := flags.Parse(args); err != nil {
@@ -198,7 +203,7 @@ func buildCommand(args []string) int {
 	if len(dirs) != 1 || *output == "" {
 		usage()
 	}
-	files, err := build.Build(build.Options{Dir: dirs[0], Output: *output, GOOS: *goos, GOARCH: *goarch, VM: *onVM, Runtime: *runtimeFile})
+	files, err := build.Build(build.Options{Dir: dirs[0], Output: *output, GOOS: *goos, GOARCH: *goarch, VM: *onVM, Runtime: *runtimeFile, Icon: *icon, IconSmall: *iconSmall})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "lizardscript build:", err)
 		return 1

@@ -12,6 +12,7 @@
 //	lizard the language itself: tokens, syntax trees, sandboxed runs, docs
 //	window a window to draw in, with its input (package terrarium/window)
 //	pen    pen pressure, which comes in the window's events
+//	task   functions run in the background (package terrarium/task)
 //
 // The standard modules (std.go) are bigger libraries in lizard-script that
 // a program loads with use, like the flower graphics family (flower/lily2d).

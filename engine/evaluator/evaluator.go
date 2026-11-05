@@ -1057,7 +1057,10 @@ func applyFunction(tok token.Token, function object.Object, args []object.Object
 		if err := countStep(tok); err != nil {
 			return err
 		}
+		saved := callSource
+		callSource = tok.Source
 		result := function.Fn(args...)
+		callSource = saved
 		if err, ok := result.(*object.Error); ok {
 			// error(message) is the program's own error: its message
 			// is shown as it is, without the builtin name in front.

@@ -390,6 +390,7 @@ Water on Mondays.
 
 - Inside the built file, `os.program_dir()` is `"bundle:"` and its files are at `bundle:/notes/care.txt` and so on: `fs.read`, `fs.list`, `fs.exists` and `fs.info` read them, but nothing can change them. The same program works built or not, as long as it finds its files through `os.program_dir()`.
 - `--os` and `--arch` build for another system: `lizardscript build garden -o garden.exe --os windows --arch amd64`, or `--os linux --arch arm64`. For that, lizardscript builds itself for that system with Go, so it needs Go and its own source (run it inside the lizard-script folder, or set `LIZARD_SRC`); `--runtime file` gives it a lizardscript already built for that system instead.
+- `--icon icon.png` gives the program an icon: a square PNG of 256 pixels or more (1024 is best), and `--icon-small small.png` a hand-drawn one for 16 pixels. On Windows the icon goes inside the `.exe`. On Linux, `icon.png`, `icon-256.png` and a `.desktop` template are written next to the program. On macOS the output is an app folder, so name it `.app`: `lizardscript build garden -o Garden.app --icon icon.png` makes `Garden.app` (with its icon, and signed ad hoc when `codesign` is installed). The program's files are inside the app, so open it with `open Garden.app`. In the program, `window.open(w, h, title, {"icon": path})` sets the window's icon.
 - `--vm` makes the program run on the bytecode VM.
 - Every module the program uses must be inside its folder.
 
@@ -745,6 +746,72 @@ done
 
 `done` went to the error output: with `2>/dev/null` at the end of the command, only the two lines are left.
 
+## `task`: work in the background
+
+A program with a window draws a frame many times a second, so a computation that takes a second freezes it. `task.start(module, function, args)` runs a function of a module in the background instead, in a fresh interpreter of its own, and gives back a handle at once. The module is found like a `use`, from the file that calls `task.start`:
+
+```
+-~> count.liz: how many numbers below n are prime, slow on purpose.
+function primes_below(n) {
+  let count = 0
+  for (let k = 2; k < n; k += 1) {
+    let prime = true
+    for (let d = 2; d * d <= k; d += 1) {
+      if (k % d == 0) {
+        prime = false
+        break
+      }
+    }
+    if (prime) {
+      count += 1
+    }
+  }
+  puts("counted up to " + str(n))
+  count
+}
+```
+
+```
+let small = task.start("count", "primes_below", [1000])
+let big = task.start("count", "primes_below", [200000])
+puts(small.state())
+puts(small.result(), big.result())
+puts(big.state(), big.done())
+
+let endless = task.start("count", "primes_below", [1000000000])
+endless.cancel()
+puts(endless.state())
+try {
+  endless.result()
+} catch (e) {
+  puts(e["message"])
+}
+try {
+  task.start("count", "primes_below", [function() { 1 }])
+} catch (e) {
+  puts(e["message"])
+}
+```
+
+```text
+running
+[task] counted up to 1000
+[task] counted up to 200000
+168 17984
+done true
+cancelled
+task.result: the task was cancelled
+task.start: args[0] is a FUNCTION, and only data crosses to and from a task (numbers, strings, booleans, null, lists, hashes, points and colors)
+```
+
+- `t.result()` waits for the task and gives what its function returned. `t.done()` says whether it has ended without waiting, which is what a window's `tick` asks every frame; `t.state()` is `"running"`, `"done"`, `"failed"` or `"cancelled"`.
+- `t.cancel()` stops it at once, even in the middle of a loop. Its `result()` is then an error.
+- An error inside the task comes out of `t.result()`, with the file and line where it happened.
+- Nothing is shared: the arguments and the result are copied, so a task that changes a hash changes its own copy. Only data goes across (numbers, strings, booleans, `null`, lists, hashes, points and colors); a function is an error that says where it was. A task that needs an image gets its path and loads it.
+- Inside a task there is no `window`, `pen` or `clip` (they are the error `not available inside a task`), and what it prints goes to the error output with `[task] ` in front, so the order of those lines next to the program's own can change from run to run.
+- Each task is a process of its own, so several run at the same time on the machine's processors; starting one costs about as much as starting `lizardscript`, so it is for work that takes a while. When the program ends, its tasks end too.
+- In a built program, a module that only `task.start` names must also be used somewhere (`use "count" as count`), so `lizardscript build` takes it.
+
 ## Summary
 
 - `use "path"` runs a module once per program, in its own scope, and lets the file see its names, alive: `=` changes the module's variable, a `let` hides it. Names that start with `_` are private.
@@ -755,5 +822,6 @@ done
 - `lizardscript fmt` lays code out one way (`-w` writes it, `--check` lists what would change); `lizardscript check` finds errors and warnings without running the program (`--json` for editors; `--names` or a `lizard-check.liz` for the names a host gives).
 - `lizardscript lsp` is the language server: the VS Code and Zed extensions of `editors/` start it, for diagnostics, formatting, completion, hover, go to definition and a color picker.
 - `lizard.tokens`, `lizard.parse`, `lizard.check`, `lizard.run` and `lizard.docs` read, check and run code; `io` reads lines and writes to the output and the error output.
+- `task.start(module, function, args)` runs a function in the background, in a process of its own; `done`, `state`, `result` and `cancel` follow it, and only data crosses.
 
 [← Previous: The Terrarium](17-terrarium.md) · [Index](../README.md) · [Next: lily2d →](19-lily2d.md)

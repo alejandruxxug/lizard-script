@@ -20,6 +20,7 @@ The Go code only reaches the system. What to draw, and every pixel of it, is dec
 | [`clip`](#clip) | the system clipboard |
 | [`io`](#io) | the standard input, output and error |
 | [`lizard`](#lizard) | the language itself: tokens, syntax trees, runs in a sandbox, doc comments |
+| [`task`](#task) | functions run in the background, each in a fresh interpreter of its own |
 | [`window`](#window) | a window to draw in, its surfaces and its input; headless windows and automation |
 | [`pen`](#pen) | pen and trackpad pressure |
 
@@ -333,6 +334,46 @@ io.error("got a request\n")
 
 In Go, `terrarium.Stdin` and `terrarium.Stderr` are where they read and write (`repl.RunFile` points `Stderr` at its error writer), and `io.write` writes to `evaluator.Output`, like `puts`.
 
+## task
+
+Work in the background: a function of a module runs in a fresh interpreter of its own while the program goes on, so a window keeps drawing during a long computation. Each task runs in a process of its own (the program's executable, started again), so tasks run at the same time on as many processors as the machine has, and nothing is shared: the arguments and the result are copied across as data.
+
+### task.start(module, function_name, args = [])
+Starts a task that calls `function_name(args...)` of `module` and returns its handle at once. The module is found the way `use` finds it: next to the file that calls `task.start`, then in `$LIZARD_PATH` and the standard modules; in a [built program](#built-programs), among its own files. A module that isn't there is the error now; any other error of the task comes later, from `t.result()`. The task runs on the engine the program runs on (the evaluator, or the VM with `--vm`).
+
+Only data crosses to a task and back: numbers, strings, booleans, `null`, lists, hashes, points and colors, deep copied, so a task that changes a hash it was given changes its own copy. Anything else (a function, an image, a window, a list that holds itself) is an error that says where it was found: `task.start: args[0]["draw"] is a FUNCTION, and only data crosses to and from a task (...)`. A task that needs an image loads it from its path.
+
+The handle is a hash with an `id` (a number, from 1) and these functions:
+
+| Function | What it does |
+| --- | --- |
+| `t.done()` | `true` once the task has ended: done, failed or cancelled |
+| `t.state()` | `"running"` (or waiting for a free processor), `"done"`, `"failed"` or `"cancelled"` |
+| `t.result()` | waits for the task to end and gives the value its function returned (the same copy each time); the error of a task that failed is raised here, at this call: `task.result: the task failed: work.liz: [line 3, column 5] runtime error: ...`, and a cancelled one is `task.result: the task was cancelled` |
+| `t.cancel()` | stops the task: it is `"cancelled"` at once and its process is ended (a busy loop too, within a millisecond or two); a task that has ended stays as it was |
+
+```
+-~> work.liz
+function total(list) {
+  let sum = 0
+  for (let i = 0; i < len(list); i += 1) { sum += list[i] }
+  sum
+}
+```
+```
+let t = task.start("work", "total", [[1, 2, 3, 4]])
+-~> ... in a window's tick: if t.done() { puts(t.result()) }
+puts(t.result())   -~> 10
+```
+
+At most one task per processor runs at a time; the others wait in line, as `"running"`, and a task cancelled while it waits never starts. A task that never ends doesn't keep the program alive: when the program ends, its tasks end too.
+
+Inside a task the Terrarium is there but for what needs the program's screen and user: `window`, `pen`, `clip` and `task` itself, and `os.exit`, `os.reveal` and `os.open_url`, are the error `not available inside a task`. The rest of `os` (`args`, `env`, `platform`, `locale`, `config_dir`, `program_dir`, `memory`) gives what it gives the program, and `fs`, `img`, `time`, `json`, `io`, `lizard` and the libraries work as usual. What a task prints (`puts`, `io.write`, `io.error`) goes to the program's error output, each line starting with `[task] `; `io.read_line()` is `null`, a task has no input.
+
+A built program carries the modules it uses: a module that only a `task.start` names must be used somewhere too (`use "work" as work`), so `lizardscript build` takes it.
+
+In Go, a host that imports `terrarium/task` gets the module in `terrarium.Install`, and must call `task.ServeIfWorker()` first thing in `main` (a test binary, in `TestMain`): started as a task's process, it runs the task and exits there. `terrarium.OnVM` says the engine (`repl.RunFile` sets it), and `evaluator.CallSource()` gives the source of the call, for finding the module.
+
 ## lizard
 
 The language itself, as data: an editor colors and checks code with it, a tool runs a user's code in a sandbox, and a help panel reads the doc comments of a library. Positions are a `line` and `column` from 1, counted in characters (a tab is one), and an `end_line` and `end_column` just after the last character.
@@ -484,6 +525,16 @@ puts(lizard.check("draw(canvas)", "", ["draw", "canvas"]))   -~> []
 ## Built programs
 
 `lizardscript build dir -o app` makes one executable of the program in `dir`: its `main.liz`, every module it uses (and the ones they use, which must be inside `dir`) and the data files that `dir/bundle.txt` lists, one path or pattern per line (`assets/*.png`; a folder takes everything in it; a line that starts with `-~>` is a comment). `--os` and `--arch` build it for another system (`--os windows --arch amd64`, `--os linux --arch arm64`), `--vm` runs it on the VM, and `--runtime FILE` gives a `lizardscript` built for the target. The executable is a copy of `lizardscript` with the files appended, so it needs nothing installed. For this system it copies the running `lizardscript`; for another one it builds `lizardscript` from its source with Go (it looks for the source in and above the current folder and the program's, or in `$LIZARD_SRC`).
+
+`--icon FILE` gives the program an icon: a square PNG of at least 256 pixels (a 1024 master is best), and `--icon-small FILE` a hand-drawn PNG for the 16 pixel size, where a shrunk master turns to mush (the master is shrunk, by averaging, to every other size). It works for each system in its own way:
+
+| System | What `--icon` does |
+| --- | --- |
+| macOS (`--os darwin`) | the output is an app folder and must be called `Name.app` (also without an icon): `Name.app/Contents/MacOS/Name` is the runtime, `Contents/Resources/program.lzb` holds the program's files (not appended to the executable, which would break its code signature), `Contents/Resources/icon.icns` the icon (PNG entries `icp4`, `ic11` to `ic14` and `ic07` to `ic10`, written in Go, so no `iconutil` is needed and a build on any system works) and `Contents/Info.plist` names them. When `codesign` is installed the app is signed ad hoc (`codesign --force --deep -s -`), and `codesign --verify --strict` passes. An icon with an output that is not `.app` is an error |
+| Windows | an icon resource (16, 32, 48 and 256 pixels, PNG pictures) is added to the `.exe` as a new `.rsrc` section before the program's files are appended, whichever `lizardscript` it is made from; the runtime must not have resources of its own, which Go's output doesn't |
+| Linux | `icon.png` (512), `icon-256.png` (256) and `name.desktop`, a launcher template with `Exec=name` and `Icon=name`, are written next to the output; an executable can't carry its icon |
+
+The window shows an icon of its own too, with the option `icon` of [`window.open`](#windowopenw-h-title-options--).
 
 While a built program runs, its files are at paths that start with `bundle:`: `os.program_dir()` is `"bundle:"`, its main file is `bundle:/main.liz`, its modules are found there, and `fs.read`, `fs.exists`, `fs.list`, `fs.info`, `fs.copy` (as the source) and `img.load` read them. They can't be changed: `fs.write` and the others are the error `the files of a built program can't be changed`. A program that finds its files with `fs.join(os.program_dir(), ...)` works the same way built or not. In Go, `bundle.ReadFile`, `bundle.Stat` and `bundle.ReadDir` read such a path, or one on disk.
 
@@ -640,6 +691,7 @@ Makes a window of `w` by `h` pixels (1 to 8192 each), black at first. It shows o
 | `frameless` | false | no title bar or border |
 | `transparent` | false | the pixels the program leaves transparent show what is behind the window (a round splash screen); only `window.open` can choose it, and it stays for the window's life |
 | `floating` | false | the window stays above every other window |
+| `icon` | none | the path of a PNG or JPEG (on disk, or a `bundle:` file): the window's icon in the title bar and taskbar (Windows, Linux) and the Dock (macOS, with `NSApplication`'s `setApplicationIconImage:`; a program run as an app has its icon from the app already). `window.set` takes it too |
 | `min_size` | none | a point `(w, h)`: the smallest buffer the user can resize the window to |
 | `fps` | 60 | frames a second, 1 to 240 |
 | `hover` | true | `move` events also come with no button down; with false, only while a button is held |
@@ -705,6 +757,23 @@ window.choose_file(w, {"title": "Pick an image", "types": ["png", "jpg"], "folde
 ```
 The dialog is the system's own program, run beside the window: `osascript` on macOS, PowerShell's `OpenFileDialog` on Windows, and `zenity` or else `kdialog` on Linux; with neither installed, `window.choose_file` is an error that says so. If the program fails, the program sees the same as a cancel.
 
+### window.choose_save(w, options = {})
+Opens the system's "save file" dialog, where the user picks a folder and a file name (the system asks before overwriting), and returns `null` at once. The answer is a `chosen` event with `dialog` `"save"` and `paths` holding the one path picked, or empty on cancel. It shares the one-dialog-at-a-time rule with `window.choose_file`.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `title` | the system's | the dialog's title or prompt |
+| `name` | none | the file name the dialog offers, like `"drawing.png"` |
+| `types` | any file | extensions, like `["png"]` (a leading dot is fine); on macOS a typed name with no extension gets the first one |
+| `folder` | the system's | the folder the dialog starts in |
+| `id` | none | any text; the `chosen` event echoes it, to tell the answers of several dialogs apart |
+
+```
+window.choose_save(w, {"name": "art.png", "types": ["png"], "id": "export"})
+// then, in tick: if (e.type == "chosen" && e.dialog == "save" && len(e.paths) > 0) { ... e.paths[0] ... }
+```
+It runs `osascript` (`choose file name`) on macOS, PowerShell's `SaveFileDialog` on Windows, and `zenity --save --confirm-overwrite` or else `kdialog --getsavefilename` on Linux; with neither installed it is an error that says so. `window.choose_file` takes `id` too.
+
 ### Events
 
 Each event is a hash with a `type` and the keys that mean something for it. Positions are buffer pixels from the top left.
@@ -717,7 +786,7 @@ Each event is a hash with a `type` and the keys that mean something for it. Posi
 | `scroll` | `pos`, `dy`, `dx`, `mods` | the wheel or a two-finger scroll; `dy` above 0 is up (content moves up) and `dx` above 0 is right (content moves right); the event comes when either is not 0 |
 | `pinch` | `pos`, `scale`, `mods` | the trackpad's pinch gesture; `scale` is the factor of this step (above 1 spreads the fingers: zoom in; 1.02 is 2% bigger), steps of one frame are multiplied into one event, and `pos` is where the pointer is. Only on macOS for now: Windows and Linux send none |
 | `drop` | `pos`, `paths`, `mods` | files were dropped on the window; `paths` is a list of their absolute paths, which `fs` reads. The system gives real paths on macOS, Windows and Linux; a file with no real path (a browser) is left out |
-| `chosen` | `paths` | a [`window.choose_file`](#windowchoose_filew-options--) dialog ended; `paths` is the list of absolute paths picked, empty on cancel. It has no `pos` |
+| `chosen` | `paths` | a [`window.choose_file`](#windowchoose_filew-options--) dialog ended; `paths` is the list of absolute paths picked, empty on cancel. `dialog` is `"open"` or `"save"`, and `id` is the dialog's `id` option when it had one. It has no `pos` |
 | `key` | `key`, `mods` | a key went down, and again while it is held; `key` is its name: `"A"` to `"Z"`, `"Digit0"` to `"Digit9"`, `"Escape"`, `"Enter"`, `"Space"`, `"Backspace"`, `"Tab"`, `"ArrowLeft"`, ... |
 | `keyup` | `key`, `mods` | a key was released; `key` has the same names as `key` and comes once, with no repeat |
 | `type` | `text`, `mods` | a character was typed, as the keyboard composed it (`"é"`, `"C"`) |
@@ -779,7 +848,7 @@ img.save(window.screenshot(w, {"full": true}), "screen.png")
 `window.open(w, h, title, {"headless": true})` makes a window with no screen: `window.run` runs its frames one after the other, as fast as `tick` goes, with the events the program injects, and stops when `tick` returns `false` (or when an `on_demand` window has nothing left to do). Everything else is the same, surfaces and screenshots included, so an app's tests and benchmarks run it as it is, in `go test` or on a machine with no display. A headless window doesn't count as the program's one window.
 
 #### window.inject(w, event)
-Adds `event`, a hash like the ones `tick` gets, to the next frame, as if the user made it. Keys left out take a plain value: the left button, no `mods`, a mouse's `pen` (a `pen` hash takes `pressure`, `raw`, `source` and `eraser`). A pointer event needs a `pos`, which can be fractional to reach a finer surface's pixels; its `surface` and `surface_pos` are worked out. A `drop` event needs a `pos` and a list of `paths` (strings); a `chosen` event needs only the `paths`. A `pinch` event takes a `scale` (1 if left out) and a `pos`; a `keyup` event takes a `key`. A `resize` event resizes the window like `window.set`.
+Adds `event`, a hash like the ones `tick` gets, to the next frame, as if the user made it. Keys left out take a plain value: the left button, no `mods`, a mouse's `pen` (a `pen` hash takes `pressure`, `raw`, `source` and `eraser`). A pointer event needs a `pos`, which can be fractional to reach a finer surface's pixels; its `surface` and `surface_pos` are worked out. A `drop` event needs a `pos` and a list of `paths` (strings); a `chosen` event needs only the `paths` (it may take `dialog` and `id`). A `pinch` event takes a `scale` (1 if left out) and a `pos`; a `keyup` event takes a `key`. A `resize` event resizes the window like `window.set`.
 ```
 let w = window.open(200, 100, "", {"headless": true})
 window.inject(w, {"type": "down", "pos": (10, 10)})

@@ -69,3 +69,14 @@ func shown(o object.Object) string {
 func sameLibrary(a, b string) bool {
 	return a == b || (IsStandardModule(a) && IsStandardModule(b))
 }
+
+// callSource is the source name of the call to the builtin running now.
+var callSource string
+
+// CallSource is the source name of the file whose call is running the
+// builtin that asks, with both engines: a builtin that finds a file the way
+// use does, relative to the file that called it, reads it here. It is ""
+// outside a builtin, and for a call from code with no source name.
+func CallSource() string {
+	return callSource
+}

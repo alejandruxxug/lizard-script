@@ -54,6 +54,8 @@ type Event struct {
 	Pen     Pen      // down, up and move
 	Samples []Sample // move: every point since the last frame, the last one at X, Y
 	Paths   []string // drop: the files dropped; chosen: the files picked, none on cancel (absolute paths)
+	Dialog  string   // chosen: "open" or "save", the dialog that answered
+	ID      string   // chosen: the id the program gave the dialog, if any
 	T       float64  // when it happened, pen.Now()
 }
 
@@ -97,6 +99,14 @@ func (e Event) hash() *object.Hash {
 			list.Elements[i] = arg.Str(p)
 		}
 		arg.Set(h, "paths", list)
+		if e.Type == "chosen" {
+			if e.Dialog != "" {
+				arg.Set(h, "dialog", arg.Str(e.Dialog))
+			}
+			if e.ID != "" {
+				arg.Set(h, "id", arg.Str(e.ID))
+			}
+		}
 	}
 	switch e.Type {
 	case "resize", "close", "focus", "leave", "enter", "chosen":
@@ -234,6 +244,10 @@ func (w *Window) eventOf(h *object.Hash) (Event, *object.Error) {
 	e.DY = r.num("dy", 0)
 	e.Scale = r.num("scale", 1)
 	e.Focused = r.flag("focused", true)
+	if e.Type == "chosen" {
+		e.Dialog = r.str("dialog", "")
+		e.ID = r.str("id", "")
+	}
 	if e.Type == "drop" || e.Type == "chosen" {
 		list, ok := r.get("paths").(*object.Array)
 		if !ok {

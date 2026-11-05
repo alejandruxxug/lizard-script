@@ -58,14 +58,16 @@ type Window struct {
 	onDemand    bool // tick runs only when there is something to do
 	headless    bool // no screen: ticks, events and screenshots only
 
-	changed      bool // drawn on since it was last shown
-	drew         bool // it or a surface was drawn on this frame
-	titleChanged bool // title changed while it runs
-	chrome       bool // an option changed while it runs (window.set)
-	center       bool // move it to the middle of the screen
-	wake         bool // window.needs_paint: run tick next frame
-	started      bool // tick ran once
-	idle         bool // the last frame had nothing to do, so tick didn't run
+	changed      bool        // drawn on since it was last shown
+	drew         bool        // it or a surface was drawn on this frame
+	titleChanged bool        // title changed while it runs
+	icon         *windowIcon // the picture in the title bar, taskbar and Dock
+	iconChanged  bool        // icon is new, and not shown yet
+	chrome       bool        // an option changed while it runs (window.set)
+	center       bool        // move it to the middle of the screen
+	wake         bool        // window.needs_paint: run tick next frame
+	started      bool        // tick ran once
+	idle         bool        // the last frame had nothing to do, so tick didn't run
 	running      bool
 
 	screen screen  // the surfaces and the composed frame (surface.go)
@@ -112,6 +114,7 @@ func Module() *object.Hash {
 		"inject":      inject,
 		"cursor":      cursorFunc,
 		"choose_file": chooseFile,
+		"choose_save": chooseSave,
 		"surface":     surfaceFunc,
 		"dirty":       dirty,
 		"screenshot":  screenshot,
@@ -171,8 +174,8 @@ func open(args ...object.Object) object.Object {
 // openOptions are the keys window.open takes in its options, and
 // setOptions the ones window.set takes.
 var (
-	openOptions = []string{"automation", "floating", "fps", "frameless", "headless", "hover", "min_size", "on_demand", "resizable", "scale", "transparent"}
-	setOptions  = []string{"center", "floating", "fps", "frameless", "hover", "min_size", "on_demand", "resizable", "scale", "size", "title"}
+	openOptions = []string{"automation", "floating", "fps", "frameless", "headless", "hover", "icon", "min_size", "on_demand", "resizable", "scale", "transparent"}
+	setOptions  = []string{"center", "floating", "fps", "frameless", "hover", "icon", "min_size", "on_demand", "resizable", "scale", "size", "title"}
 )
 
 // setOptions reads the options of window.open or window.set; allowed are
@@ -243,6 +246,15 @@ func (w *Window) setOption(name string, value []object.Object) *object.Error {
 		var width, height int
 		if width, height, err = sizeOption(value, name, 1); err == nil {
 			w.setSize(width, height)
+		}
+	case "icon":
+		var path string
+		if path, err = arg.String(value, 0, "icon"); err == nil {
+			icon, lerr := loadIcon(path)
+			if lerr != nil {
+				return arg.Errorf("%v", lerr)
+			}
+			w.icon, w.iconChanged = icon, true
 		}
 	case "title":
 		if w.title, err = arg.String(value, 0, "title"); err == nil {

@@ -4,6 +4,9 @@
 // or another one. The file is a copy of lizardscript with the program
 // appended (package bundle), so it runs with nothing else installed.
 //
+// With an icon (Options.Icon) the program also gets its icon on each system,
+// and on macOS the output is an app folder; see icon.go and app.go.
+//
 // bundle.txt has one path or pattern per line, relative to the folder,
 // like assets/*.png; a folder takes everything in it, and a line that
 // starts with -~> is a comment.
@@ -40,6 +43,12 @@ type Options struct {
 	// it is "" the running lizardscript is copied for this system, and for
 	// another one lizardscript is built from its source with Go.
 	Runtime string
+	// Icon is a square PNG of at least 256 pixels (1024 is best), the
+	// program's icon; IconSmall is an optional hand-drawn one for 16 pixels.
+	// On macOS the output must be called Name.app: Build makes an app
+	// folder, with or without an icon.
+	Icon      string
+	IconSmall string
 }
 
 // Build makes the executable of o and returns the files it bundled.
@@ -58,12 +67,15 @@ func Build(o Options) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out bytes.Buffer
-	out.Write(base)
-	if err := bundle.Write(&out, bundle.Program{Main: "main.liz", VM: o.VM}, files); err != nil {
-		return nil, err
+	var icons *iconSet
+	if o.Icon != "" {
+		if icons, err = loadIcons(o.Icon, o.IconSmall); err != nil {
+			return nil, err
+		}
+	} else if o.IconSmall != "" {
+		return nil, errors.New("--icon-small needs --icon")
 	}
-	if err := os.WriteFile(o.Output, out.Bytes(), 0o755); err != nil {
+	if err := write(o, base, bundle.Program{Main: "main.liz", VM: o.VM}, files, icons); err != nil {
 		return nil, err
 	}
 	names := make([]string, len(files))
@@ -71,6 +83,38 @@ func Build(o Options) ([]string, error) {
 		names[i] = f.Name
 	}
 	return names, nil
+}
+
+// write makes the output of o for its system: an app folder on macOS, else
+// one file, with the icon added to the file on Windows or beside it on Linux.
+func write(o Options, base []byte, program bundle.Program, files []bundle.File, icons *iconSet) error {
+	var archive bytes.Buffer
+	if err := bundle.Write(&archive, program, files); err != nil {
+		return err
+	}
+	app := strings.HasSuffix(o.Output, appSuffix)
+	switch {
+	case o.GOOS == "darwin" && app:
+		return writeApp(o, base, archive.Bytes(), icons)
+	case o.GOOS == "darwin" && icons != nil:
+		return fmt.Errorf("an icon on macOS needs an app: make the output %s.app", strings.TrimSuffix(filepath.Base(o.Output), filepath.Ext(o.Output)))
+	case app:
+		return fmt.Errorf("%s is an app, which only a build for macOS makes (--os darwin)", o.Output)
+	}
+	if o.GOOS == "windows" && icons != nil {
+		var err error
+		if base, err = addIcon(base, icoImages(icons)); err != nil {
+			return fmt.Errorf("adding the icon: %w", err)
+		}
+	}
+	out := append(append([]byte{}, base...), archive.Bytes()...)
+	if err := os.WriteFile(o.Output, out, 0o755); err != nil {
+		return err
+	}
+	if o.GOOS == "linux" && icons != nil {
+		return writeLinuxIcon(o.Output, icons)
+	}
+	return nil
 }
 
 // Collect finds the files of the program in dir: main.liz, the modules it

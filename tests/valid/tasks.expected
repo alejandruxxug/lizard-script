@@ -1,0 +1,11 @@
+10
+done true
+{"list": [1, 2]}
+{"list": [1, 2, 3], "marked": true}
+[(3, 6), #3fa34d, 1.5, null, {"ok": true}]
+task.result: the task failed: valid/modules/tasks.liz: [line 18, column 8] runtime error: the task broke
+failed
+cancelled
+task.result: the task was cancelled
+task.start: args[0] is a FUNCTION, and only data crosses to and from a task (numbers, strings, booleans, null, lists, hashes, points and colors)
+task.result: the task failed: the result["draw"] is a FUNCTION, and only data crosses to and from a task (numbers, strings, booleans, null, lists, hashes, points and colors)

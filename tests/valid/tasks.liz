@@ -1,0 +1,45 @@
+-~> task runs a function of a module in the background, in a fresh
+-~> interpreter of its own: values cross as copies.
+
+let t = task.start("modules/tasks", "total", [[1, 2, 3, 4]])
+puts(t.result())
+puts(t.state(), t.done())
+
+-~> The task changes its own copy of the hash, not this one.
+let h = {"list": [1, 2]}
+let back = task.start("modules/tasks", "mark", [h]).result()
+puts(h)
+puts(back)
+
+puts(task.start("modules/tasks", "shapes", [3]).result())
+
+-~> Errors come from result(), at the caller.
+let failing = task.start("modules/tasks", "fail")
+try {
+  failing.result()
+} catch (e) {
+  puts(e["message"])
+}
+puts(failing.state())
+
+-~> A busy loop stops at cancel.
+let busy = task.start("modules/tasks", "spin")
+busy.cancel()
+puts(busy.state())
+try {
+  busy.result()
+} catch (e) {
+  puts(e["message"])
+}
+
+-~> Only data crosses.
+try {
+  task.start("modules/tasks", "total", [function() { 1 }])
+} catch (e) {
+  puts(e["message"])
+}
+try {
+  task.start("modules/tasks", "sneaky").result()
+} catch (e) {
+  puts(e["message"])
+}

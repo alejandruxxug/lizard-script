@@ -685,7 +685,7 @@ Mientras dibujas, el título de la ventana muestra `pressure 0.42 (raw 0.91) · 
 | `"move"` | `pos`, `mods`, `pen` | el puntero se movió |
 | `"scroll"` | `pos`, `dy`, `dx`, `mods` | la rueda o un desplazamiento con dos dedos |
 || `"drop"` | `pos`, `paths`, `mods` | se soltaron archivos sobre la ventana; `paths` son sus rutas absolutas |
-| `"chosen"` | `paths` | terminó un diálogo de `window.choose_file`; `paths` está vacío si el usuario canceló |
+| `"chosen"` | `paths` | terminó un diálogo de `window.choose_file` o `window.choose_save`; `paths` está vacío si el usuario canceló; `dialog` es `"open"` o `"save"`, e `id` es la opción `id` del diálogo |
 | `"key"` | `key`, `mods` | se presionó una tecla |
  | `"type"` | `text` | se escribió un carácter |
 | `"resize"` | `size` | la ventana cambió de tamaño |
@@ -740,6 +740,25 @@ window.run(w, function(events) {
 ```text
 picked /tmp/photo.png
 cancelled
+```
+
+**Pedir dónde guardar.** `window.choose_save(w, {"name": "art.png", "types": ["png"], "id": "export"})` abre el diálogo "guardar archivo" del sistema (el usuario elige la carpeta y el nombre, y el sistema pregunta antes de sobrescribir) y vuelve al instante. Su respuesta también es un evento `"chosen"`, ahora con `dialog` igual a `"save"` o `"open"` para saber qué diálogo respondió, y con el `id` que le diste (ambos diálogos aceptan `id`). `paths` trae la única ruta, o está vacío si canceló. Las opciones son `title`, `name`, `types`, `folder` e `id`. Este programa se ejecutó y muestra las dos líneas de abajo:
+```
+let w = window.open(40, 30, "save", {"headless": true})
+window.inject(w, {"type": "chosen", "dialog": "save", "id": "export", "paths": ["/tmp/art.png"]})
+window.inject(w, {"type": "chosen", "dialog": "open", "paths": []})
+window.run(w, function(events) {
+  for (let i = 0; i < len(events); i += 1) {
+    let e = events[i]
+    if (e.type == "chosen" && e.dialog == "save" && len(e.paths) > 0) { puts("save " + e.id + ": " + e.paths[0]) }
+    if (e.type == "chosen" && e.dialog == "open") { puts("open dialog ended") }
+  }
+  false
+})
+```
+```text
+save export: /tmp/art.png
+open dialog ended
 ```
 
 `mods` dice cuáles de `shift`, `alt`, `cmd` y `ctrl` estaban presionadas. Las opciones van en un hash después del título: `window.open(160, 100, "game", {"scale": 3, "fps": 30})` muestra cada píxel como un cuadrado de 3x3, ideal para pixel art. Un programa muestra una sola ventana. El REPL tiene todos los módulos menos `window` y `pen`; ahí, `window` da `identifier not found`.

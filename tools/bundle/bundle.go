@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -152,19 +153,42 @@ func Write(w io.Writer, program Program, contents []File) error {
 	return nil
 }
 
-// Open reads the built program at the end of the file exe. It returns nil
-// and no error when exe is a plain lizardscript, with nothing appended.
-// The file stays open while the program runs.
+// AppFile is where a program built as a macOS app keeps its files, in the
+// app's Resources folder: appended to the executable they would break the
+// app's code signature.
+const AppFile = "program.lzb"
+
+// Open reads the built program at the end of the file exe, or, when exe is
+// the executable of a macOS app (Name.app/Contents/MacOS/Name), in the file
+// AppFile of its Resources. It returns nil and no error when exe is a plain
+// lizardscript, with nothing appended. The file stays open while the
+// program runs.
 func Open(exe string) (*Program, error) {
-	f, err := os.Open(exe)
-	if err != nil {
-		return nil, err
+	files := []string{exe}
+	if real, err := filepath.EvalSymlinks(exe); err == nil {
+		// A link to the app's executable (e.g. one an installer put in ~/.local/bin).
+		exe = real
 	}
-	program, err := read(f)
-	if program == nil {
-		f.Close()
+	if dir := filepath.Dir(exe); filepath.Base(dir) == "MacOS" {
+		files = append(files, filepath.Join(dir, "..", "Resources", AppFile))
 	}
-	return program, err
+	for _, file := range files {
+		f, err := os.Open(file)
+		if err != nil {
+			if file == exe {
+				return nil, err
+			}
+			return nil, nil
+		}
+		program, err := read(f)
+		if program == nil {
+			f.Close()
+		}
+		if program != nil || err != nil {
+			return program, err
+		}
+	}
+	return nil, nil
 }
 
 // RuntimeSize is the size of the lizardscript at the start of the file exe:

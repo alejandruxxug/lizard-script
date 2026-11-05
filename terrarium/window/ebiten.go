@@ -117,6 +117,11 @@ func (g *game) Update() error {
 		ebiten.SetWindowTitle(w.title)
 		w.titleChanged = false
 	}
+	if w.iconChanged {
+		ebiten.SetWindowIcon([]image.Image{w.icon.image})
+		setDockIcon(w.icon)
+		w.iconChanged = false
+	}
 	if w.chrome {
 		g.applyChrome()
 	}
